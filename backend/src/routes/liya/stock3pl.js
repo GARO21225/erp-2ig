@@ -1,0 +1,96 @@
+const router = require('express').Router();
+const prisma = require('../../lib/prisma');
+const { auth, requireFiliale } = require('../../middleware/auth');
+const liya = requireFiliale('LIYA');
+
+// GET /api/liya/stock3pl
+router.get('/', auth, liya, async (req, res) => {
+  try {
+    const { statut, clientNom, page = 1, limit = 30 } = req.query;
+    const where = {};
+    if (statut) where.statut = statut;
+    if (clientNom) where.clientNom = { contains: clientNom, mode: 'insensitive' };
+
+    const [total, data] = await Promise.all([
+      prisma.stockClient3PL.count({ where }),
+      prisma.stockClient3PL.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: Number(limit),
+        orderBy: { dateEntree: 'desc' },
+      })
+    ]);
+
+    // Stats par client
+    const statsClient = await prisma.stockClient3PL.groupBy({
+      by: ['clientNom'],
+      _count: { id: true },
+      _sum: { quantite: true },
+      where: { statut: 'EN_STOCK' },
+    });
+
+    res.json({ data, total, statsClient });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/liya/stock3pl — Nouvelle entrée stock client
+router.post('/', auth, liya, async (req, res) => {
+  try {
+    const stock = await prisma.stockClient3PL.create({
+      data: { ...req.body, quantite: Number(req.body.quantite), statut: 'EN_STOCK' }
+    });
+    res.status(201).json(stock);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT /api/liya/stock3pl/:id — Sortie partielle ou totale
+router.put('/:id/sortie', auth, liya, async (req, res) => {
+  try {
+    const { quantiteSortie } = req.body;
+    const stock = await prisma.stockClient3PL.findUnique({ where: { id: req.params.id } });
+    if (!stock) return res.status(404).json({ error: 'Stock introuvable' });
+
+    const qte = Number(quantiteSortie);
+    if (qte > stock.quantite) {
+      return res.status(400).json({ error: `Quantité sortie (${qte}) supérieure au stock disponible (${stock.quantite})` });
+    }
+
+    const nouvelleQte = stock.quantite - qte;
+    const statut = nouvelleQte === 0 ? 'SORTI_TOTAL' : 'SORTI_PARTIEL';
+
+    const updated = await prisma.stockClient3PL.update({
+      where: { id: req.params.id },
+      data: {
+        quantite: nouvelleQte,
+        statut,
+        dateSortie: statut === 'SORTI_TOTAL' ? new Date() : undefined,
+      }
+    });
+    res.json(updated);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/liya/stock3pl/rapport — Rapport mensuel facturable
+router.get('/rapport', auth, liya, async (req, res) => {
+  try {
+    const { mois, annee } = req.query;
+    const debut = new Date(annee || new Date().getFullYear(), (mois || new Date().getMonth() + 1) - 1, 1);
+    const fin = new Date(debut.getFullYear(), debut.getMonth() + 1, 0, 23, 59, 59);
+
+    const stocks = await prisma.stockClient3PL.findMany({
+      where: { dateEntree: { lte: fin }, OR: [{ dateSortie: null }, { dateSortie: { gte: debut } }] }
+    });
+
+    // Grouper par client
+    const parClient = stocks.reduce((acc, s) => {
+      if (!acc[s.clientNom]) acc[s.clientNom] = { client: s.clientNom, telephone: s.clientTel, articles: [] };
+      const jours = Math.ceil((Math.min(fin, s.dateSortie || fin) - Math.max(debut, s.dateEntree)) / (1000 * 60 * 60 * 24));
+      acc[s.clientNom].articles.push({ ...s, joursStockage: Math.max(0, jours) });
+      return acc;
+    }, {});
+
+    res.json(Object.values(parClient));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+module.exports = router;

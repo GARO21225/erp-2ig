@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 40">
+  <rect width="120" height="40" rx="6" fill="#1a3f6f"/>
+  <text x="12" y="27" font-family="Arial Black, sans-serif" font-weight="900" font-size="22" fill="#E87722">2</text>
+  <text x="30" y="27" font-family="Arial Black, sans-serif" font-weight="900" font-size="22" fill="white">iG</text>
+  <text x="62" y="20" font-family="Arial, sans-serif" font-size="7" fill="#B5D4F4" letter-spacing="1">ERP</text>
+  <text x="62" y="30" font-family="Arial, sans-serif" font-size="7" fill="#B5D4F4" letter-spacing="1">GROUPE</text>
+</svg>

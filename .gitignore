@@ -1,0 +1,19 @@
+# Node
+node_modules/
+dist/
+.env
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Prisma
+backend/prisma/migrations/.gitkeep
+
+# Build
+frontend/dist/
+frontend/.env

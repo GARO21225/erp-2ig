@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 40">
+  <rect width="160" height="40" rx="6" fill="#1a3f6f"/>
+  <text x="10" y="26" font-family="Arial Black, sans-serif" font-weight="900" font-size="16" fill="#F5A623">📍</text>
+  <text x="38" y="24" font-family="Arial Black, sans-serif" font-weight="900" font-size="13" fill="white">TOPTELSIG</text>
+  <text x="38" y="35" font-family="Arial, sans-serif" font-size="8" fill="#B5D4F4" letter-spacing="1">FONCIER</text>
+</svg>

@@ -1,0 +1,66 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useAuthStore } from './store';
+import Layout from './components/layout/Layout';
+import LoginPage from './pages/LoginPage';
+import DashboardGroupe from './pages/groupe/DashboardGroupe';
+import RHPage from './pages/groupe/RHPage';
+import FinancePage from './pages/groupe/FinancePage';
+import StocksPage from './pages/groupe/StocksPage';
+import POS from './pages/yakro/POS';
+import CommandesYakro from './pages/yakro/CommandesYakro';
+import MenuPage from './pages/yakro/MenuPage';
+import ReservationsYakro from './pages/yakro/ReservationsYakro';
+import CaisseYakro from './pages/yakro/CaisseYakro';
+import ProjetsPage from './pages/toptelsig/ProjetsPage';
+import SouscripteursPage from './pages/toptelsig/SouscripteursPage';
+import SouscripteurDetail from './pages/toptelsig/SouscripteurDetail';
+import VentesPage from './pages/toptelsig/VentesPage';
+import DepensesPage from './pages/toptelsig/DepensesPage';
+import PrescripteursPage from './pages/toptelsig/PrescripteursPage';
+import LivraisonsPage from './pages/liya/LivraisonsPage';
+import MotosPage from './pages/liya/MotosPage';
+import CarteLivraison from './pages/liya/CarteLivraison';
+import Stock3PLPage from './pages/liya/Stock3PLPage';
+
+const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30000, retry: 1 } } });
+
+function PrivateRoute({ children }) {
+  const isAuth = useAuthStore(s => s.isAuth());
+  return isAuth ? children : <Navigate to="/login" replace />;
+}
+
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<DashboardGroupe />} />
+            <Route path="rh" element={<RHPage />} />
+            <Route path="finance" element={<FinancePage />} />
+            <Route path="stocks" element={<StocksPage />} />
+            <Route path="yakro/pos" element={<POS />} />
+            <Route path="yakro/commandes" element={<CommandesYakro />} />
+            <Route path="yakro/menu" element={<MenuPage />} />
+            <Route path="yakro/reservations" element={<ReservationsYakro />} />
+            <Route path="yakro/caisse" element={<CaisseYakro />} />
+            <Route path="toptelsig/projets" element={<ProjetsPage />} />
+            <Route path="toptelsig/souscripteurs" element={<SouscripteursPage />} />
+            <Route path="toptelsig/souscripteurs/:id" element={<SouscripteurDetail />} />
+            <Route path="toptelsig/ventes" element={<VentesPage />} />
+            <Route path="toptelsig/depenses" element={<DepensesPage />} />
+            <Route path="toptelsig/prescripteurs" element={<PrescripteursPage />} />
+            <Route path="liya/livraisons" element={<LivraisonsPage />} />
+            <Route path="liya/motos" element={<MotosPage />} />
+            <Route path="liya/carte" element={<CarteLivraison />} />
+            <Route path="liya/stock3pl" element={<Stock3PLPage />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </QueryClientProvider>
+  );
+}

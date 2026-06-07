@@ -1,0 +1,987 @@
+// ============================================================
+// ERP GROUPE 2IG — Prisma Schema
+// Stack : PostgreSQL + Prisma ORM
+// Filiales : Yakro Grill | TOPTELSIG | LiYA
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum Filiale {
+  GROUPE
+  YAKRO_GRILL
+  TOPTELSIG
+  LIYA
+}
+
+enum Role {
+  DG
+  DIRECTEUR
+  MANAGER
+  EMPLOYE
+  COMPTABLE
+  RH
+  // Yakro Grill
+  CAISSIER
+  SERVEUR
+  BARMAN
+  // TOPTELSIG
+  RESP_FONCIER
+  COMMERCIAL
+  // LiYA
+  RESP_LIVRAISON
+  LIVREUR
+  // Stocks
+  MAGASINIER
+}
+
+enum StatutEmploye {
+  ACTIF
+  CONGE
+  SUSPENDU
+  DEMISSIONNAIRE
+  QUITTE
+}
+
+enum TypePaiement {
+  ESPECES
+  ORANGE_MONEY
+  MTN_MONEY
+  MOOV_MONEY
+  WAVE
+  BANQUE
+}
+
+enum StatutPaiement {
+  EN_ATTENTE
+  VALIDE
+  REJETE
+  REMBOURSE
+}
+
+// ─────────────────────────────────────────────
+// GROUPE / HOLDING
+// ─────────────────────────────────────────────
+
+model Utilisateur {
+  id                 String    @id @default(cuid())
+  email              String    @unique
+  motDePasse         String
+  nom                String
+  prenom             String
+  telephone          String?
+  role               Role      @default(EMPLOYE)
+  filiale            Filiale
+  avatar             String?
+  actif              Boolean   @default(true)
+  // ── Sécurité ──────────────────────────────────────────────
+  loginAttempts      Int       @default(0)   // Compteur tentatives échouées
+  lockedUntil        DateTime?              // Verrouillage temporaire
+  derniereConnexion  DateTime?              // Horodatage dernière connexion réussie
+  // ── Timestamps ───────────────────────────────────────────
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  employe            Employe?
+  sessions           Session[]
+  actions            AuditLog[]
+
+  @@index([email])
+  @@map("utilisateurs")
+}
+
+model Session {
+  id            String   @id @default(cuid())
+  token         String   @unique
+  utilisateurId String
+  utilisateur   Utilisateur @relation(fields: [utilisateurId], references: [id], onDelete: Cascade)
+  ip            String?  // IP de connexion
+  userAgent     String?  // User-Agent navigateur/app
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+
+  @@index([utilisateurId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model AuditLog {
+  id              String   @id @default(cuid())
+  utilisateurId   String   // Peut être 'system' pour actions automatiques
+  utilisateurNom  String   // Dénormalisé — capture au moment de l'action
+  filiale         Filiale  @default(GROUPE)
+  action          String   // CREATE | UPDATE | DELETE | VALIDATE | REJECT | EXPORT | LOGIN | LOGOUT | LOGIN_FAILED | LOGIN_BLOCKED | FORCE_LOGOUT | PASSWORD_CHANGE
+  entite          String
+  entiteId        String?
+  entiteLabel     String?  // Libellé lisible ex: "Lot 14B — Projet Divo"
+  avant           Json?    // État avant modification (mots de passe JAMAIS stockés)
+  apres           Json?    // État après modification
+  ip              String?  // IP de l'opérateur
+  createdAt       DateTime @default(now())
+
+  @@index([filiale, createdAt])
+  @@index([action])
+  @@index([utilisateurId])
+  @@map("audit_logs")
+}
+
+model ScoreSante {
+  id          String   @id @default(cuid())
+  filiale     Filiale
+  score       Float
+  tresorerie  Float
+  ca          Float
+  productivite Float
+  stocks      Float
+  retards     Int
+  impayes     Int
+  calculeLe   DateTime @default(now())
+
+  @@map("scores_sante")
+}
+
+// ─────────────────────────────────────────────
+// RH — COMMUN TOUTES FILIALES
+// ─────────────────────────────────────────────
+
+model Employe {
+  id              String        @id @default(cuid())
+  matricule       String        @unique
+  utilisateurId   String?       @unique
+  utilisateur     Utilisateur?  @relation(fields: [utilisateurId], references: [id])
+  nom             String
+  prenom          String
+  telephone       String
+  email           String?
+  filiale         Filiale
+  poste           String
+  departement     String?
+  dateEmbauche    DateTime
+  salaireBase     Float
+  statut          StatutEmploye @default(ACTIF)
+  photo           String?
+  adresse         String?
+  numeroCni       String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  conges          Conge[]
+  evaluations     Evaluation[]
+  sanctions       Sanction[]
+  avances         Avance[]
+  bonus           Bonus[]
+  rotationsRepos  RotationRepos[]
+  salaires        FichePaie[]
+
+  // Yakro Grill
+  servicesYakro   ServiceServeur[]
+
+  // LiYA
+  livraisons      Livraison[]
+
+  @@map("employes")
+}
+
+model Conge {
+  id          String   @id @default(cuid())
+  employeId   String
+  employe     Employe  @relation(fields: [employeId], references: [id])
+  type        String   // ANNUEL, MALADIE, MATERNITE, SANS_SOLDE
+  dateDebut   DateTime
+  dateFin     DateTime
+  motif       String?
+  statut      String   @default("EN_ATTENTE") // EN_ATTENTE, APPROUVE, REFUSE
+  approuvePar String?
+  createdAt   DateTime @default(now())
+
+  @@map("conges")
+}
+
+model RotationRepos {
+  id          String   @id @default(cuid())
+  employeId   String
+  employe     Employe  @relation(fields: [employeId], references: [id])
+  semaine     Int
+  annee       Int
+  jourRepos   String   // LUNDI, MARDI, MERCREDI, JEUDI, VENDREDI, SAMEDI, DIMANCHE
+  createdAt   DateTime @default(now())
+
+  @@unique([employeId, semaine, annee])
+  @@map("rotations_repos")
+}
+
+model Evaluation {
+  id          String   @id @default(cuid())
+  employeId   String
+  employe     Employe  @relation(fields: [employeId], references: [id])
+  periode     String
+  note        Float    // /10
+  commentaire String?
+  evaluateurId String?
+  createdAt   DateTime @default(now())
+
+  @@map("evaluations")
+}
+
+model Sanction {
+  id          String   @id @default(cuid())
+  employeId   String
+  employe     Employe  @relation(fields: [employeId], references: [id])
+  type        String   // AVERTISSEMENT, MISE_A_PIED, LICENCIEMENT
+  motif       String
+  dateEffet   DateTime
+  decision    String?
+  createdAt   DateTime @default(now())
+
+  @@map("sanctions")
+}
+
+model Avance {
+  id          String   @id @default(cuid())
+  employeId   String
+  employe     Employe  @relation(fields: [employeId], references: [id])
+  montant     Float
+  motif       String?
+  statut      String   @default("EN_ATTENTE")
+  rembourse   Float    @default(0)
+  createdAt   DateTime @default(now())
+
+  @@map("avances")
+}
+
+model Bonus {
+  id          String   @id @default(cuid())
+  employeId   String
+  employe     Employe  @relation(fields: [employeId], references: [id])
+  montant     Float
+  motif       String
+  mois        Int
+  annee       Int
+  createdAt   DateTime @default(now())
+
+  @@map("bonus")
+}
+
+model FichePaie {
+  id              String   @id @default(cuid())
+  employeId       String
+  employe         Employe  @relation(fields: [employeId], references: [id])
+  mois            Int
+  annee           Int
+  salaireBase     Float
+  primes          Float    @default(0)
+  heuresSup       Float    @default(0)
+  avancesDeduit   Float    @default(0)
+  netAPayer       Float
+  paye            Boolean  @default(false)
+  datePaiement    DateTime?
+  createdAt       DateTime @default(now())
+
+  @@map("fiches_paie")
+}
+
+// ─────────────────────────────────────────────
+// FINANCE — COMMUN
+// ─────────────────────────────────────────────
+
+model Caisse {
+  id          String   @id @default(cuid())
+  nom         String
+  filiale     Filiale
+  solde       Float    @default(0)
+  actif       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  encaissements Encaissement[]
+  decaissements Decaissement[]
+
+  @@map("caisses")
+}
+
+model Encaissement {
+  id            String       @id @default(cuid())
+  caisseId      String
+  caisse        Caisse       @relation(fields: [caisseId], references: [id])
+  filiale       Filiale
+  montant       Float
+  typePaiement  TypePaiement
+  reference     String?
+  motif         String
+  entiteRef     String?      // ID commande, lot, livraison...
+  entiteType    String?
+  operateurId   String?
+  createdAt     DateTime     @default(now())
+
+  @@map("encaissements")
+}
+
+model Decaissement {
+  id            String       @id @default(cuid())
+  caisseId      String
+  caisse        Caisse       @relation(fields: [caisseId], references: [id])
+  filiale       Filiale
+  montant       Float
+  typePaiement  TypePaiement
+  reference     String?
+  motif         String
+  categorie     String?
+  beneficiaire  String?
+  valide        Boolean      @default(false)
+  validePar     String?
+  createdAt     DateTime     @default(now())
+
+  @@map("decaissements")
+}
+
+model Budget {
+  id          String   @id @default(cuid())
+  filiale     Filiale
+  annee       Int
+  mois        Int?
+  categorie   String
+  montantPrevu Float
+  montantReel  Float   @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("budgets")
+}
+
+// ─────────────────────────────────────────────
+// STOCKS — COMMUN
+// ─────────────────────────────────────────────
+
+model Produit {
+  id          String   @id @default(cuid())
+  reference   String   @unique
+  nom         String
+  description String?
+  categorie   String
+  unite       String   @default("unité")
+  filiale     Filiale
+  prixAchat   Float    @default(0)
+  prixVente   Float    @default(0)
+  stockAlert  Float    @default(5)
+  actif       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  stocks          Stock[]
+  lignesCommande  LigneCommandeYakro[]
+  mouvements      MouvementStock[]
+  lignesAchat     LigneAchat[]
+
+  @@map("produits")
+}
+
+model Stock {
+  id          String   @id @default(cuid())
+  produitId   String
+  produit     Produit  @relation(fields: [produitId], references: [id])
+  filiale     Filiale
+  quantite    Float    @default(0)
+  depot       String   @default("Principal")
+  updatedAt   DateTime @updatedAt
+
+  @@unique([produitId, filiale, depot])
+  @@map("stocks")
+}
+
+model MouvementStock {
+  id          String   @id @default(cuid())
+  produitId   String
+  produit     Produit  @relation(fields: [produitId], references: [id])
+  filiale     Filiale
+  type        String   // ENTREE, SORTIE, TRANSFERT, PERTE, INVENTAIRE
+  quantite    Float
+  // motif OBLIGATOIRE si type = PERTE (validé côté application)
+  // Valeurs PERTE : PEREMPTION | CASSE | VOL | CONSO_INTERNE | OFFERT_CLIENT
+  motif       String?
+  typeMotif   String?  // Code de motif normalisé pour les pertes
+  refDocument String?
+  operateurId String?
+  createdAt   DateTime @default(now())
+
+  @@map("mouvements_stock")
+}
+
+model Fournisseur {
+  id          String   @id @default(cuid())
+  nom         String
+  telephone   String?
+  email       String?
+  adresse     String?
+  filiale     Filiale
+  actif       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  achats      Achat[]
+
+  @@map("fournisseurs")
+}
+
+model Achat {
+  id              String       @id @default(cuid())
+  fournisseurId   String
+  fournisseur     Fournisseur  @relation(fields: [fournisseurId], references: [id])
+  filiale         Filiale
+  reference       String       @unique
+  dateCommande    DateTime     @default(now())
+  dateReception   DateTime?
+  statut          String       @default("EN_ATTENTE") // EN_ATTENTE, RECU, PARTIEL, ANNULE
+  montantTotal    Float        @default(0)
+  notes           String?
+  createdAt       DateTime     @default(now())
+
+  lignes          LigneAchat[]
+
+  @@map("achats")
+}
+
+model LigneAchat {
+  id          String   @id @default(cuid())
+  achatId     String
+  achat       Achat    @relation(fields: [achatId], references: [id])
+  produitId   String
+  produit     Produit  @relation(fields: [produitId], references: [id])
+  quantite    Float
+  prixUnitaire Float
+  quantiteRecue Float  @default(0)
+
+  @@map("lignes_achat")
+}
+
+// ─────────────────────────────────────────────
+// GED — COMMUN
+// ─────────────────────────────────────────────
+
+model Document {
+  id          String   @id @default(cuid())
+  nom         String
+  type        String   // CNI, CONTRAT, PAIEMENT, PLAN, PHOTO, BULLETIN, EVALUATION, AUTRE
+  url         String
+  filiale     Filiale
+  entiteType  String   // employe | souscripteur | lot | livraison | commande | moto
+  entiteId    String   // ID de l'entité cible — relation gérée applicativement (pas de FK)
+  version     Int      @default(1)
+  taille      Int?
+  mimeType    String?
+  uploadePar  String?
+  supprime    Boolean  @default(false) // Soft delete — jamais de suppression physique
+  createdAt   DateTime @default(now())
+
+  @@index([entiteType, entiteId])
+  @@map("documents")
+}
+
+// ─────────────────────────────────────────────
+// FILIALE 1 : YAKRO GRILL
+// ─────────────────────────────────────────────
+
+model TableRestaurant {
+  id          String   @id @default(cuid())
+  numero      Int      @unique
+  nom         String?
+  capacite    Int      @default(4)
+  zone        String   @default("Salle") // Salle, Terrasse, VIP, Bar
+  statut      String   @default("LIBRE") // LIBRE, OCCUPEE, RESERVEE, NETTOYAGE
+  createdAt   DateTime @default(now())
+
+  commandes   CommandeYakro[]
+  reservations ReservationYakro[]
+
+  @@map("tables_restaurant")
+}
+
+model CommandeYakro {
+  id          String   @id @default(cuid())
+  numero      String   @unique
+  tableId     String?
+  table       TableRestaurant? @relation(fields: [tableId], references: [id])
+  serveurId   String?
+  type        String   @default("SUR_PLACE") // SUR_PLACE, EMPORTER, LIVRAISON
+  statut      String   @default("EN_COURS") // EN_COURS, CUISINE, PRETE, SERVIE, ANNULEE, PAYEE
+  nbCouverts  Int      @default(1)
+  sousTotal   Float    @default(0)
+  remise      Float    @default(0)
+  total       Float    @default(0)
+  notes       String?
+  typePaiement TypePaiement?
+  payeeLe     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lignes      LigneCommandeYakro[]
+  paiements   PaiementYakro[]
+  caisseTransaction CaisseTransaction?
+
+  @@map("commandes_yakro")
+}
+
+model LigneCommandeYakro {
+  id          String   @id @default(cuid())
+  commandeId  String
+  commande    CommandeYakro @relation(fields: [commandeId], references: [id])
+  produitId   String
+  produit     Produit  @relation(fields: [produitId], references: [id])
+  quantite    Int      @default(1)
+  prixUnitaire Float
+  notes       String?
+  statut      String   @default("EN_ATTENTE") // EN_ATTENTE, EN_CUISINE, PRET, SERVI
+
+  @@map("lignes_commande_yakro")
+}
+
+// Un paiement Yakro peut avoir plusieurs lignes (paiement mixte)
+model PaiementYakro {
+  id          String       @id @default(cuid())
+  commandeId  String
+  commande    CommandeYakro @relation(fields: [commandeId], references: [id])
+  montant     Float
+  type        TypePaiement
+  reference   String?      // Obligatoire si type != ESPECES
+  createdAt   DateTime     @default(now())
+
+  @@map("paiements_yakro")
+}
+
+// Stocker espèces reçues + monnaie rendue pour le POS
+model CaisseTransaction {
+  id              String       @id @default(cuid())
+  commandeId      String       @unique
+  commande        CommandeYakro @relation(fields: [commandeId], references: [id])
+  totalCommande   Float
+  especesRecues   Float        @default(0)
+  monnaieRendue   Float        @default(0)
+  estMixte        Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+
+  @@map("caisse_transactions")
+}
+
+model ReservationYakro {
+  id          String   @id @default(cuid())
+  tableId     String
+  table       TableRestaurant @relation(fields: [tableId], references: [id])
+  nomClient   String
+  telephone   String
+  dateHeure   DateTime
+  nbPersonnes Int      @default(2)
+  statut      String   @default("CONFIRMEE") // CONFIRMEE, ANNULEE, HONOREE
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@map("reservations_yakro")
+}
+
+model ServiceServeur {
+  id          String   @id @default(cuid())
+  employeId   String
+  employe     Employe  @relation(fields: [employeId], references: [id])
+  date        DateTime
+  service     String   // MIDI, SOIR, JOURNEE
+  statut      String   @default("PLANIFIE")
+  createdAt   DateTime @default(now())
+
+  @@map("services_serveurs")
+}
+
+model MenuYakro {
+  id          String   @id @default(cuid())
+  nom         String
+  description String?
+  categorie   String   // GARNITURE, PLAT_EUROPEEN, ENTREE, BROCHETTE, PLATEAU, VOLAILLE, VIANDE, PIZZA, CHAWARMA, PASTA, DESSERT, BOISSON, COCKTAIL, BIERE, VIN
+  sousCategorie String?
+  prix        Float
+  prixMini    Float?   // pour demi
+  prixMaxi    Float?   // pour entier / grande
+  disponible  Boolean  @default(true)
+  image       String?
+  coutRevient Float?   // pour calcul marge
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("menu_yakro")
+}
+
+// ─────────────────────────────────────────────
+// FILIALE 2 : TOPTELSIG (FONCIER)
+// ─────────────────────────────────────────────
+
+model ProjetFoncier {
+  id              String   @id @default(cuid())
+  code            String   @unique
+  nom             String
+  localisation    String
+  ville           String
+  superficie      Float    // en m²
+  nombreLots      Int
+  prixLotMin      Float
+  prixLotMax      Float
+  statut          String   @default("EN_COURS") // EN_COURS, TERMINE, SUSPENDU
+  dateDebut       DateTime?
+  dateFin         DateTime?
+  description     String?
+  latitude        Float?
+  longitude       Float?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  lots            Lot[]
+  depenses        DepenseFoncier[]
+
+  @@map("projets_fonciers")
+}
+
+model Lot {
+  id              String   @id @default(cuid())
+  projetId        String
+  projet          ProjetFoncier @relation(fields: [projetId], references: [id])
+  numero          String
+  superficie      Float
+  prix            Float
+  ilot            String?
+  statut          String   @default("DISPONIBLE") // DISPONIBLE, RESERVE, VENDU, LITIGE
+  latitude        Float?
+  longitude       Float?
+  createdAt       DateTime @default(now())
+
+  reservations    ReservationFoncier[]
+  vente           VenteFoncier?
+
+  @@unique([projetId, numero])
+  @@map("lots")
+}
+
+model Souscripteur {
+  id              String   @id @default(cuid())
+  code            String   @unique
+  nom             String
+  prenom          String
+  telephone       String
+  email           String?
+  adresse         String?
+  profession      String?
+  numeroCni       String?
+  statut          String   @default("PROSPECT") // PROSPECT, ACTIF, SUSPENDU, RESILIE
+  prescripteurId  String?
+  prescripteur    Prescripteur? @relation(fields: [prescripteurId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  reservations    ReservationFoncier[]
+  ventes          VenteFoncier[]
+  paiements       PaiementFoncier[]
+  documents       DocumentFoncier[]
+
+  @@map("souscripteurs")
+}
+
+model Prescripteur {
+  id              String   @id @default(cuid())
+  code            String   @unique
+  nom             String
+  prenom          String
+  telephone       String
+  email           String?
+  typePersonne    String   @default("PHYSIQUE") // PHYSIQUE | MORALE
+  raisonSociale   String?  // Si MORALE
+  ribOuMobile     String?  // Coordonnées paiement commission
+  tauxCommission  Float    @default(3)
+  actif           Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  souscripteurs   Souscripteur[]
+  commissions     Commission[]
+
+  @@map("prescripteurs")
+}
+
+model ReservationFoncier {
+  id              String   @id @default(cuid())
+  lotId           String
+  lot             Lot      @relation(fields: [lotId], references: [id])
+  souscripteurId  String
+  souscripteur    Souscripteur @relation(fields: [souscripteurId], references: [id])
+  dateReservation DateTime @default(now())
+  montantAvance   Float    @default(0)
+  statut          String   @default("ACTIVE") // ACTIVE, CONVERTIE, ANNULEE
+  notes           String?
+
+  vente           VenteFoncier?
+
+  @@map("reservations_foncier")
+}
+
+model VenteFoncier {
+  id              String   @id @default(cuid())
+  lotId           String   @unique
+  lot             Lot      @relation(fields: [lotId], references: [id])
+  souscripteurId  String
+  souscripteur    Souscripteur @relation(fields: [souscripteurId], references: [id])
+  reservationId   String?  @unique
+  reservation     ReservationFoncier? @relation(fields: [reservationId], references: [id])
+  prixVente       Float
+  dateVente       DateTime @default(now())
+  statut          String   @default("EN_COURS") // EN_COURS, SOLDE, LITIGE
+  createdAt       DateTime @default(now())
+
+  echeanciers     Echeancier[]
+  paiements       PaiementFoncier[]
+  commissions     Commission[]
+
+  @@map("ventes_foncier")
+}
+
+model Echeancier {
+  id          String   @id @default(cuid())
+  venteId     String
+  vente       VenteFoncier @relation(fields: [venteId], references: [id])
+  numero      Int
+  montant     Float
+  dateEcheance DateTime
+  statut      String   @default("EN_ATTENTE") // EN_ATTENTE, PAYE, RETARD, PARTIEL
+  montantPaye Float    @default(0)
+  createdAt   DateTime @default(now())
+
+  paiements   PaiementFoncier[]
+
+  @@map("echeanciers")
+}
+
+model PaiementFoncier {
+  id              String       @id @default(cuid())
+  venteId         String
+  vente           VenteFoncier @relation(fields: [venteId], references: [id])
+  souscripteurId  String
+  souscripteur    Souscripteur @relation(fields: [souscripteurId], references: [id])
+  echeancierId    String?
+  echeancier      Echeancier?  @relation(fields: [echeancierId], references: [id])
+  montant         Float
+  typePaiement    TypePaiement
+  reference       String?
+  statut          StatutPaiement @default(VALIDE)
+  notes           String?
+  createdAt       DateTime     @default(now())
+
+  @@map("paiements_foncier")
+}
+
+model Commission {
+  id              String   @id @default(cuid())
+  prescripteurId  String
+  prescripteur    Prescripteur @relation(fields: [prescripteurId], references: [id])
+  venteId         String
+  vente           VenteFoncier @relation(fields: [venteId], references: [id])
+  montant         Float
+  taux            Float
+  statut          String   @default("EN_ATTENTE") // EN_ATTENTE, PAYEE
+  payeeLe         DateTime?
+  createdAt       DateTime @default(now())
+
+  @@map("commissions")
+}
+
+model DepenseFoncier {
+  id              String        @id @default(cuid())
+  projetId        String
+  projet          ProjetFoncier @relation(fields: [projetId], references: [id])
+  categorie       String
+  sousCategorie   String?
+  montant         Float
+  description     String
+  date            DateTime      @default(now())
+  beneficiaire    String?       // Texte libre (entité Bénéficiaire optionnelle future)
+  typePaiement    TypePaiement?
+  justificatif    String?
+
+  // Workflow 3 niveaux
+  statut          String        @default("EN_ATTENTE")
+  // EN_ATTENTE → VALIDEE_N1 → VALIDEE_FINALE → PAYEE → ARCHIVEE | REJETEE
+
+  // Niveau 1 — Chef Projet / RESP_FONCIER
+  valideN1        Boolean       @default(false)
+  valideN1Par     String?       // userId
+  valideN1Le      DateTime?
+  valideN1Nom     String?       // Dénormalisé
+
+  // Niveau 2 — Direction (DG ou DIRECTEUR)
+  valideFinale    Boolean       @default(false)
+  valideFinalePar String?
+  valideFinaleLe  DateTime?
+  valideFinalNom  String?
+
+  // Paiement — Comptable
+  paye            Boolean       @default(false)
+  payePar         String?
+  payeLe          DateTime?
+  referenceVirement String?
+
+  // Rejet (n'importe quel niveau)
+  rejete          Boolean       @default(false)
+  rejetePar       String?
+  rejeteMotif     String?       // Obligatoire si rejet
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("depenses_foncier")
+}
+
+model DocumentFoncier {
+  id              String   @id @default(cuid())
+  souscripteurId  String
+  souscripteur    Souscripteur @relation(fields: [souscripteurId], references: [id])
+  type            String   // CNI, CONTRAT, RECU, PLAN, AUTRE
+  nom             String
+  url             String
+  version         Int      @default(1)
+  createdAt       DateTime @default(now())
+
+  @@map("documents_foncier")
+}
+
+// ─────────────────────────────────────────────
+// FILIALE 3 : LiYA (LIVRAISON & LOGISTIQUE)
+// ─────────────────────────────────────────────
+
+model Moto {
+  id                        String   @id @default(cuid())
+  immatriculation           String   @unique
+  marque                    String
+  modele                    String?
+  annee                     Int?
+  statut                    String   @default("DISPONIBLE") // DISPONIBLE, EN_LIVRAISON, MAINTENANCE, HORS_SERVICE
+  kilometrage               Float    @default(0)
+  dernierePlein             DateTime?
+  // Assurance
+  numeroAssurance           String?
+  dateExpirationAssurance   DateTime?
+  // Visite technique
+  dateVisiteTechnique       DateTime?
+  dateProchaineVisite       DateTime?
+  // Exploitation
+  consommationMoyenne       Float?   // L/100km — pour calcul rentabilité
+  valeurAcquisition         Float?   // Pour amortissement
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  livraisons      Livraison[]
+  maintenances    MaintenanceMoto[]
+  pleins          PleinCarburant[]
+
+  @@map("motos")
+}
+
+model Livraison {
+  id              String   @id @default(cuid())
+  numero          String   @unique
+  motoId          String?
+  moto            Moto?    @relation(fields: [motoId], references: [id])
+  chauffeurId     String?
+  chauffeur       Employe? @relation(fields: [chauffeurId], references: [id])
+  clientNom       String
+  clientTel       String
+  adressePrise    String
+  adresseLivraison String
+  latPrise        Float?
+  lonPrise        Float?
+  latDest         Float?
+  lonDest         Float?
+  statut          String   @default("EN_ATTENTE") // EN_ATTENTE, PRISE_EN_CHARGE, EN_ROUTE, LIVRE, ECHEC, ANNULE
+  montant         Float    @default(0)
+  typePaiement    TypePaiement?
+  paye            Boolean  @default(false)
+  dateDebut       DateTime?
+  dateFin         DateTime?
+  distance        Float?   // en km
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  positions       PositionGPS[]
+
+  @@map("livraisons")
+}
+
+model PositionGPS {
+  id          String   @id @default(cuid())
+  livraisonId String
+  livraison   Livraison @relation(fields: [livraisonId], references: [id])
+  latitude    Float
+  longitude   Float
+  vitesse     Float?
+  timestamp   DateTime @default(now())
+
+  @@map("positions_gps")
+}
+
+model MaintenanceMoto {
+  id          String   @id @default(cuid())
+  motoId      String
+  moto        Moto     @relation(fields: [motoId], references: [id])
+  type        String   // VIDANGE, PNEU, FREINS, AUTRE
+  description String
+  cout        Float    @default(0)
+  date        DateTime @default(now())
+  prestataire String?
+  statut      String   @default("PLANIFIE") // PLANIFIE, EN_COURS, TERMINE
+
+  @@map("maintenances_motos")
+}
+
+model PleinCarburant {
+  id          String   @id @default(cuid())
+  motoId      String
+  moto        Moto     @relation(fields: [motoId], references: [id])
+  litres      Float
+  montant     Float
+  kilometrage Float
+  date        DateTime @default(now())
+  station     String?
+
+  @@map("pleins_carburant")
+}
+
+model StockClient3PL {
+  id          String   @id @default(cuid())
+  clientNom   String
+  clientTel   String
+  article     String
+  quantite    Float
+  unite       String   @default("unité")
+  dateEntree  DateTime @default(now())
+  dateSortie  DateTime?
+  statut      String   @default("EN_STOCK") // EN_STOCK, SORTI_PARTIEL, SORTI_TOTAL
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@map("stocks_clients_3pl")
+}
+
+// Note: Les @@index supplémentaires ci-dessous sont à ajouter aux modèles existants
+// lors de la prochaine migration schema. Ils améliorent les performances sur les
+// requêtes de filtrage les plus fréquentes.
+//
+// AuditLog: @@index([filiale, createdAt])
+// AuditLog: @@index([utilisateurId])
+// Encaissement: @@index([filiale, createdAt])
+// Decaissement: @@index([filiale, valide])
+// CommandeYakro: @@index([statut, createdAt])
+// Livraison: @@index([statut, createdAt])
+// Livraison: @@index([chauffeurId])
+// Echeancier: @@index([statut, dateEcheance])
+// VenteFoncier: @@index([souscripteurId])
+// MouvementStock: @@index([filiale, type, createdAt])
+// PaiementFoncier: @@index([venteId])
