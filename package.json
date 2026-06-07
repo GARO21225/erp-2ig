@@ -1,0 +1,14 @@
+{
+  "name": "erp-2ig",
+  "version": "2.0.0",
+  "description": "ERP Groupe 2IG — Monorepo",
+  "private": true,
+  "scripts": {
+    "start": "cd backend && node src/index.js",
+    "build": "cd backend && npm install && npx prisma generate",
+    "install:all": "cd backend && npm install && cd ../frontend && npm install"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
