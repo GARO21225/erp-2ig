@@ -94,7 +94,6 @@ model Utilisateur {
 
   employe            Employe?
   sessions           Session[]
-  actions            AuditLog[]
 
   @@index([email])
   @@map("utilisateurs")
