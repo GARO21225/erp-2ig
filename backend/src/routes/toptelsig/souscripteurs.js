@@ -139,3 +139,35 @@ router.post('/:id/paiements', auth, toptelsig, async (req, res) => {
 });
 
 module.exports = router;
+
+// GET /template — Template Excel souscripteurs
+router.get('/template', auth, toptelsig, (_, res) => {
+  const headers = ['nom','prenom','telephone','email','adresse','profession','numeroCni','statut'];
+  const example = [['DUPONT','Jean','0701234567','jean@email.com','Abidjan Cocody','Ingénieur','CI12345678','PROSPECT']];
+  res.setHeader('Content-Disposition', 'attachment; filename="template_souscripteurs.csv"');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.send('\uFEFF' + [headers, ...example].map(r => r.join(';')).join('\r\n'));
+});
+
+// POST /import — Import CSV/Excel souscripteurs
+const multer = require('multer');
+const upload2 = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5*1024*1024 } });
+router.post('/import', auth, toptelsig, upload2.single('fichier'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Fichier requis' });
+    const xlsx = require('xlsx');
+    const wb = xlsx.read(req.file.buffer, { type: 'buffer' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = xlsx.utils.sheet_to_json(ws, { defval: '' });
+    const errors = [], created = [];
+    for (const [i, row] of rows.entries()) {
+      if (!row.nom || !row.prenom || !row.telephone) { errors.push(`Ligne ${i+2}: nom, prenom, telephone requis`); continue; }
+      try {
+        const code = `SOUS-${Date.now()}-${i}`;
+        const s = await prisma.souscripteur.create({ data: { code, nom: String(row.nom), prenom: String(row.prenom), telephone: String(row.telephone), email: row.email || null, adresse: row.adresse || null, profession: row.profession || null, numeroCni: row.numeroCni || null, statut: row.statut || 'PROSPECT' } });
+        created.push(s.id);
+      } catch(e) { errors.push(`Ligne ${i+2}: ${e.message}`); }
+    }
+    res.json({ imported: created.length, errors, total: rows.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});

@@ -25,7 +25,7 @@ router.get('/', auth, yakro, async (req, res) => {
       prisma.commandeYakro.findMany({
         where, skip: (Number(page)-1)*Number(limit), take: Number(limit),
         orderBy: { createdAt: 'desc' },
-        include: { table: true, lignes: { include: { produit: true } }, paiements: true, caisseTransaction: true }
+        include: { table: true, lignes: { include: { menu: true } }, paiements: true, caisseTransaction: true }
       })
     ]);
     res.json({ data: commandes, total, page: Number(page), pages: Math.ceil(total/Number(limit)) });
@@ -72,7 +72,7 @@ router.post('/', auth, yakro, VALIDATORS.commande, async (req, res) => {
       if (!item.disponible) return res.status(400).json({ error: `Article "${item.nom}" indisponible (rupture ou hors menu)` });
       const prix = l.prixUnitaire || item.prix;
       sousTotal += prix * l.quantite;
-      lignesData.push({ produitId: l.menuId, quantite: l.quantite, prixUnitaire: prix, notes: l.notes });
+      lignesData.push({ menuId: l.menuId, quantite: l.quantite, prixUnitaire: prix, notes: l.notes });
     }
 
     if (lignesData.length === 0) return res.status(400).json({ error: 'Aucun article valide dans la commande' });

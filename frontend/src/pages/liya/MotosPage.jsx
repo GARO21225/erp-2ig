@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { liyaAPI } from '../../lib/api';
+import ExportBar from '../../components/ui/ExportBar';
+import ImportButton from '../../components/ui/ImportButton';
 import { Plus, X, Wrench, Fuel, ChevronRight } from 'lucide-react';
 
 const STATUT_MOTO = {
@@ -13,6 +15,28 @@ const STATUT_MOTO = {
 export default function MotosPage() {
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+
+  const handleImportMotos = async ({ lignes, entetes }) => {
+    setImporting(true);
+    try {
+      const file = new Blob([/* reconstruit depuis lignes */], { type: 'text/csv' });
+      // Import via CSV reconstruit
+      const csv = [entetes.join(';'), ...lignes.map(l => l.join(';'))].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const fd = new FormData();
+      fd.append('fichier', blob, 'motos_import.csv');
+      const res = await liyaAPI.importMotos(blob);
+      setImportResult(res.data);
+      qc.invalidateQueries(['motos']);
+    } catch (e) {
+      setImportResult({ error: e?.response?.data?.error || e.message });
+    } finally { setImporting(false); }
+  };
+
+  const handleDownloadTemplate = () => { window.open(liyaAPI.motosTemplate(), '_blank'); };
+  const handleExportMotos = () => { window.open(liyaAPI.exportMotos(), '_blank'); };
   const [showPlein, setShowPlein] = useState(null);
   const [showMaint, setShowMaint] = useState(null);
   const [showHisto, setShowHisto] = useState(null);
@@ -30,6 +54,19 @@ export default function MotosPage() {
   const list = Array.isArray(motos) ? motos : [];
   const disponibles = list.filter(m => m.statut === 'DISPONIBLE').length;
   const enLivraison = list.filter(m => m.statut === 'EN_LIVRAISON').length;
+
+  if (importResult) return (
+    <div className="card" style={{ maxWidth:500, margin:'40px auto', textAlign:'center' }}>
+      <h3 style={{ fontFamily:'Syne' }}>{importResult.error ? '❌ Erreur' : '✅ Import terminé'}</h3>
+      {importResult.error ? <p style={{color:'#A32D2D'}}>{importResult.error}</p> : (
+        <>
+          <p><strong>{importResult.imported}</strong> moto(s) importée(s) sur {importResult.total}</p>
+          {importResult.errors?.length > 0 && <ul style={{textAlign:'left',fontSize:12,color:'#A32D2D'}}>{importResult.errors.map((e,i)=><li key={i}>{e}</li>)}</ul>}
+        </>
+      )}
+      <button className="btn btn-primary" style={{marginTop:16}} onClick={() => { setImportResult(null); qc.invalidateQueries(['motos']); }}>Fermer</button>
+    </div>
+  );
 
   return (
     <div className="page-enter">

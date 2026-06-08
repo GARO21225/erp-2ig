@@ -118,3 +118,61 @@ router.get('/:id/historique', auth, liya, async (req, res) => {
 });
 
 module.exports = router;
+
+// GET /template — Template Excel motos
+router.get('/template', auth, liya, (_, res) => {
+  const headers = ['immatriculation','marque','modele','annee','kilometrage','dateExpirationAssurance','dateVisiteTechnique'];
+  const example = [['AB1234CI','Honda','CB125F',2023,5000,'2027-06-01','2026-12-01']];
+  res.setHeader('Content-Disposition', 'attachment; filename="template_motos.csv"');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.send('\uFEFF' + [headers, ...example].map(r => r.join(';')).join('\r\n'));
+});
+
+// POST /import — Import Excel/CSV motos
+const multerM = require('multer');
+const uploadM = multerM({ storage: multerM.memoryStorage(), limits: { fileSize: 5*1024*1024 } });
+router.post('/import', auth, liya, uploadM.single('fichier'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Fichier requis' });
+    const xlsx = require('xlsx');
+    const wb = xlsx.read(req.file.buffer, { type: 'buffer' });
+    const rows = xlsx.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+    const errors = [], created = [];
+    for (const [i, row] of rows.entries()) {
+      if (!row.immatriculation || !row.marque) { errors.push(`Ligne ${i+2}: immatriculation et marque requis`); continue; }
+      try {
+        const m = await prisma.moto.create({ data: {
+          immatriculation: String(row.immatriculation).toUpperCase(),
+          marque: String(row.marque), modele: row.modele || null,
+          annee: row.annee ? Number(row.annee) : null,
+          kilometrage: row.kilometrage ? Number(row.kilometrage) : 0,
+          dateExpirationAssurance: row.dateExpirationAssurance ? new Date(row.dateExpirationAssurance) : null,
+          dateVisiteTechnique: row.dateVisiteTechnique ? new Date(row.dateVisiteTechnique) : null,
+        }});
+        created.push(m.id);
+      } catch(e) { errors.push(`Ligne ${i+2}: ${e.message}`); }
+    }
+    res.json({ imported: created.length, errors, total: rows.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /export — Export Excel motos
+router.get('/export', auth, liya, async (req, res) => {
+  try {
+    const motos = await prisma.moto.findMany({ orderBy: { createdAt: 'desc' } });
+    const xlsx = require('xlsx');
+    const data = motos.map(m => ({
+      Immatriculation: m.immatriculation, Marque: m.marque, Modèle: m.modele || '',
+      Année: m.annee || '', Kilométrage: m.kilometrage, Statut: m.statut,
+      'Assurance expire': m.dateExpirationAssurance ? new Date(m.dateExpirationAssurance).toLocaleDateString('fr') : '',
+      'Visite expire': m.dateVisiteTechnique ? new Date(m.dateVisiteTechnique).toLocaleDateString('fr') : '',
+    }));
+    const ws = xlsx.utils.json_to_sheet(data);
+    const wb = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(wb, ws, 'Motos');
+    const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Disposition', 'attachment; filename="motos_liya.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.send(buf);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});

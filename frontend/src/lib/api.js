@@ -108,6 +108,8 @@ export const toptelsigAPI = {
   createLotsBatch: (data) => api.post('/toptelsig/lots/batch', data),
 
   souscripteurs: (params) => api.get('/toptelsig/souscripteurs', { params }),
+  souscripteursTemplate: () => `${api.defaults.baseURL}/toptelsig/souscripteurs/template`,
+  importSouscripteurs: (file) => { const fd = new FormData(); fd.append('fichier', file); return api.post('/toptelsig/souscripteurs/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }); },
   getSouscripteur: (id) => api.get(`/toptelsig/souscripteurs/${id}`),
   createSouscripteur: (data) => api.post('/toptelsig/souscripteurs', data),
   updateSouscripteur: (id, data) => api.put(`/toptelsig/souscripteurs/${id}`, data),
@@ -118,6 +120,7 @@ export const toptelsigAPI = {
   retards: () => api.get('/toptelsig/ventes/retards'),
 
   depenses: (params) => api.get('/toptelsig/depenses', { params }),
+  exportDepenses: (params) => `${api.defaults.baseURL}/toptelsig/depenses/export?${new URLSearchParams(params || {}).toString()}`,
   createDepense: (data) => api.post('/toptelsig/depenses', data),
   validerDepense: (id) => api.put(`/toptelsig/depenses/${id}/valider`),
   statsDepenses: (params) => api.get('/toptelsig/depenses/stats', { params }),
@@ -126,6 +129,7 @@ export const toptelsigAPI = {
 // ── LIYA
 export const liyaAPI = {
   livraisons: (params) => api.get('/liya/livraisons', { params }),
+  exportLivraisonsXlsx: (params) => `${api.defaults.baseURL}/liya/livraisons/export?${new URLSearchParams(params || {}).toString()}`,
   stats: () => api.get('/liya/livraisons/stats'),
   createLivraison: (data) => api.post('/liya/livraisons', data),
   updateStatut: (id, statut) => api.put(`/liya/livraisons/${id}/statut`, { statut }),
@@ -133,6 +137,9 @@ export const liyaAPI = {
   positions: (id) => api.get(`/liya/livraisons/${id}/positions`),
 
   motos: () => api.get('/liya/motos'),
+  motosTemplate: () => `${api.defaults.baseURL}/liya/motos/template`,
+  importMotos: (file) => { const fd = new FormData(); fd.append('fichier', file); return api.post('/liya/motos/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }); },
+  exportMotos: () => `${api.defaults.baseURL}/liya/motos/export`,
   createMoto: (data) => api.post('/liya/motos', data),
   updateMoto: (id, data) => api.put(`/liya/motos/${id}`, data),
   addMaintenance: (id, data) => api.post(`/liya/motos/${id}/maintenances`, data),

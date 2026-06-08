@@ -49,6 +49,14 @@ export default function DepensesPage() {
 
   const STATUTS_FILTRE = [['', 'Toutes'], ['EN_ATTENTE', 'En attente'], ['VALIDEE_N1', 'Validées N1'], ['VALIDEE_FINALE', 'À payer'], ['PAYEE', 'Payées'], ['REJETEE', 'Rejetées']];
 
+  const handleExport = () => {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const url = toptelsigAPI.exportDepenses(projetFiltreId ? { projetId: projetFiltreId } : {});
+    const a = document.createElement('a');
+    a.href = url;
+    a.click();
+  };
+
   return (
     <div className="page-enter">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>

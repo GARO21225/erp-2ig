@@ -531,8 +531,8 @@ model LigneCommandeYakro {
   id          String   @id @default(cuid())
   commandeId  String
   commande    CommandeYakro @relation(fields: [commandeId], references: [id])
-  produitId   String
-  produit     Produit  @relation(fields: [produitId], references: [id])
+  menuId      String
+  menu        MenuYakro @relation(fields: [menuId], references: [id])
   quantite    Int      @default(1)
   prixUnitaire Float
   notes       String?

@@ -230,3 +230,30 @@ router.post('/:id/incident', auth, liya, async (req, res) => {
     res.json({ message: 'Incident déclaré, moto mise hors service, livraison marquée en échec' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+// GET /export — Export Excel livraisons
+router.get('/export', auth, liya, async (req, res) => {
+  try {
+    const { dateDebut, dateFin, statut } = req.query;
+    const where = {};
+    if (statut) where.statut = statut;
+    if (dateDebut || dateFin) { where.createdAt = {}; if (dateDebut) where.createdAt.gte = new Date(dateDebut); if (dateFin) where.createdAt.lte = new Date(dateFin); }
+    const livraisons = await prisma.livraison.findMany({ where, orderBy: { createdAt: 'desc' }, take: 10000,
+      include: { chauffeur: { select: { nom: true, prenom: true } } } });
+    const xlsx = require('xlsx');
+    const data = livraisons.map(l => ({
+      Numéro: l.numero, Client: l.clientNom, Téléphone: l.clientTel,
+      'Adresse prise': l.adressePrise, 'Adresse livraison': l.adresseLivraison,
+      Statut: l.statut, Montant: l.montant, Payé: l.paye ? 'Oui' : 'Non',
+      Livreur: l.chauffeur ? `${l.chauffeur.prenom} ${l.chauffeur.nom}` : '—',
+      Date: new Date(l.createdAt).toLocaleString('fr'),
+    }));
+    const ws = xlsx.utils.json_to_sheet(data);
+    const wb = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(wb, ws, 'Livraisons');
+    const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Disposition', `attachment; filename="livraisons_${new Date().toISOString().split('T')[0]}.xlsx"`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.send(buf);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});

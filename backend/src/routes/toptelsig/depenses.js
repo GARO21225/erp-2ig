@@ -227,3 +227,29 @@ function getCategoriesDepenses() {
 }
 
 module.exports = router;
+
+// GET /export — Export Excel dépenses
+router.get('/export', auth, toptelsig, async (req, res) => {
+  try {
+    const { projetId, statut } = req.query;
+    const where = {};
+    if (projetId) where.projetId = projetId;
+    if (statut) where.statut = statut;
+    const depenses = await prisma.depenseFoncier.findMany({ where, orderBy: { createdAt: 'desc' },
+      include: { projet: { select: { nom: true, code: true } } } });
+    const xlsx = require('xlsx');
+    const data = depenses.map(d => ({
+      Projet: d.projet?.nom || '—', Catégorie: d.categorie, 'Sous-catégorie': d.sousCategorie || '',
+      Montant: d.montant, Description: d.description, Bénéficiaire: d.beneficiaire || '',
+      'Type paiement': d.typePaiement || '', Statut: d.statut,
+      Date: new Date(d.date).toLocaleDateString('fr'),
+    }));
+    const ws = xlsx.utils.json_to_sheet(data);
+    const wb = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(wb, ws, 'Dépenses');
+    const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Disposition', 'attachment; filename="depenses_foncier.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.send(buf);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
