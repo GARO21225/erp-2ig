@@ -71,6 +71,7 @@ export const financeAPI = {
 
 // ── STOCKS
 export const stocksAPI = {
+  seedYakro: () => api.post('/stocks/seed-yakro'),
   produits: (params) => api.get('/stocks/produits', { params }),
   createProduit: (data) => api.post('/stocks/produits', data),
   mouvements: (params) => api.get('/stocks/mouvements', { params }),

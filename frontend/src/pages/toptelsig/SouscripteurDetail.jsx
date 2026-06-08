@@ -253,9 +253,7 @@ export default function SouscripteurDetail() {
           {tab === 'documents' && (
             <div>
               {s.documents?.length === 0 && (
-                <div style={{ textAlign: 'center', padding: 40, color: '#ccc', fontSize: 13 }}>
-                  <FileText size={28} style={{ marginBottom: 8 }} /><br />Aucun document uploadé
-                </div>
+                                  <GEDPanel entiteType="souscripteur" entiteId={s?.id} />
               )}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
                 {s.documents?.map(d => (

@@ -32,6 +32,7 @@ app.use('/api/stocks',      require('./routes/stocks'));
 app.use('/api/documents',   require('./routes/documents'));
 app.use('/api/dashboard',   require('./routes/dashboard'));
 app.use('/api/recherche',   require('./routes/recherche'));
+app.use('/api/audit', require('./routes/audit'));
 app.use('/api/backup',      require('./routes/backup'));
 app.use('/api/yakro/tables',       require('./routes/yakro/tables'));
 app.use('/api/yakro/commandes',    require('./routes/yakro/commandes'));

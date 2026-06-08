@@ -30,6 +30,18 @@ export default function StocksPage() {
   const list = Array.isArray(produits) ? produits : [];
   const enAlerte = list.filter(p => p.enAlerte).length;
 
+  const [seeding, setSeeding] = useState(false);
+  const seedYakro = async () => {
+    if (!confirm('Initialiser le stock Yakro Grill avec 36 articles ? (déjà existants = ignorés)')) return;
+    setSeeding(true);
+    try {
+      const res = await stocksAPI.seedYakro();
+      alert(`✅ ${res.created} article(s) créé(s), ${res.skipped} déjà présent(s)`);
+      qc.invalidateQueries(['produits']);
+    } catch (e) { alert('Erreur: ' + (e?.error || e.message)); }
+    finally { setSeeding(false); }
+  };
+
   return (
     <div className="page-enter">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
@@ -108,7 +120,11 @@ export default function StocksPage() {
             <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
               <button className="btn btn-ghost btn-sm" onClick={() => setShowCreate(false)}>Annuler</button>
               <TemplateButton url="/stocks/template-import" label="Template stock" />
-          <button className="btn btn-primary btn-sm" onClick={() => createMut.mutate({ ...form, prixAchat: Number(form.prixAchat), prixVente: Number(form.prixVente) })}>Créer</button>
+          <button className="btn btn-ghost btn-sm" onClick={seedYakro} disabled={seeding}
+          style={{ borderColor: '#8B1A1A20', color: '#8B1A1A', background: '#FDF2F2' }}>
+          {seeding ? '⏳' : '🔥'} Stock Yakro
+        </button>
+        <button className="btn btn-primary btn-sm" onClick={() => createMut.mutate({ ...form, prixAchat: Number(form.prixAchat), prixVente: Number(form.prixVente) })}>Créer</button>
             </div>
           </div>
         </div>

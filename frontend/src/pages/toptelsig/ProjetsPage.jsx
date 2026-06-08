@@ -1,126 +1,192 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toptelsigAPI } from '../../lib/api';
-import TemplateButton from '../../components/ui/TemplateButton';
-import { Plus, X, MapPin, Upload, Download } from 'lucide-react';
+import { Plus, X, MapPin, Download, Upload, Search } from 'lucide-react';
 import ImportButton from '../../components/ui/ImportButton';
 import ExportBar from '../../components/ui/ExportBar';
-import { exportExcel, exportPDF, exportLots } from '../../lib/export';
+import TemplateButton from '../../components/ui/TemplateButton';
+import { exportExcel, exportPDF } from '../../lib/export';
+import { VILLES_CI, LOCALISATIONS_CI } from '../../lib/catalogue-rh';
 
-const STATUT_COLORS = { EN_COURS: 'badge-blue', TERMINE: 'badge-green', SUSPENDU: 'badge-amber' };
+const STATUTS = { EN_COURS:'badge-blue', TERMINE:'badge-green', SUSPENDU:'badge-amber', ANNULE:'badge-red' };
 
-function ModalImportLots({ projetId, projetNom, onClose }) {
-  const [preview, setPreview] = useState(null);
-  const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState(null);
+// Combobox ville avec saisie libre + suggestions
+function ComboboxVille({ value, onChange, placeholder = 'Choisir ou saisir...' }) {
+  const [query, setQuery] = useState(value || '');
+  const [open, setOpen] = useState(false);
+  const filtered = VILLES_CI.filter(v => v.toLowerCase().includes(query.toLowerCase())).slice(0, 8);
 
-  const TEMPLATE_COLS = ['numero', 'superficie', 'prix', 'ilot', 'latitude', 'longitude'];
+  const handleSelect = (v) => { setQuery(v); onChange(v); setOpen(false); };
+  const handleChange = (e) => { setQuery(e.target.value); onChange(e.target.value); setOpen(true); };
 
-  const handleData = ({ entetes, lignes, nomFichier }) => {
-    const headersLow = entetes.map(h => h.toLowerCase().replace(/ \*.*$/, '').trim());
-    const erreurs = [];
-    const lotsPreview = [];
-    
-    lignes.slice(0, 5).forEach((row, i) => {
-      const obj = {};
-      headersLow.forEach((h, idx) => { obj[h] = row[idx]; });
-      lotsPreview.push(obj);
-    });
-    setPreview({ entetes, lignes, nomFichier, headersLow, preview: lotsPreview });
+  return (
+    <div style={{ position: 'relative' }}>
+      <input className="input" value={query} onChange={handleChange}
+        onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 200)}
+        placeholder={placeholder} />
+      {open && filtered.length > 0 && (
+        <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:100, background:'white', border:'0.5px solid #e8e7e1', borderRadius:8, boxShadow:'0 4px 16px rgba(0,0,0,0.1)', maxHeight:200, overflowY:'auto' }}>
+          {filtered.map(v => (
+            <div key={v} onMouseDown={() => handleSelect(v)}
+              style={{ padding:'8px 12px', cursor:'pointer', fontSize:13 }}
+              onMouseEnter={e => e.target.style.background='#F1EFE8'}
+              onMouseLeave={e => e.target.style.background='transparent'}>{v}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Combobox localisation filtrée par ville
+function ComboboxLocalisation({ value, onChange, ville }) {
+  const suggestions = ville && LOCALISATIONS_CI[ville] ? LOCALISATIONS_CI[ville] : [];
+  const [query, setQuery] = useState(value || '');
+  const [open, setOpen] = useState(false);
+  const filtered = suggestions.filter(l => l.toLowerCase().includes(query.toLowerCase())).slice(0, 8);
+
+  const handleSelect = (v) => { setQuery(v); onChange(v); setOpen(false); };
+  const handleChange = (e) => { setQuery(e.target.value); onChange(e.target.value); setOpen(true); };
+
+  return (
+    <div style={{ position:'relative' }}>
+      <input className="input" value={query} onChange={handleChange}
+        onFocus={() => filtered.length > 0 && setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 200)}
+        placeholder={ville ? `Localisation à ${ville}...` : 'Localisation (saisie libre)'} />
+      {open && filtered.length > 0 && (
+        <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:100, background:'white', border:'0.5px solid #e8e7e1', borderRadius:8, boxShadow:'0 4px 16px rgba(0,0,0,0.1)', maxHeight:180, overflowY:'auto' }}>
+          {filtered.map(l => (
+            <div key={l} onMouseDown={() => handleSelect(l)}
+              style={{ padding:'8px 12px', cursor:'pointer', fontSize:13 }}
+              onMouseEnter={e => e.target.style.background='#F1EFE8'}
+              onMouseLeave={e => e.target.style.background='transparent'}>{l}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Générer un code projet automatique
+function genCode(nom, ville) {
+  const year = new Date().getFullYear().toString().slice(-2);
+  const n = (nom || 'PRJ').slice(0, 3).toUpperCase().replace(/[^A-Z]/g, 'X');
+  const v = (ville || 'CI').slice(0, 2).toUpperCase().replace(/[^A-Z]/g, 'X');
+  const rand = Math.floor(Math.random() * 900 + 100);
+  return `${n}-${v}${year}-${rand}`;
+}
+
+function ModalProjet({ projet, onClose, onSave, loading }) {
+  const isEdit = !!projet;
+  const [form, setForm] = useState({
+    code: projet?.code || '',
+    nom: projet?.nom || '',
+    ville: projet?.ville || '',
+    localisation: projet?.localisation || '',
+    superficie: projet?.superficie || '',
+    nombreLots: projet?.nombreLots || '',
+    prixLotMin: projet?.prixLotMin || '',
+    prixLotMax: projet?.prixLotMax || '',
+    description: projet?.description || '',
+    statut: projet?.statut || 'EN_COURS',
+    latitude: projet?.latitude || '',
+    longitude: projet?.longitude || '',
+  });
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  // Auto-générer le code quand nom ou ville change
+  const handleVilleChange = (v) => {
+    set('ville', v);
+    set('localisation', ''); // reset localisation
+    if (!isEdit && !form.code) set('code', genCode(form.nom, v));
   };
-
-  const confirmerImport = async () => {
-    if (!preview) return;
-    setImporting(true);
-    try {
-      const formData = new FormData();
-      formData.append('projetId', projetId);
-      
-      // Recréer le fichier Excel depuis les données parsées
-      const XLSX = await import('xlsx');
-      const ws = XLSX.utils.aoa_to_sheet([preview.entetes, ...preview.lignes]);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Lots');
-      const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
-      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      formData.append('fichier', blob, 'lots.xlsx');
-      
-      const token = JSON.parse(localStorage.getItem('2ig-auth') || '{}')?.state?.token;
-      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}/toptelsig/lots/import`, {
-        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData
-      });
-      const data = await res.json();
-      setResult(data);
-    } catch (e) {
-      setResult({ erreur: e.message });
-    } finally {
-      setImporting(false);
-    }
+  const handleNomChange = (e) => {
+    set('nom', e.target.value);
+    if (!isEdit && !form.code) set('code', genCode(e.target.value, form.ville));
   };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 600 }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
-          <h3 style={{ margin: 0, fontFamily: 'Syne', fontSize: 16 }}>Import lots — {projetNom}</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+      <div className="modal" style={{ maxWidth:600 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+          <h3 style={{ margin:0, fontFamily:'Syne', fontSize:16 }}>
+            {isEdit ? 'Modifier le projet' : 'Nouveau projet foncier'}
+          </h3>
+          <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer' }}><X size={18}/></button>
         </div>
 
-        {!result && (
-          <>
-            <div style={{ background: '#EEF3FB', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12, color: '#1a3f6f' }}>
-              Colonnes attendues : <strong>numero *, superficie *, prix *, ilot, latitude, longitude</strong><br />
-              Maximum 500 lots par fichier.
-            </div>
-            <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-              <ImportButton onData={handleData} label="Sélectionner le fichier Excel" color="#1a3f6f" />
-              <TemplateButton url={`/toptelsig/lots/template?projetId=${projetId}`} label="Template lots" />
-            </div>
-
-            {preview && (
-              <div>
-                <div style={{ fontSize: 12, color: '#888', marginBottom: 8 }}>
-                  Aperçu — {preview.lignes.length} ligne(s) détectée(s) dans "{preview.nomFichier}"
-                </div>
-                <div style={{ overflow: 'auto', maxHeight: 200, border: '0.5px solid #e8e7e1', borderRadius: 8 }}>
-                  <table className="table-erp" style={{ fontSize: 11 }}>
-                    <thead><tr>{preview.entetes.slice(0, 6).map(h => <th key={h}>{h}</th>)}</tr></thead>
-                    <tbody>{preview.preview.map((row, i) => (
-                      <tr key={i}>{preview.entetes.slice(0, 6).map(h => <td key={h}>{String(row[h.toLowerCase().replace(/ \*.*$/,'').trim()] || '—')}</td>)}</tr>
-                    ))}</tbody>
-                  </table>
-                </div>
-                {preview.lignes.length > 5 && <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>...et {preview.lignes.length - 5} autres lignes</div>}
-                <div style={{ display: 'flex', gap: 10, marginTop: 14, justifyContent: 'flex-end' }}>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setPreview(null)}>Changer de fichier</button>
-                  <button className="btn btn-sm" style={{ background: '#1a3f6f', color: 'white', border: 'none' }} onClick={confirmerImport} disabled={importing}>
-                    {importing ? 'Import en cours...' : `Importer ${preview.lignes.length} lots`}
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {result && (
+        <div className="form-grid">
           <div>
-            <div style={{ padding: '14px', background: result.erreur ? '#FCEBEB' : '#EAF3DE', borderRadius: 10, marginBottom: 14 }}>
-              <div style={{ fontWeight: 600, fontSize: 14, color: result.erreur ? '#A32D2D' : '#27500A', marginBottom: 6 }}>
-                {result.erreur ? '❌ Erreur' : `✅ ${result.importes} lot(s) importé(s)`}
-              </div>
-              {result.message && <div style={{ fontSize: 13 }}>{result.message}</div>}
+            <label className="label">Code projet *</label>
+            <div style={{ display:'flex', gap:6 }}>
+              <input className="input" value={form.code} onChange={e => set('code', e.target.value)} placeholder="Ex: YAM-AB24-001" style={{ flex:1 }} />
+              <button type="button" onClick={() => set('code', genCode(form.nom, form.ville))}
+                style={{ padding:'0 10px', background:'#EEF3FB', border:'none', borderRadius:7, cursor:'pointer', fontSize:11, color:'#1a3f6f', whiteSpace:'nowrap' }}>
+                🔄 Auto
+              </button>
             </div>
-            {result.erreurs?.length > 0 && (
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#A32D2D' }}>Lignes en erreur :</div>
-                <div style={{ maxHeight: 200, overflow: 'auto', fontSize: 12 }}>
-                  {result.erreurs.map((e, i) => <div key={i} style={{ padding: '3px 0', color: '#666' }}>• {e}</div>)}
-                </div>
-              </div>
-            )}
-            <button className="btn btn-primary btn-sm" style={{ marginTop: 14 }} onClick={onClose}>Fermer</button>
           </div>
-        )}
+          <div>
+            <label className="label">Nom du projet *</label>
+            <input className="input" value={form.nom} onChange={handleNomChange} placeholder="Ex: Résidence Les Palmiers" />
+          </div>
+
+          <div>
+            <label className="label">Ville *</label>
+            <ComboboxVille value={form.ville} onChange={handleVilleChange} />
+          </div>
+          <div>
+            <label className="label">Localisation / Quartier</label>
+            <ComboboxLocalisation value={form.localisation} onChange={v => set('localisation', v)} ville={form.ville} />
+          </div>
+
+          <div>
+            <label className="label">Superficie (m²) *</label>
+            <input className="input" type="number" value={form.superficie} onChange={e => set('superficie', e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Nombre de lots *</label>
+            <input className="input" type="number" value={form.nombreLots} onChange={e => set('nombreLots', e.target.value)} />
+          </div>
+
+          <div>
+            <label className="label">Prix lot min (FCFA)</label>
+            <input className="input" type="number" value={form.prixLotMin} onChange={e => set('prixLotMin', e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Prix lot max (FCFA)</label>
+            <input className="input" type="number" value={form.prixLotMax} onChange={e => set('prixLotMax', e.target.value)} />
+          </div>
+
+          <div>
+            <label className="label">Latitude (GPS)</label>
+            <input className="input" type="number" step="any" value={form.latitude} onChange={e => set('latitude', e.target.value)} placeholder="Ex: 5.3600" />
+          </div>
+          <div>
+            <label className="label">Longitude (GPS)</label>
+            <input className="input" type="number" step="any" value={form.longitude} onChange={e => set('longitude', e.target.value)} placeholder="Ex: -4.0083" />
+          </div>
+
+          <div className="full">
+            <label className="label">Description</label>
+            <textarea className="input" rows={3} value={form.description} onChange={e => set('description', e.target.value)} style={{ resize:'vertical' }} />
+          </div>
+        </div>
+
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:20 }}>
+          <button className="btn btn-ghost" onClick={onClose}>Annuler</button>
+          <button className="btn btn-primary" disabled={loading || !form.code || !form.nom}
+            onClick={() => onSave({
+              ...form,
+              superficie: Number(form.superficie), nombreLots: Number(form.nombreLots),
+              prixLotMin: Number(form.prixLotMin) || 0, prixLotMax: Number(form.prixLotMax) || 0,
+              latitude: form.latitude ? Number(form.latitude) : null,
+              longitude: form.longitude ? Number(form.longitude) : null,
+            })}>
+            {loading ? 'Enregistrement...' : isEdit ? 'Modifier' : 'Créer'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -129,128 +195,134 @@ function ModalImportLots({ projetId, projetNom, onClose }) {
 export default function ProjetsPage() {
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
-  const [showImportLots, setShowImportLots] = useState(null); // { id, nom }
-  const [form, setForm] = useState({ code: '', nom: '', localisation: '', ville: 'Abidjan', superficie: '', nombreLots: '', prixLotMin: '', prixLotMax: '', description: '' });
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const [editProjet, setEditProjet] = useState(null);
+  const [projetOuvert, setProjetOuvert] = useState(null);
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type='success') => { setToast({msg,type}); setTimeout(()=>setToast(null),3500); };
 
-  const { data: projets, isLoading } = useQuery({ queryKey: ['projets'], queryFn: toptelsigAPI.projets });
-  const createMut = useMutation({ mutationFn: toptelsigAPI.createProjet, onSuccess: () => { qc.invalidateQueries(['projets']); setShowCreate(false); } });
+  const { data: projets = [] } = useQuery({ queryKey:['projets'], queryFn: toptelsigAPI.projets });
 
-  const list = Array.isArray(projets) ? projets : [];
+  const createMut = useMutation({
+    mutationFn: toptelsigAPI.createProjet,
+    onSuccess: () => { qc.invalidateQueries(['projets']); setShowCreate(false); showToast('Projet créé'); },
+    onError: e => showToast(e?.error || e?.message || 'Erreur', 'error'),
+  });
 
-  const handleExportLots = async (projet) => {
-    const lots = await toptelsigAPI.lots({ projetId: projet.id, limit: 1000 });
-    const { entetes, lignes } = exportLots(Array.isArray(lots) ? lots : []);
-    exportExcel(`lots_${projet.code}`, `Lots ${projet.nom}`, entetes, lignes);
+  const updateMut = useMutation({
+    mutationFn: ({ id, data }) => toptelsigAPI.updateProjet(id, data),
+    onSuccess: () => { qc.invalidateQueries(['projets']); setEditProjet(null); showToast('Projet mis à jour'); },
+    onError: e => showToast(e?.error || 'Erreur', 'error'),
+  });
+
+  // Export Excel
+  const handleExportExcel = () => {
+    const entetes = ['Code','Nom','Ville','Localisation','Superficie (m²)','Nb lots','Prix min','Prix max','Statut'];
+    const lignes = projets.map(p => [p.code, p.nom, p.ville, p.localisation||'', p.superficie, p.nombreLots, p.prixLotMin, p.prixLotMax, p.statut]);
+    exportExcel('projets_fonciers', 'Projets', entetes, lignes);
   };
+
+  const listeProjets = Array.isArray(projets) ? projets : [];
 
   return (
     <div className="page-enter">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+      <div className="page-header">
         <div>
-          <h1 style={{ margin: 0, fontSize: 20, fontFamily: 'Syne', fontWeight: 800 }}>Projets Fonciers</h1>
-          <div style={{ fontSize: 12, color: '#888', marginTop: 3 }}>{list.length} projets</div>
+          <h1 style={{ margin:0, fontFamily:'Syne', fontWeight:800, fontSize:20 }}>Projets Fonciers</h1>
+          <p style={{ margin:'4px 0 0', fontSize:12, color:'#888' }}>
+            {listeProjets.length} projet(s) · {listeProjets.filter(p=>p.statut==='EN_COURS').length} actif(s)
+          </p>
         </div>
-        <button className="btn btn-sm" style={{ background: '#1a3f6f', color: 'white', border: 'none' }} onClick={() => setShowCreate(true)}>
-          <Plus size={13} /> Nouveau projet
-        </button>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+          <ExportBar onExcelClick={handleExportExcel} />
+          <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
+            <Plus size={13} /> Nouveau projet
+          </button>
+        </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
+      {/* KPI */}
+      <div className="grid-kpi" style={{ marginBottom:20 }}>
         {[
-          { label: 'Projets actifs', value: list.filter(p => p.statut === 'EN_COURS').length },
-          { label: 'Total lots', value: list.reduce((s, p) => s + (p._count?.lots || 0), 0) },
-          { label: 'Lots vendus', value: list.reduce((s, p) => s + (p.statsLots?.VENDU || 0), 0) },
-          { label: 'Lots disponibles', value: list.reduce((s, p) => s + (p.statsLots?.DISPONIBLE || 0), 0) },
-        ].map(k => (
-          <div key={k.label} className="kpi"><div className="kpi-label">{k.label}</div><div className="kpi-value" style={{ color: '#1a3f6f' }}>{k.value}</div></div>
+          { label:'Projets actifs', value: listeProjets.filter(p=>p.statut==='EN_COURS').length },
+          { label:'Total lots', value: listeProjets.reduce((s,p)=>s+p.nombreLots,0).toLocaleString('fr') },
+          { label:'Lots vendus', value: listeProjets.reduce((s,p)=>s+(p._count?.lots||0),0).toLocaleString('fr') },
+          { label:'Villes couvertes', value: [...new Set(listeProjets.map(p=>p.ville))].filter(Boolean).length },
+        ].map((k,i) => (
+          <div key={i} className="kpi">
+            <div className="kpi-label">{k.label}</div>
+            <div className="kpi-value" style={{ fontSize:22 }}>{k.value}</div>
+          </div>
         ))}
       </div>
 
-      {isLoading ? (
-        <div style={{ textAlign: 'center', padding: 60, color: '#888', fontSize: 13 }}>Chargement...</div>
+      {/* Liste projets */}
+      {listeProjets.length === 0 ? (
+        <div className="card empty-state"><MapPin size={40} /><p>Aucun projet — créez votre premier projet foncier</p></div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 12 }}>
-          {list.map(p => {
-            const total = p._count?.lots || 0;
-            const vendus = p.statsLots?.VENDU || 0;
-            const disponibles = p.statsLots?.DISPONIBLE || 0;
-            const reserves = p.statsLots?.RESERVE || 0;
-            const pct = total > 0 ? Math.round((vendus / total) * 100) : 0;
-            return (
-              <div key={p.id} className="card" style={{ borderTop: '3px solid #1a3f6f' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <div>
-                    <div style={{ fontFamily: 'Syne', fontWeight: 700, fontSize: 15 }}>{p.nom}</div>
-                    <div style={{ fontSize: 12, color: '#888', display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                      <MapPin size={11} /> {p.ville} · {p.code}
-                    </div>
-                  </div>
-                  <span className={`badge ${STATUT_COLORS[p.statut] || 'badge-gray'}`}>{p.statut}</span>
-                </div>
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#888', marginBottom: 4 }}>
-                    <span>Avancement ventes</span><span style={{ fontWeight: 600, color: '#1a3f6f' }}>{pct}%</span>
-                  </div>
-                  <div style={{ height: 6, background: '#EEF3FB', borderRadius: 3, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${pct}%`, background: '#1a3f6f', borderRadius: 3 }} />
+        <div className="grid-3">
+          {listeProjets.map(p => (
+            <div key={p.id} className="card" style={{ cursor:'pointer', borderTop:`3px solid #1a3f6f` }}
+              onClick={() => setProjetOuvert(p.id === projetOuvert ? null : p.id)}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:8 }}>
+                <div>
+                  <div style={{ fontFamily:'Syne', fontWeight:700, fontSize:14 }}>{p.nom}</div>
+                  <div style={{ fontSize:11, color:'#888' }}>{p.code}</div>
+                  <div style={{ fontSize:11, color:'#888', marginTop:2 }}>
+                    <MapPin size={10} style={{ verticalAlign:'middle', marginRight:3 }} />
+                    {p.ville}{p.localisation ? ` · ${p.localisation}` : ''}
                   </div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
-                  {[['Disponibles', disponibles, '#639922'], ['Réservés', reserves, '#BA7517'], ['Vendus', vendus, '#1a3f6f']].map(([label, val, color]) => (
-                    <div key={label} style={{ background: '#F7F7F5', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
-                      <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'Syne', color }}>{val}</div>
-                      <div style={{ fontSize: 10, color: '#888' }}>{label}</div>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#888', marginBottom: 10 }}>
-                  <span>{(p.superficie / 10000).toFixed(2)} ha</span>
-                  <span>{p.prixLotMin?.toLocaleString('fr')} — {p.prixLotMax?.toLocaleString('fr')} F/lot</span>
-                </div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button onClick={() => setShowImportLots({ id: p.id, nom: p.nom })} className="btn btn-sm btn-ghost" style={{ flex: 1, fontSize: 11, justifyContent: 'center' }}>
-                    <Upload size={11} /> Importer lots
-                  </button>
-                  <button onClick={() => handleExportLots(p)} className="btn btn-sm" style={{ flex: 1, fontSize: 11, background: '#EAF3DE', color: '#27500A', border: 'none', justifyContent: 'center' }}>
-                    <Download size={11} /> Export lots
-                  </button>
-                </div>
+                <span className={`badge ${STATUTS[p.statut]||'badge-gray'}`}>{p.statut}</span>
               </div>
-            );
-          })}
-          {list.length === 0 && <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: 60, color: '#ccc', fontSize: 13 }}>Aucun projet foncier.</div>}
+
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:4, marginBottom:10 }}>
+                {[
+                  { label:'Lots total', value: p.nombreLots },
+                  { label:'Prix min', value: p.prixLotMin>=1000000 ? `${(p.prixLotMin/1000000).toFixed(1)}M` : `${Math.round(p.prixLotMin/1000)}k` },
+                  { label:'Prix max', value: p.prixLotMax>=1000000 ? `${(p.prixLotMax/1000000).toFixed(1)}M` : `${Math.round(p.prixLotMax/1000)}k` },
+                ].map((m,i) => (
+                  <div key={i} style={{ background:'#F7F7F5', borderRadius:6, padding:'5px 8px', textAlign:'center' }}>
+                    <div style={{ fontSize:9, color:'#888' }}>{m.label}</div>
+                    <div style={{ fontFamily:'Syne', fontWeight:700, fontSize:13 }}>{m.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display:'flex', gap:6 }}>
+                <button className="btn btn-ghost btn-xs" onClick={e => { e.stopPropagation(); setEditProjet(p); }}>Modifier</button>
+              </div>
+
+              {/* Panneau import lots */}
+              {projetOuvert === p.id && (
+                <div style={{ marginTop:12, borderTop:'0.5px solid #e8e7e1', paddingTop:12 }} onClick={e=>e.stopPropagation()}>
+                  <div style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
+                    <span style={{ fontSize:12, fontWeight:600 }}>📦 Import lots Excel :</span>
+                    <TemplateButton url={`/toptelsig/lots/template?projetId=${p.id}`} label="Template lots" />
+                    <ImportButton
+                      onData={({ lignes, entetes }) => {
+                        const token = JSON.parse(localStorage.getItem('2ig-auth')||'{}')?.state?.token;
+                        const base = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+                        // Reconstruire en CSV et envoyer
+                        const csv = '\uFEFF' + [entetes, ...lignes].map(r=>r.join(';')).join('\r\n');
+                        const fd = new FormData();
+                        fd.append('fichier', new Blob([csv], {type:'text/csv'}), 'lots.csv');
+                        fd.append('projetId', p.id);
+                        fetch(`${base}/toptelsig/lots/import`, { method:'POST', headers:{ Authorization:`Bearer ${token}` }, body:fd })
+                          .then(r=>r.json()).then(d => { showToast(`${d.imported} lot(s) importé(s)`); qc.invalidateQueries(['lots']); })
+                          .catch(()=>showToast('Erreur import','error'));
+                      }}
+                      label="Importer lots" color="#1a3f6f" />
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
 
-      {showCreate && (
-        <div className="modal-overlay" onClick={() => setShowCreate(false)}>
-          <div className="modal" style={{ maxWidth: 600 }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
-              <h3 style={{ margin: 0, fontFamily: 'Syne', fontSize: 16 }}>Nouveau projet foncier</h3>
-              <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              {[['Code', 'code'], ['Nom', 'nom'], ['Localisation', 'localisation'], ['Ville', 'ville']].map(([label, key]) => (
-                <div key={key}><label className="label">{label}</label><input className="input" value={form[key]} onChange={e => set(key, e.target.value)} /></div>
-              ))}
-              <div><label className="label">Superficie (m²)</label><input className="input" type="number" value={form.superficie} onChange={e => set('superficie', e.target.value)} /></div>
-              <div><label className="label">Nombre de lots</label><input className="input" type="number" value={form.nombreLots} onChange={e => set('nombreLots', e.target.value)} /></div>
-              <div><label className="label">Prix lot min (FCFA)</label><input className="input" type="number" value={form.prixLotMin} onChange={e => set('prixLotMin', e.target.value)} /></div>
-              <div><label className="label">Prix lot max (FCFA)</label><input className="input" type="number" value={form.prixLotMax} onChange={e => set('prixLotMax', e.target.value)} /></div>
-              <div style={{ gridColumn: '1/-1' }}><label className="label">Description</label><input className="input" value={form.description} onChange={e => set('description', e.target.value)} /></div>
-            </div>
-            <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
-              <button className="btn btn-ghost btn-sm" onClick={() => setShowCreate(false)}>Annuler</button>
-              <button className="btn btn-sm" style={{ background: '#1a3f6f', color: 'white', border: 'none' }} onClick={() => createMut.mutate({ ...form, superficie: Number(form.superficie), nombreLots: Number(form.nombreLots), prixLotMin: Number(form.prixLotMin), prixLotMax: Number(form.prixLotMax) })}>Créer</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showImportLots && (
-        <ModalImportLots projetId={showImportLots.id} projetNom={showImportLots.nom} onClose={() => { setShowImportLots(null); qc.invalidateQueries(['projets']); }} />
-      )}
+      {showCreate && <ModalProjet onClose={() => setShowCreate(false)} onSave={d => createMut.mutate(d)} loading={createMut.isPending} />}
+      {editProjet && <ModalProjet projet={editProjet} onClose={() => setEditProjet(null)} onSave={d => updateMut.mutate({ id: editProjet.id, data: d })} loading={updateMut.isPending} />}
+      {toast && <div style={{ position:'fixed', bottom:20, right:16, background:toast.type==='error'?'#A32D2D':'#27500A', color:'white', padding:'10px 18px', borderRadius:10, fontSize:13, zIndex:9999 }}>{toast.msg}</div>}
     </div>
   );
 }

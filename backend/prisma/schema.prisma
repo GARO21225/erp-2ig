@@ -188,7 +188,6 @@ model Employe {
   // LiYA
   livraisons      Livraison[]
 
-  depensesInitiees DepenseFoncier[] @relation("InitiateurDepense")
 
   @@map("employes")
 }
@@ -378,7 +377,6 @@ model Produit {
   updatedAt   DateTime @updatedAt
 
   stocks          Stock[]
-  lignesCommande  LigneCommandeYakro[]
   mouvements      MouvementStock[]
   lignesAchat     LigneAchat[]
 
@@ -805,7 +803,10 @@ model DepenseFoncier {
   montant         Float
   description     String
   date            DateTime      @default(now())
-  beneficiaire    String?       // Texte libre (entité Bénéficiaire optionnelle future)
+  initiateurId    String?       // Employé initiateur (liste déroulante)
+  initiateur      Employe?      @relation("InitiateurDepense", fields: [initiateurId], references: [id])
+  beneficiaire    String?       // Texte libre ou prescripteur
+  beneficiaireId  String?       // Prescripteur (optionnel)
   typePaiement    TypePaiement?
   justificatif    String?
 

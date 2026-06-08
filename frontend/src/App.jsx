@@ -4,6 +4,7 @@ import { useAuthStore } from './store';
 import Layout from './components/layout/Layout';
 import LoginPage from './pages/LoginPage';
 import TablesPage from './pages/yakro/TablesPage';
+import HistorisationPage from './pages/groupe/HistorisationPage';
 import UtilisateursPage from './pages/groupe/UtilisateursPage';
 import DashboardGroupe from './pages/groupe/DashboardGroupe';
 import RHPage from './pages/groupe/RHPage';
@@ -45,6 +46,7 @@ export default function App() {
             <Route path="finance" element={<FinancePage />} />
             <Route path="stocks" element={<StocksPage />} />
             <Route path="utilisateurs" element={<UtilisateursPage />} />
+            <Route path="historisation" element={<HistorisationPage />} />
             <Route path="yakro/pos" element={<POS />} />
             <Route path="yakro/commandes" element={<CommandesYakro />} />
             <Route path="yakro/menu" element={<MenuPage />} />

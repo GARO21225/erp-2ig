@@ -181,7 +181,26 @@ export default function VentesPage() {
   const [selectedVente, setSelectedVente] = useState(null);
   const [encaisserTarget, setEncaisserTarget] = useState(null); // { vente, echeance }
   const [filtreDates, setFiltreDates] = useState(null);
-  const [form, setForm] = useState({ lotId: '', souscripteurId: '', prixVente: '', nombreEcheances: 12 });
+  const [form, setForm] = useState({ projetId: '', lotId: '', souscripteurId: '', prixVente: '', nombreEcheances: 12, prescripteurId: '' });
+  const [lotsDispos, setLotsDispos] = useState([]);
+  const [loadingLots, setLoadingLots] = useState(false);
+
+  const handleProjetChange = async (projetId) => {
+    setForm(f => ({ ...f, projetId, lotId: '', prixVente: '' }));
+    setLotsDispos([]);
+    if (!projetId) return;
+    setLoadingLots(true);
+    try {
+      const data = await toptelsigAPI.lotsDispo(projetId);
+      setLotsDispos(Array.isArray(data) ? data : []);
+    } catch { setLotsDispos([]); }
+    finally { setLoadingLots(false); }
+  };
+
+  const handleLotChange = (lotId) => {
+    const lot = lotsDispos.find(l => l.id === lotId);
+    setForm(f => ({ ...f, lotId, prixVente: lot ? lot.prix : '' }));
+  };
 
   const { data } = useQuery({
     queryKey: ['ventes', filtreDates],
@@ -189,6 +208,11 @@ export default function VentesPage() {
   });
   const { data: retards } = useQuery({ queryKey: ['retards'], queryFn: toptelsigAPI.retards });
   const { data: lots } = useQuery({ queryKey: ['lots-dispo'], queryFn: () => toptelsigAPI.lots({ statut: 'DISPONIBLE' }) });
+  const { data: projets } = useQuery({
+    queryKey: ['projets'],
+    queryFn: toptelsigAPI.projets,
+  });
+
   const { data: souscripteurs } = useQuery({ queryKey: ['sous-all'], queryFn: () => toptelsigAPI.souscripteurs({ limit: 200 }) });
 
   const createMut = useMutation({ mutationFn: toptelsigAPI.createVente, onSuccess: () => { qc.invalidateQueries(['ventes']); setShowCreate(false); } });
@@ -355,14 +379,39 @@ export default function VentesPage() {
               <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {/* 1. Sélectionner le projet */}
               <div>
-                <label className="label">Lot disponible</label>
-                <select className="input" value={form.lotId} onChange={e => setForm(f => ({ ...f, lotId: e.target.value }))}>
-                  <option value="">Sélectionner un lot</option>
-                  {(Array.isArray(lots) ? lots : []).map(l => (
-                    <option key={l.id} value={l.id}>Lot {l.numero} — {l.projet?.nom} — {l.superficie} m² — {l.prix?.toLocaleString('fr')} F</option>
+                <label className="label">Projet foncier</label>
+                <select className="input" value={form.projetId} onChange={e => handleProjetChange(e.target.value)}>
+                  <option value="">— Choisir un projet —</option>
+                  {(Array.isArray(projets) ? projets : []).map(p => (
+                    <option key={p.id} value={p.id}>{p.nom} — {p.ville} ({p.code})</option>
                   ))}
                 </select>
+              </div>
+
+              {/* 2. Lot disponible dans ce projet */}
+              <div>
+                <label className="label">
+                  Lot disponible
+                  {form.projetId && <span style={{ color: '#888', fontWeight: 400, marginLeft: 6 }}>
+                    {loadingLots ? 'Chargement...' : `${lotsDispos.length} lot(s) disponible(s)`}
+                  </span>}
+                </label>
+                <select className="input" value={form.lotId} onChange={e => handleLotChange(e.target.value)}
+                  disabled={!form.projetId || loadingLots}>
+                  <option value="">{!form.projetId ? "Sélectionner un projet d'abord" : "Choisir un lot"}</option>
+                  {lotsDispos.map(l => (
+                    <option key={l.id} value={l.id}>
+                      Lot {l.numero}{l.ilot ? ` — Îlot ${l.ilot}` : ''} — {l.superficie} m² — {l.prix?.toLocaleString('fr')} F
+                    </option>
+                  ))}
+                </select>
+                {form.lotId && lotsDispos.find(l => l.id === form.lotId) && (
+                  <div style={{ fontSize: 11, color: '#1a3f6f', marginTop: 4, background: '#EEF3FB', borderRadius: 6, padding: '4px 8px' }}>
+                    Prix catalogue : {lotsDispos.find(l => l.id === form.lotId)?.prix?.toLocaleString('fr')} F — {lotsDispos.find(l => l.id === form.lotId)?.superficie} m²
+                  </div>
+                )}
               </div>
               <div>
                 <label className="label">Souscripteur</label>
