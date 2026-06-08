@@ -27,3 +27,12 @@ export const useUIStore = create((set) => ({
   popModal: () => set(s => ({ modalStack: s.modalStack.slice(0, -1) })),
   addNotif: (notif) => set(s => ({ notifications: [notif, ...s.notifications].slice(0, 20) })),
 }));
+
+// Exposer le store auth pour la déconnexion automatique après inactivité
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    const { useAuthStore } = require('./index');
+    window.__authStore = useAuthStore.getState();
+    useAuthStore.subscribe(state => { window.__authStore = state; });
+  }, 0);
+}

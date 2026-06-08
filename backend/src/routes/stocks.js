@@ -276,3 +276,69 @@ router.get('/alertes', auth, async (req, res) => {
     res.json({ total: alertes.length, alertes });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+// POST /stocks/seed-yakro — Initialiser le stock Yakro Grill depuis le catalogue menu
+router.post('/seed-yakro', auth, async (req, res) => {
+  try {
+    if (!['DG','DIRECTEUR','MANAGER','MAGASINIER'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Non autorisé' });
+    }
+    // Importer le catalogue côté serveur
+    const STOCK_ITEMS = [
+      { reference:'YG-VIAN-001', nom:'Poulet de chair (kg)', categorie:'VIANDES_PROTEINES', unite:'kg', prixAchat:2500, stockAlert:10 },
+      { reference:'YG-VIAN-002', nom:'Poulet hybride (kg)', categorie:'VIANDES_PROTEINES', unite:'kg', prixAchat:3000, stockAlert:5 },
+      { reference:'YG-VIAN-003', nom:'Viande de bœuf (kg)', categorie:'VIANDES_PROTEINES', unite:'kg', prixAchat:5500, stockAlert:5 },
+      { reference:'YG-VIAN-004', nom:'Entrecôte de bœuf (kg)', categorie:'VIANDES_PROTEINES', unite:'kg', prixAchat:6000, stockAlert:3 },
+      { reference:'YG-VIAN-005', nom:'Viande de porc (kg)', categorie:'VIANDES_PROTEINES', unite:'kg', prixAchat:3500, stockAlert:5 },
+      { reference:'YG-VIAN-006', nom:'Cabri (kg)', categorie:'VIANDES_PROTEINES', unite:'kg', prixAchat:4500, stockAlert:5 },
+      { reference:'YG-VIAN-007', nom:'Mouton (kg)', categorie:'VIANDES_PROTEINES', unite:'kg', prixAchat:5000, stockAlert:5 },
+      { reference:'YG-VIAN-008', nom:'Gambas (kg)', categorie:'VIANDES_PROTEINES', unite:'kg', prixAchat:8000, stockAlert:2 },
+      { reference:'YG-VIAN-009', nom:'Gésiers de poulet (kg)', categorie:'VIANDES_PROTEINES', unite:'kg', prixAchat:2000, stockAlert:3 },
+      { reference:'YG-FEC-001', nom:'Riz (sac 25kg)', categorie:'FECULENTS', unite:'sac', prixAchat:25000, stockAlert:3 },
+      { reference:'YG-FEC-002', nom:'Attiéké (kg)', categorie:'FECULENTS', unite:'kg', prixAchat:800, stockAlert:10 },
+      { reference:'YG-FEC-003', nom:'Pommes de terre (kg)', categorie:'FECULENTS', unite:'kg', prixAchat:1200, stockAlert:10 },
+      { reference:'YG-FEC-004', nom:'Igname (kg)', categorie:'FECULENTS', unite:'kg', prixAchat:900, stockAlert:10 },
+      { reference:'YG-FEC-005', nom:'Plantain (régime)', categorie:'FECULENTS', unite:'régime', prixAchat:3000, stockAlert:5 },
+      { reference:'YG-BRD-001', nom:'Farine de blé (kg)', categorie:'FECULENTS', unite:'kg', prixAchat:700, stockAlert:10 },
+      { reference:'YG-LEG-001', nom:'Oignons (kg)', categorie:'LEGUMES_CONDIMENTS', unite:'kg', prixAchat:500, stockAlert:5 },
+      { reference:'YG-LEG-002', nom:'Tomates fraîches (kg)', categorie:'LEGUMES_CONDIMENTS', unite:'kg', prixAchat:600, stockAlert:5 },
+      { reference:'YG-LEG-003', nom:'Ail (kg)', categorie:'LEGUMES_CONDIMENTS', unite:'kg', prixAchat:3000, stockAlert:2 },
+      { reference:'YG-LAI-001', nom:'Crème fraîche (L)', categorie:'LAITIERS_SAUCES', unite:'litre', prixAchat:2500, stockAlert:3 },
+      { reference:'YG-LAI-002', nom:'Beurre (kg)', categorie:'LAITIERS_SAUCES', unite:'kg', prixAchat:4000, stockAlert:2 },
+      { reference:'YG-PIZ-001', nom:'Pâte à pizza (kg)', categorie:'PIZZA_CHAWARMA', unite:'kg', prixAchat:1500, stockAlert:5 },
+      { reference:'YG-PIZ-002', nom:'Pain pita (unité)', categorie:'PIZZA_CHAWARMA', unite:'unité', prixAchat:300, stockAlert:30 },
+      { reference:'YG-BOI-001', nom:'Heineken (casier 24)', categorie:'BOISSONS', unite:'casier', prixAchat:18000, stockAlert:5 },
+      { reference:'YG-BOI-002', nom:'Desperados (casier 24)', categorie:'BOISSONS', unite:'casier', prixAchat:22000, stockAlert:3 },
+      { reference:'YG-BOI-003', nom:'Guinness (casier 24)', categorie:'BOISSONS', unite:'casier', prixAchat:24000, stockAlert:3 },
+      { reference:'YG-BOI-004', nom:'Fanta (casier 24)', categorie:'BOISSONS', unite:'casier', prixAchat:12000, stockAlert:3 },
+      { reference:'YG-BOI-005', nom:'Coca-cola (casier 24)', categorie:'BOISSONS', unite:'casier', prixAchat:12000, stockAlert:3 },
+      { reference:'YG-BOI-006', nom:'Eau minérale (casier)', categorie:'BOISSONS', unite:'casier', prixAchat:6000, stockAlert:5 },
+      { reference:'YG-ALC-001', nom:'Rhum blanc (bouteille)', categorie:'ALCOOLS_BAR', unite:'bouteille', prixAchat:8000, stockAlert:3 },
+      { reference:'YG-ALC-002', nom:'Champagne Moët', categorie:'ALCOOLS_BAR', unite:'bouteille', prixAchat:45000, stockAlert:2 },
+      { reference:'YG-ALC-003', nom:'Vin rouge Bordeaux', categorie:'ALCOOLS_BAR', unite:'bouteille', prixAchat:8000, stockAlert:5 },
+      { reference:'YG-EPI-001', nom:'Huile végétale (bidon 20L)', categorie:'EPICERIE', unite:'bidon', prixAchat:25000, stockAlert:3 },
+      { reference:'YG-EPI-002', nom:'Sel (kg)', categorie:'EPICERIE', unite:'kg', prixAchat:300, stockAlert:5 },
+      { reference:'YG-EPI-003', nom:'Sucre (kg)', categorie:'EPICERIE', unite:'kg', prixAchat:700, stockAlert:5 },
+      { reference:'YG-GAZ-001', nom:'Bouteille gaz 12kg', categorie:'GAZ_ENERGIE', unite:'bouteille', prixAchat:9000, stockAlert:2 },
+    ];
+
+    let created = 0, skipped = 0;
+    for (const item of STOCK_ITEMS) {
+      const exists = await prisma.produit.findUnique({ where: { reference: item.reference } });
+      if (exists) { skipped++; continue; }
+      const produit = await prisma.produit.create({ data: { ...item, filiale: 'YAKRO_GRILL', prixVente: item.prixAchat * 1.3 } });
+      await prisma.stock.create({ data: { produitId: produit.id, filiale: 'YAKRO_GRILL', quantite: 0, depot: 'Principal' } });
+      created++;
+    }
+    res.json({ message: `Stock Yakro initialisé`, created, skipped, total: STOCK_ITEMS.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /stocks/template-import — Template CSV pour import stock
+router.get('/template-import', auth, (req, res) => {
+  const headers = ['reference','nom','categorie','unite','prixAchat','prixVente','stockAlert'];
+  const example = [['YG-001','Poulet de chair (kg)','VIANDES_PROTEINES','kg',2500,3500,10]];
+  res.setHeader('Content-Disposition', 'attachment; filename="template_stock.csv"');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.send('\uFEFF' + [headers, ...example].map(r => r.join(';')).join('\r\n'));
+});

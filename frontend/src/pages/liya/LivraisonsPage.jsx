@@ -88,7 +88,7 @@ export default function LivraisonsPage() {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <FilterBar onChange={setFiltreDates} defaultPreset="today" color="#E85D04" />
-          <ExportBar onExcelClick={handleExportXlsx}
+          <ExportBar
             onExcelClick={() => { const { entetes, lignes } = exportLivraisons(livraisons); exportExcel('livraisons_liya', 'Livraisons', entetes, lignes); }}
             onPDFClick={() => { const { entetes, lignes } = exportLivraisons(livraisons); exportPDF('Rapport Livraisons LiYA', 'livraisons_liya', entetes, lignes, { orientation: 'landscape' }); }}
             count={livraisons.length}

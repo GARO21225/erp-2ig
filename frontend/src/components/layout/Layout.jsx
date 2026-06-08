@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '../../store';
 import { authAPI } from '../../lib/api';
 import {
-  LayoutDashboard, Users, Wallet, Package, ChevronDown, ChevronRight,
+  LayoutDashboard, Users, Wallet, Package, ChevronDown, ChevronRight, Shield,
   Flame, MapPin, Truck, Search, Bell, LogOut, Menu, X,
   ClipboardList, BookOpen, Calendar,
   Building2, Map, Bike, Layers, FileText, TrendingUp
@@ -19,6 +19,7 @@ const FILIALES = [
 const NAV = {
   GROUPE: [
     { label: 'Commandement DG', to: '/dashboard', icon: LayoutDashboard },
+    { label: 'Accès & Rôles', to: '/utilisateurs', icon: Shield },
     { label: 'Ressources Humaines', to: '/rh', icon: Users },
     { label: 'Finance Groupe', to: '/finance', icon: Wallet },
     { label: 'Stocks & Achats', to: '/stocks', icon: Package },

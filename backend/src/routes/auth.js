@@ -361,3 +361,51 @@ async function logAudit(prisma, userId, action, ip, label, filiale = 'GROUPE', n
 }
 
 module.exports = router;
+
+// ── GET /api/auth/utilisateurs — Liste tous les utilisateurs (DG/RH)
+router.get('/utilisateurs', auth, async (req, res) => {
+  try {
+    if (!['DG','DIRECTEUR','RH'].includes(req.user.role)) return res.status(403).json({ error: 'Réservé au DG/RH' });
+    const { filiale, role, actif } = req.query;
+    const where = {};
+    if (filiale) where.filiale = filiale;
+    if (role) where.role = role;
+    if (actif !== undefined) where.actif = actif === 'true';
+    const users = await prisma.utilisateur.findMany({
+      where, orderBy: { createdAt: 'desc' },
+      select: { id:true, email:true, nom:true, prenom:true, role:true, filiale:true, actif:true, loginAttempts:true, lockedUntil:true, derniereConnexion:true, createdAt:true }
+    });
+    res.json(users);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── PUT /api/auth/utilisateurs/:id/role — Changer rôle/filiale
+router.put('/utilisateurs/:id/role', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'DG') return res.status(403).json({ error: 'Réservé au DG' });
+    const { role, filiale, actif } = req.body;
+    const data = {};
+    if (role) data.role = role;
+    if (filiale) data.filiale = filiale;
+    if (actif !== undefined) data.actif = Boolean(actif);
+    if (!actif) await prisma.session.deleteMany({ where: { utilisateurId: req.params.id } });
+    const user = await prisma.utilisateur.update({
+      where: { id: req.params.id }, data,
+      select: { id:true, email:true, nom:true, prenom:true, role:true, filiale:true, actif:true }
+    });
+    const ip = req.headers['x-forwarded-for']?.split(',')[0] || 'unknown';
+    await prisma.auditLog.create({ data: { utilisateurId: req.user.id, utilisateurNom: `${req.user.prenom} ${req.user.nom}`, filiale: req.user.filiale, action: 'UPDATE', entite: 'Utilisateur', entiteId: req.params.id, entiteLabel: `Rôle → ${role || 'inchangé'} | Filiale → ${filiale || 'inchangée'}`, ip } });
+    res.json(user);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── DELETE /api/auth/utilisateurs/:id — Désactiver un compte
+router.delete('/utilisateurs/:id', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'DG') return res.status(403).json({ error: 'Réservé au DG' });
+    if (req.params.id === req.user.id) return res.status(400).json({ error: 'Impossible de supprimer son propre compte' });
+    await prisma.session.deleteMany({ where: { utilisateurId: req.params.id } });
+    await prisma.utilisateur.update({ where: { id: req.params.id }, data: { actif: false } });
+    res.json({ message: 'Compte désactivé' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
