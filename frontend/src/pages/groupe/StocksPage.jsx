@@ -107,7 +107,8 @@ export default function StocksPage() {
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
               <button className="btn btn-ghost btn-sm" onClick={() => setShowCreate(false)}>Annuler</button>
-              <button className="btn btn-primary btn-sm" onClick={() => createMut.mutate({ ...form, prixAchat: Number(form.prixAchat), prixVente: Number(form.prixVente) })}>Créer</button>
+              <TemplateButton url="/stocks/template-import" label="Template stock" />
+          <button className="btn btn-primary btn-sm" onClick={() => createMut.mutate({ ...form, prixAchat: Number(form.prixAchat), prixVente: Number(form.prixVente) })}>Créer</button>
             </div>
           </div>
         </div>

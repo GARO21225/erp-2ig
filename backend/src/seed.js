@@ -1,12 +1,30 @@
 /**
- * ERP 2IG — Seed initial idempotent
- * Appelé lors du build Render — ne plante pas si données déjà présentes
+ * ERP 2IG — Initialisation complète
+ * Ordre : 1. db push via Prisma CLI  2. migrations SQL  3. seed données
  */
 const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
+const prisma = new PrismaClient();
+
+// 1. Appliquer le schéma Prisma (db push)
+function applySchema() {
+  console.log('📐 Application du schéma Prisma...');
+  try {
+    execSync('npx prisma db push --accept-data-loss --skip-generate', {
+      stdio: 'inherit',
+      cwd: path.join(__dirname, '..'),
+      env: { ...process.env, PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING: '1' }
+    });
+    console.log('✅ Schéma appliqué');
+  } catch (e) {
+    console.warn('⚠ db push warning (peut-être déjà à jour):', e.message?.slice(0, 100));
+  }
+}
+
+// 2. Migrations SQL manuelles
 async function runMigrations() {
   const migrationsDir = path.join(__dirname, '../prisma/migrations');
   if (!fs.existsSync(migrationsDir)) return;
@@ -16,43 +34,42 @@ async function runMigrations() {
     try {
       await prisma.$executeRawUnsafe(sql);
       console.log(`✅ Migration ${file} OK`);
-    } catch(e) {
-      console.log(`⚠ Migration ${file}: ${e.message}`);
+    } catch (e) {
+      console.warn(`⚠ Migration ${file}: ${e.message?.slice(0, 80)}`);
     }
   }
 }
 
+// 3. Seed données initiales
 async function seed() {
-  console.log('🌱 Seed ERP 2IG...');
-  await runMigrations();
+  console.log('🌱 Seed données...');
 
-  // 1. Caisses (une par filiale)
-  const caisses = [
+  // Caisses
+  for (const c of [
     { nom: 'Caisse Yakro Grill', filiale: 'YAKRO_GRILL' },
     { nom: 'Caisse TOPTELSIG',   filiale: 'TOPTELSIG'   },
     { nom: 'Caisse LiYA',        filiale: 'LIYA'         },
     { nom: 'Caisse Groupe',      filiale: 'GROUPE'       },
-  ];
-  for (const c of caisses) {
+  ]) {
     const exists = await prisma.caisse.findFirst({ where: { nom: c.nom } });
     if (!exists) await prisma.caisse.create({ data: c });
   }
   const nbCaisses = await prisma.caisse.count();
   console.log(`✅ Caisses (${nbCaisses})`);
 
-  // 2. Tables restaurant (12 tables)
+  // Tables restaurant
   for (let i = 1; i <= 12; i++) {
     const zone = i <= 7 ? 'Salle' : i <= 10 ? 'Terrasse' : 'VIP';
-    const cap  = i === 7 ? 8 : [3,5,6].includes(i) ? 6 : i >= 11 ? 6 : 4;
+    const cap = i === 7 ? 8 : [3,5,6].includes(i) ? 6 : i >= 11 ? 6 : 4;
     const exists = await prisma.tableRestaurant.findUnique({ where: { numero: i } });
     if (!exists) await prisma.tableRestaurant.create({ data: { numero: i, capacite: cap, zone } });
   }
-  console.log(`✅ Tables restaurant (12)`);
+  console.log(`✅ Tables restaurant`);
 
-  // 3. Menu Yakro Grill — 80 articles (données réelles PDF)
+  // Menu Yakro Grill
   const existing = await prisma.menuYakro.count();
   if (existing === 0) {
-    const menuItems = [
+    const items = [
       { nom:'Attiéké nature',categorie:'GARNITURE',prix:1000 },
       { nom:'Alloco',categorie:'GARNITURE',prix:1000 },
       { nom:'Riz nature ou légumes',categorie:'GARNITURE',prix:1000 },
@@ -134,15 +151,21 @@ async function seed() {
       { nom:'Tisane Gingembre',categorie:'TISANE',prix:1500 },
       { nom:'Tisane Bissap',categorie:'TISANE',prix:1500 },
     ];
-    await prisma.menuYakro.createMany({ data: menuItems, skipDuplicates: true });
-    console.log(`✅ Menu Yakro Grill (${menuItems.length} articles)`);
+    await prisma.menuYakro.createMany({ data: items, skipDuplicates: true });
+    console.log(`✅ Menu Yakro Grill (${items.length} articles)`);
   } else {
-    console.log(`⏭ Menu déjà présent (${existing} articles) — skip`);
+    console.log(`⏭ Menu déjà présent (${existing} articles)`);
   }
 
-  console.log('\n🎉 Seed OK — ERP 2IG prêt');
+  console.log('🎉 Initialisation terminée');
 }
 
-seed()
-  .catch(e => { console.error('❌ Seed error:', e.message); /* Non bloquant */ })
+async function main() {
+  applySchema();
+  await runMigrations();
+  await seed();
+}
+
+main()
+  .catch(e => { console.error('❌ Erreur init:', e.message); })
   .finally(() => prisma.$disconnect());

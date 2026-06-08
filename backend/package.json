@@ -6,19 +6,14 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "build": "npx prisma generate",
-    "setup": "npx prisma generate && npx prisma db push --accept-data-loss",
-    "seed-menu": "node -e \"require('./src/routes/yakro/menu.js')\"",
-    "test": "echo 'No tests yet' && exit 0"
+    "build": "npm install && npx prisma generate && node src/seed.js",
+    "postinstall": "npx prisma generate"
   },
-  "engines": {
-    "node": "20.x"
-  },
+  "engines": { "node": ">=18.0.0" },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1063.0",
     "@prisma/client": "^6.9.0",
     "bcryptjs": "^2.4.3",
-    "cloudinary": "^2.10.0",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^4.21.2",

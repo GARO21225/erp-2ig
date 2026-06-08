@@ -1,18 +1,12 @@
 services:
-  # ── Backend API ─────────────────────────────────────────────────────────────
   - type: web
     name: erp-2ig-backend
     runtime: node
     region: frankfurt
     rootDir: backend
-    nodeVersion: 20.18.0
-    buildCommand: npm install && npx prisma generate && npx prisma db push --accept-data-loss && node src/seed.js
+    buildCommand: npm install && npx prisma generate && node src/seed.js
     startCommand: node src/index.js
-    plan: starter
-    disk:
-      name: erp-2ig-storage
-      mountPath: /data/uploads
-      sizeGB: 1
+    plan: free
     envVars:
       - key: NODE_ENV
         value: production
@@ -25,13 +19,8 @@ services:
       - key: FRONTEND_URL
         sync: false
       - key: BACKUP_DIR
-        value: /data/backups
-      - key: GED_UPLOAD_DIR
-        value: /data/uploads/ged
-      - key: BACKUP_RETENTION_DAILY
-        value: "7"
+        value: /tmp/erp-2ig-backups
 
-  # ── Frontend Static Site ─────────────────────────────────────────────────────
   - type: web
     name: erp-2ig-frontend
     runtime: static

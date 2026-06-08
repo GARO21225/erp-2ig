@@ -25,10 +25,10 @@ api.interceptors.response.use(
 
 // ── AUTH
 export const authAPI = {
-  listUtilisateurs: (params) => api.get('/auth/utilisateurs', { params }).then(r => r.data),
-  updateRole: (id, data) => api.put(`/auth/utilisateurs/${id}/role`, data).then(r => r.data),
-  unlockAccount: (id) => api.post(`/auth/unlock/${id}`).then(r => r.data),
-  register: (data) => api.post('/auth/register', data).then(r => r.data),
+  listUtilisateurs: (params) => api.get('/auth/utilisateurs', { params }),
+  updateRole: (id, data) => api.put(`/auth/utilisateurs/${id}/role`, data),
+  unlockAccount: (id) => api.post(`/auth/unlock/${id}`),
+  register: (data) => api.post('/auth/register', data),
   login: (data) => api.post('/auth/login', data),
   me: () => api.get('/auth/me'),
   logout: () => api.post('/auth/logout'),
@@ -37,7 +37,7 @@ export const authAPI = {
 
 // ── DASHBOARD
 export const dashboardAPI = {
-  scoreSante: () => api.get('/dashboard/score-sante').then(r => r.data),
+  scoreSante: () => api.get('/dashboard/score-sante'),
   groupe: () => api.get('/dashboard/groupe'),
   scoreSante: () => api.get('/dashboard/score-sante'),
 };
@@ -84,9 +84,9 @@ export const stocksAPI = {
 export const yakroAPI = {
   tables: () => api.get('/yakro/tables'),
   updateTable: (id, statut) => api.put(`/yakro/tables/${id}/statut`, { statut }),
-  createTable: (data) => api.post('/yakro/tables', data).then(r => r.data),
-  updateTableFull: (id, data) => api.put(`/yakro/tables/${id}`, data).then(r => r.data),
-  deleteTable: (id) => api.delete(`/yakro/tables/${id}`).then(r => r.data),
+  createTable: (data) => api.post('/yakro/tables', data),
+  updateTableFull: (id, data) => api.put(`/yakro/tables/${id}`, data),
+  deleteTable: (id) => api.delete(`/yakro/tables/${id}`),
   commandes: (params) => api.get('/yakro/commandes', { params }),
   caisse: () => api.get('/yakro/commandes/caisse'),
   createCommande: (data) => api.post('/yakro/commandes', data),
@@ -205,9 +205,9 @@ export const rotationsAPI = {
 };
 
 export const documentsAPI = {
-  upload: (formData) => api.post('/documents/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data),
-  list: (params) => api.get('/documents', { params }).then(r => r.data),
-  delete: (id) => api.delete(`/documents/${id}`).then(r => r.data),
+  upload: (formData) => api.post('/documents/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  list: (params) => api.get('/documents', { params }),
+  delete: (id) => api.delete(`/documents/${id}`),
   viewUrl: (id) => `${api.defaults.baseURL}/documents/${id}`,
 };
 

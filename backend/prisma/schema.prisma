@@ -612,6 +612,8 @@ model MenuYakro {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  lignes      LigneCommandeYakro[]
+
   @@map("menu_yakro")
 }
 

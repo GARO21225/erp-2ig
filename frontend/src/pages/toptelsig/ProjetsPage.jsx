@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toptelsigAPI } from '../../lib/api';
+import TemplateButton from '../../components/ui/TemplateButton';
 import { Plus, X, MapPin, Upload, Download } from 'lucide-react';
 import ImportButton from '../../components/ui/ImportButton';
 import ExportBar from '../../components/ui/ExportBar';
@@ -73,10 +74,7 @@ function ModalImportLots({ projetId, projetNom, onClose }) {
             </div>
             <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
               <ImportButton onData={handleData} label="Sélectionner le fichier Excel" color="#1a3f6f" />
-              <a href={`${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}/toptelsig/lots/template?projetId=${projetId}`}
-                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 8, background: '#F1EFE8', color: '#555', textDecoration: 'none', fontSize: 12 }}>
-                <Download size={12} /> Télécharger template
-              </a>
+              <TemplateButton url={`/toptelsig/lots/template?projetId=${projetId}`} label="Template lots" />
             </div>
 
             {preview && (

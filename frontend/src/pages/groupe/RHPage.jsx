@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { employesAPI } from '../../lib/api';
 import { useAuthStore } from '../../store';
 import { Plus, Search, ChevronRight, X } from 'lucide-react';
+import TemplateButton from '../../components/ui/TemplateButton';
 import ExportBar from '../../components/ui/ExportBar';
 import ImportButton from '../../components/ui/ImportButton';
 import FilterBar from '../../components/ui/FilterBar';
@@ -164,6 +165,7 @@ export default function RHPage() {
           <div style={{ fontSize: 12, color: '#888', marginTop: 3 }}>{total} employés · {actifs} actifs</div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <TemplateButton url="/employes/template" label="Template employés" />
           <ImportButton onData={handleImport} label="Importer Excel" color="#27500A" />
           <ExportBar onExcelClick={handleExcelExport} onPDFClick={handlePDFExport} count={employes.length} />
           <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}><Plus size={14} /> Nouvel employé</button>

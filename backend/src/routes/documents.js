@@ -2,12 +2,13 @@
  * ERP 2IG — GED (Gestion Électronique de Documents)
  * 
  * Stratégie de stockage (par ordre de priorité) :
- * 1. Render Disk persistant → /data/uploads/ged (configuré via render.yaml)
- * 2. Cloudinary → si CLOUDINARY_URL définie (pour redondance)
- * 3. Fallback base64 BDD → pour fichiers < 500KB si aucun disk ni Cloudinary
- * 
- * Le Render Disk ($0.25/GB/mois) est persistant entre les redéploiements.
- * Le filesystem normal (/tmp, /opt) est ephemeral et effacé à chaque deploy.
+ * 1. Render Disk (STORAGE_PATH défini) → disque persistant Render Individual+ 
+ * 2. Cloudinary (CLOUDINARY_URL défini) → cloud externe, fichiers volumineux
+ * 3. PostgreSQL base64 (défaut) → persistant, fichiers ≤ 2MB, sans coût additionnel
+ *
+ * Configuration Render :
+ * - Plan Individual ($25/mois) → ajouter un Disk de 10GB → STORAGE_PATH=/data/ged
+ * - Plan Free → stockage PostgreSQL base64 automatique (≤2MB par fichier)
  */
 const router = require('express').Router();
 const prisma = require('../lib/prisma');
@@ -17,97 +18,96 @@ const path = require('path');
 const fs = require('fs');
 const logger = require('../lib/logger');
 
-// Dossier de stockage persistant (Render Disk ou local dev)
-const UPLOAD_DIR = process.env.GED_UPLOAD_DIR || path.join(process.cwd(), 'uploads', 'ged');
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-
-const ALLOWED_MIME = {
-  'image/jpeg': '.jpg', 'image/jpg': '.jpg', 'image/png': '.png',
-  'application/pdf': '.pdf',
-  'application/msword': '.doc',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+const ALLOWED_TYPES = {
+  'image/jpeg':'.jpg','image/jpg':'.jpg','image/png':'.png',
+  'application/pdf':'.pdf',
+  'application/msword':'.doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document':'.docx',
 };
-
-const TYPES_GED = ['CNI','EXTRAIT_NAISSANCE','DIPLOME','FACTURE','CONTRAT','PLAN','PHOTO','PERMIS','ASSURANCE','RECU','JUSTIFICATIF','DECHARGE','AUTRE'];
-const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
-
-// Multer avec stockage sur disque persistant
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    // Organiser par entiteType
-    const dir = path.join(UPLOAD_DIR, req.body.entiteType || 'divers');
-    fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const ext = ALLOWED_MIME[file.mimetype] || path.extname(file.originalname);
-    const safeName = file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_').substring(0, 50);
-    cb(null, `${Date.now()}_${safeName}${ext.startsWith('.') ? '' : ext}`);
-  }
-});
+const TYPES_GED = ['CNI','EXTRAIT_NAISSANCE','DIPLOME','FACTURE','CONTRAT','PLAN','PHOTO','PERMIS','ASSURANCE','JUSTIFICATIF','AUTRE'];
+const MAX_SIZE = 15 * 1024 * 1024; // 15 MB
 
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: MAX_SIZE },
   fileFilter: (req, file, cb) => {
-    if (ALLOWED_MIME[file.mimetype]) cb(null, true);
-    else cb(new Error(`Type non autorisé: ${file.mimetype}. Formats acceptés: JPG, PNG, PDF, DOC, DOCX`));
+    if (ALLOWED_TYPES[file.mimetype]) cb(null, true);
+    else cb(new Error(`Type non autorisé: ${file.mimetype}. Formats: JPG, PNG, PDF, DOC, DOCX`));
   }
 });
+
+// Détecter le mode de stockage
+function getStorageMode() {
+  if (process.env.STORAGE_PATH) return 'disk';      // Render Disk persistant
+  if (process.env.CLOUDINARY_URL || process.env.CLOUDINARY_CLOUD_NAME) return 'cloudinary';
+  return 'database'; // Défaut : PostgreSQL base64
+}
+
+async function storeFile(buffer, originalname, mimetype) {
+  const mode = getStorageMode();
+  const ext = ALLOWED_TYPES[mimetype] || '.bin';
+  const filename = `${Date.now()}_${Math.random().toString(36).slice(2)}${ext}`;
+
+  if (mode === 'disk') {
+    const dir = process.env.STORAGE_PATH;
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const filepath = path.join(dir, filename);
+    fs.writeFileSync(filepath, buffer);
+    logger.info('[GED] Stockage disque Render', { filename, size: buffer.length });
+    return { url: `/api/documents/file/${filename}`, publicId: filename, size: buffer.length, storage: 'disk' };
+  }
+
+  if (mode === 'cloudinary') {
+    const { v2: cloudinary } = require('cloudinary');
+    return new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { resource_type: 'auto', folder: 'erp-2ig-ged' },
+        (err, result) => err ? reject(err) : resolve({ url: result.secure_url, publicId: result.public_id, size: result.bytes, storage: 'cloudinary' })
+      );
+      require('stream').Readable.from(buffer).pipe(stream);
+    });
+  }
+
+  // Mode database : base64 dans PostgreSQL
+  if (buffer.length > 2 * 1024 * 1024) {
+    throw new Error(`Fichier trop grand pour le stockage BDD (${(buffer.length/1024/1024).toFixed(1)} MB > 2 MB). Pour les fichiers plus lourds, configurer STORAGE_PATH (Render Disk) ou CLOUDINARY_URL.`);
+  }
+  const base64 = `data:${mimetype};base64,${buffer.toString('base64')}`;
+  logger.info('[GED] Stockage PostgreSQL base64', { size: buffer.length });
+  return { url: base64, publicId: null, size: buffer.length, storage: 'database' };
+}
 
 // POST /api/documents/upload
 router.post('/upload', auth, upload.single('fichier'), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'Fichier requis (max 10 MB)' });
+    if (!req.file) return res.status(400).json({ error: 'Fichier requis' });
     const { entiteType, entiteId, type, nom } = req.body;
     if (!entiteType || !entiteId) return res.status(400).json({ error: 'entiteType et entiteId requis' });
-
-    const typeDoc = (type || 'AUTRE').toUpperCase();
+    const typeDoc = type || 'AUTRE';
     if (!TYPES_GED.includes(typeDoc)) return res.status(400).json({ error: `Type invalide. Valeurs: ${TYPES_GED.join(', ')}` });
 
-    // Construire l'URL de téléchargement
-    const relativePath = path.relative(UPLOAD_DIR, req.file.path).replace(/\\/g, '/');
-    const fileUrl = `/api/documents/file/${relativePath}`;
-
+    const stored = await storeFile(req.file.buffer, req.file.originalname, req.file.mimetype);
     const doc = await prisma.document.create({
-      data: {
-        nom: nom || req.file.originalname,
-        type: typeDoc,
-        url: fileUrl,
-        filiale: req.user.filiale,
-        entiteType,
-        entiteId,
-        taille: req.file.size,
-        mimeType: req.file.mimetype,
-        uploadePar: req.user.id,
-      }
+      data: { nom: nom || req.file.originalname, type: typeDoc, url: stored.url, filiale: req.user.filiale, entiteType, entiteId, taille: stored.size, mimeType: req.file.mimetype, uploadePar: req.user.id }
     });
-
-    logger.info('[GED] Document uploadé', { type: typeDoc, entiteType, size: req.file.size, path: relativePath });
-    res.status(201).json(doc);
+    res.status(201).json({ ...doc, storage: stored.storage });
   } catch (e) {
-    // Nettoyer le fichier si erreur BDD
-    if (req.file?.path) try { fs.unlinkSync(req.file.path); } catch {}
     logger.error('[GED] Erreur upload', { error: e.message });
     res.status(500).json({ error: e.message });
   }
 });
 
-// GET /api/documents/file/* — Servir les fichiers depuis le disk
-router.get('/file/*', auth, (req, res) => {
-  try {
-    const relativePath = req.params[0];
-    // Sécurité : empêcher path traversal
-    const filePath = path.resolve(UPLOAD_DIR, relativePath);
-    if (!filePath.startsWith(path.resolve(UPLOAD_DIR))) {
-      return res.status(403).json({ error: 'Accès refusé' });
-    }
-    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Fichier introuvable' });
-    res.sendFile(filePath);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+// GET /api/documents/file/:filename — Servir fichiers depuis le disque Render
+router.get('/file/:filename', auth, (req, res) => {
+  const dir = process.env.STORAGE_PATH;
+  if (!dir) return res.status(404).json({ error: 'Stockage disque non configuré' });
+  const filename = path.basename(req.params.filename); // sécurité : pas de traversal
+  const filepath = path.join(dir, filename);
+  if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'Fichier introuvable' });
+  res.sendFile(filepath);
 });
 
-// GET /api/documents — Liste
+// GET /api/documents
 router.get('/', auth, async (req, res) => {
   try {
     const { entiteType, entiteId } = req.query;
@@ -117,46 +117,62 @@ router.get('/', auth, async (req, res) => {
     if (req.user.filiale !== 'GROUPE') where.filiale = req.user.filiale;
     const docs = await prisma.document.findMany({
       where, orderBy: { createdAt: 'desc' },
-      select: { id:true, nom:true, type:true, url:true, mimeType:true, taille:true, entiteType:true, entiteId:true, filiale:true, uploadePar:true, createdAt:true }
+      select: { id:true, nom:true, type:true, mimeType:true, taille:true, entiteType:true, entiteId:true, filiale:true, uploadePar:true, createdAt:true }
     });
     res.json(docs);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/documents/:id — Télécharger un document
+// GET /api/documents/:id — Récupérer et servir un document
 router.get('/:id', auth, async (req, res) => {
   try {
     const doc = await prisma.document.findUnique({ where: { id: req.params.id } });
     if (!doc) return res.status(404).json({ error: 'Document introuvable' });
     if (req.user.filiale !== 'GROUPE' && doc.filiale !== req.user.filiale) return res.status(403).json({ error: 'Accès refusé' });
 
-    if (doc.url.startsWith('/api/documents/file/')) {
-      const relativePath = doc.url.replace('/api/documents/file/', '');
-      const filePath = path.resolve(UPLOAD_DIR, relativePath);
-      if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Fichier physique introuvable' });
-      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(doc.nom)}"`);
-      return res.sendFile(filePath);
+    if (doc.url.startsWith('data:')) {
+      const [header, data] = doc.url.split(',');
+      const mimeType = header.split(':')[1].split(';')[0];
+      const buffer = Buffer.from(data, 'base64');
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Content-Disposition', `inline; filename="${doc.nom}"`);
+      return res.send(buffer);
     }
-    res.redirect(doc.url);
+    if (doc.url.startsWith('/api/documents/file/')) {
+      const filename = path.basename(doc.url);
+      const filepath = path.join(process.env.STORAGE_PATH || '/tmp', filename);
+      if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'Fichier introuvable sur disque' });
+      return res.sendFile(filepath);
+    }
+    res.redirect(doc.url); // Cloudinary URL
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// DELETE /api/documents/:id — Soft delete + suppression fichier
+// GET /api/documents/info/storage — Info sur le mode de stockage actuel
+router.get('/info/storage', auth, (req, res) => {
+  const mode = getStorageMode();
+  res.json({
+    mode,
+    maxSize: mode === 'database' ? '2 MB' : '15 MB',
+    description: {
+      disk: 'Render Disk persistant (STORAGE_PATH configuré)',
+      cloudinary: 'Cloudinary cloud (CLOUDINARY_URL configuré)',
+      database: 'PostgreSQL base64 (défaut gratuit, ≤ 2 MB par fichier)'
+    }[mode]
+  });
+});
+
+// DELETE /api/documents/:id
 router.delete('/:id', auth, async (req, res) => {
   try {
     const doc = await prisma.document.findUnique({ where: { id: req.params.id } });
     if (!doc) return res.status(404).json({ error: 'Document introuvable' });
     if (req.user.filiale !== 'GROUPE' && doc.filiale !== req.user.filiale) return res.status(403).json({ error: 'Accès refusé' });
-
-    // Supprimer le fichier physique
     if (doc.url.startsWith('/api/documents/file/')) {
-      const relativePath = doc.url.replace('/api/documents/file/', '');
-      const filePath = path.resolve(UPLOAD_DIR, relativePath);
-      if (fs.existsSync(filePath)) try { fs.unlinkSync(filePath); } catch {}
+      const filepath = path.join(process.env.STORAGE_PATH || '/tmp', path.basename(doc.url));
+      try { fs.unlinkSync(filepath); } catch {}
     }
-
-    await prisma.document.update({ where: { id: req.params.id }, data: { nom: `[SUPPRIMÉ] ${doc.nom}`, url: '' } });
-    await prisma.auditLog.create({ data: { utilisateurId: req.user.id, utilisateurNom: `${req.user.prenom} ${req.user.nom}`, filiale: req.user.filiale, action: 'DELETE', entite: 'Document', entiteId: doc.id, entiteLabel: doc.nom } });
+    await prisma.document.update({ where: { id: req.params.id }, data: { nom: `[SUPPRIMÉ] ${doc.nom}` } });
     res.json({ message: 'Document supprimé' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
