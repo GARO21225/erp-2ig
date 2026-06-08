@@ -129,6 +129,8 @@ function PanelCommande({ table, menu, onClose, onSave, loading }) {
         </div>
       </div>
     </div>
+
+     
   );
 }
 
@@ -253,12 +255,18 @@ export default function POS() {
   const { data: tables } = useQuery({ queryKey: ['tables'], queryFn: yakroAPI.tables, refetchInterval: 15000 });
   const { data: menu } = useQuery({ queryKey: ['menu'], queryFn: () => yakroAPI.menu({ disponible: 'true' }) });
 
-  const createCmd = useMutation({ mutationFn: yakroAPI.createCommande, onSuccess: () => { qc.invalidateQueries(['tables']); setSelectedTable(null); } });
-  const updateStatut = useMutation({ mutationFn: ({ id, statut }) => yakroAPI.updateStatut(id, statut), onSuccess: () => qc.invalidateQueries(['tables']) });
-  const payerCmd = useMutation({
-    mutationFn: ({ id, data }) => yakroAPI.payer(id, data),
-    onSuccess: () => { qc.invalidateQueries(['tables']); setPaiementCommande(null); }
-  });
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
+
+  const createCmd = useMutation({ mutationFn: yakroAPI.createCommande,
+    onSuccess: () => { qc.invalidateQueries(['tables']); setSelectedTable(null); showToast('Commande créée ✓'); },
+    onError: (e) => showToast(e?.response?.data?.error || 'Erreur', 'error') });
+  const updateStatut = useMutation({ mutationFn: ({ id, statut }) => yakroAPI.updateStatut(id, statut),
+    onSuccess: (_, v) => { qc.invalidateQueries(['tables']); showToast(v.statut === 'CUISINE' ? '🍳 En cuisine !' : 'OK'); },
+    onError: (e) => showToast(e?.response?.data?.error || 'Erreur', 'error') });
+  const payerCmd = useMutation({ mutationFn: ({ id, data }) => yakroAPI.payer(id, data),
+    onSuccess: () => { qc.invalidateQueries(['tables']); setPaiementCommande(null); showToast('✅ Paiement OK'); },
+    onError: (e) => showToast(e?.response?.data?.error || 'Erreur paiement', 'error') });
 
   const tablesFiltrees = (tables || []).filter(t => t.zone === zone);
   const occupees = (tables || []).filter(t => t.statut === 'OCCUPEE').length;
@@ -357,6 +365,7 @@ export default function POS() {
           onPay={data => payerCmd.mutate({ id: paiementCommande.id, data })}
         />
       )}
+      {toast && <div style={{ position:'fixed', bottom:20, right:16, left:16, background: toast.type==='error'?'#A32D2D':'#27500A', color:'white', padding:'12px 18px', borderRadius:10, fontSize:13, fontWeight:500, zIndex:9999 }}>{toast.msg}</div>}
     </div>
   );
 }
