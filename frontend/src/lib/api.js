@@ -210,3 +210,7 @@ export const documentsAPI = {
   delete: (id) => api.delete(`/documents/${id}`).then(r => r.data),
   viewUrl: (id) => `${api.defaults.baseURL}/documents/${id}`,
 };
+
+export function getApiBaseUrl() {
+  return api.defaults.baseURL || 'http://localhost:4000/api';
+}

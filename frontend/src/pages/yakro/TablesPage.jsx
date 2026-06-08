@@ -64,7 +64,7 @@ export default function TablesPage() {
   const { data: tables = [] } = useQuery({ queryKey: ['tables'], queryFn: yakroAPI.tables });
 
   const createMut = useMutation({
-    mutationFn: (data) => yakroAPI.createTable(data),
+    mutationFn: (data) => yakroAPI.createTable(data).then ? yakroAPI.createTable(data) : yakroAPI.createTable(data),
     onSuccess: () => { qc.invalidateQueries(['tables']); setShowCreate(false); showToast('Table créée'); },
     onError: (e) => showToast(e?.response?.data?.error || 'Erreur', 'error'),
   });

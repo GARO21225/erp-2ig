@@ -210,13 +210,20 @@ router.post('/register', async (req, res) => {
   try {
     const count = await prisma.utilisateur.count();
     if (count > 0) {
+      // Vérification JWT + Session en BDD
       const header = req.headers.authorization;
       if (!header?.startsWith('Bearer ')) {
-        return res.status(401).json({ error: 'Création de compte réservée au DG — token requis' });
+        return res.status(401).json({ error: 'Token DG requis' });
       }
+      const token = header.split(' ')[1];
       let payload;
-      try { payload = jwt.verify(header.split(' ')[1], process.env.JWT_SECRET); }
-      catch { return res.status(401).json({ error: 'Token invalide' }); }
+      try { payload = jwt.verify(token, process.env.JWT_SECRET); }
+      catch { return res.status(401).json({ error: 'Token invalide ou expiré' }); }
+      // Vérifier la session en BDD
+      const session = await prisma.session.findUnique({ where: { token } });
+      if (!session || session.expiresAt < new Date()) {
+        return res.status(401).json({ error: 'Session expirée — veuillez vous reconnecter' });
+      }
       const caller = await prisma.utilisateur.findUnique({ where: { id: payload.userId } });
       if (!caller || !['DG', 'DIRECTEUR'].includes(caller.role)) {
         return res.status(403).json({ error: 'Seul le DG peut créer des comptes utilisateurs' });

@@ -28,9 +28,11 @@ export default function UtilisateursPage() {
 
   const showToast = (msg, type='success') => { setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
 
-  const { data: users = [], isLoading } = useQuery({
+  const { data: users = [], isLoading, error, refetch } = useQuery({
     queryKey: ['utilisateurs', filialeFilter],
     queryFn: () => authAPI.listUtilisateurs(filialeFilter ? { filiale: filialeFilter } : {}),
+    staleTime: 0, // Toujours rafraîchir
+    retry: 2,
   });
 
   const updateRole = useMutation({
@@ -71,12 +73,21 @@ export default function UtilisateursPage() {
             {users.length} compte(s) · {users.filter(u=>u.actif).length} actif(s)
           </p>
         </div>
+  <button className="btn btn-ghost btn-sm" onClick={() => refetch()} title="Rafraîchir">
+          🔄
+        </button>
         {user?.role === 'DG' && (
           <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
             <Plus size={13} /> Nouveau compte
           </button>
         )}
       </div>
+
+      {error && (
+        <div style={{ padding:'10px 14px', background:'#FCEBEB', borderRadius:8, fontSize:12, color:'#A32D2D', marginBottom:12 }}>
+          Erreur de chargement: {error?.response?.data?.error || error.message}
+        </div>
+      )}
 
       {/* Filtres */}
       <div style={{ display:'flex', gap:8, marginBottom:16, flexWrap:'wrap' }}>
