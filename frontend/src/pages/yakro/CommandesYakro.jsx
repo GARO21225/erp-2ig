@@ -4,7 +4,7 @@ import { yakroAPI } from '../../lib/api';
 import { ChefHat, CheckCircle, Eye, X, Printer } from 'lucide-react';
 import FilterBar from '../../components/ui/FilterBar';
 import ExportBar from '../../components/ui/ExportBar';
-import { exportPDF } from '../../lib/export';
+import { exportTicketYakro, exportPDF } from '../../lib/export';
 import { exportExcel } from '../../lib/export';
 
 const STATUT_MAP = {
@@ -27,15 +27,7 @@ function DetailCommande({ commande, onClose, onUpdateStatut }) {
       `${l.prixUnitaire?.toLocaleString('fr')} F`,
       `${(l.prixUnitaire * l.quantite)?.toLocaleString('fr')} F`,
     ]) || [];
-    exportPDF(
-      `Yakro Grill — ${commande.numero}`,
-      `ticket_${commande.numero}`,
-      ['Qté', 'Article', 'P.U.', 'Total'],
-      [...lignes, ['', '', 'TOTAL :', `${commande.total?.toLocaleString('fr')} F`]],
-      {
-        sousTitre: `Table ${commande.table?.numero || 'Emporter'} · ${commande.nbCouverts} couvert(s) · ${new Date(commande.createdAt).toLocaleString('fr')}`,
-      }
-    );
+    exportTicketYakro(commande);
   };
 
   return (

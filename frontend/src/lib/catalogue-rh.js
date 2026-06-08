@@ -157,3 +157,10 @@ export const LOCALISATIONS_CI = {
   Korhogo: ['Centre','Kasséré','Petit Paris'],
   'San-Pédro': ['Cité des Cadres','Zone Portuaire','Bameya'],
 };
+
+export const FILIALES_LABELS = {
+  GROUPE: 'Groupe 2iG',
+  YAKRO_GRILL: 'Yakro Grill',
+  TOPTELSIG: 'TOPTELSIG',
+  LIYA: 'LiYA',
+};

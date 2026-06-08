@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { exportTicketYakro } from '../../lib/export';
 import { yakroAPI } from '../../lib/api';
 import { Plus, X, Minus, ShoppingBag, Banknote, Smartphone, CreditCard, CheckCircle } from 'lucide-react';
 
@@ -319,11 +320,15 @@ export default function POS() {
                 <div>
                   <div style={{ fontSize: 11, color: '#888' }}>{commande.lignes?.length || 0} article(s)</div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: '#8B1A1A', marginBottom: 6 }}>{commande.total?.toLocaleString('fr')} F</div>
-                  <div style={{ display: 'flex', gap: 4 }}>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {commande.statut === 'EN_COURS' && (
+                      <button onClick={(e) => { e.stopPropagation(); setSelectedTable({ ...t, commandeExistante: commande }); }}
+                        style={{ flex: 1, minWidth: 60, padding: '3px 0', fontSize: 10, border: 'none', borderRadius: 5, background: '#EEF3FB', color: '#1a3f6f', cursor: 'pointer' }}>+ Articles</button>
+                    )}
                     <button onClick={(e) => { e.stopPropagation(); updateStatut.mutate({ id: commande.id, statut: 'CUISINE' }); }}
-                      style={{ flex: 1, padding: '3px 0', fontSize: 10, border: 'none', borderRadius: 5, background: '#FAEEDA', color: '#412402', cursor: 'pointer' }}>Cuisine</button>
+                      style={{ flex: 1, minWidth: 50, padding: '3px 0', fontSize: 10, border: 'none', borderRadius: 5, background: '#FAEEDA', color: '#412402', cursor: 'pointer' }}>Cuisine</button>
                     <button onClick={(e) => { e.stopPropagation(); setPaiementCommande(commande); }}
-                      style={{ flex: 1, padding: '3px 0', fontSize: 10, border: 'none', borderRadius: 5, background: '#EAF3DE', color: '#27500A', cursor: 'pointer' }}>Payer</button>
+                      style={{ flex: 1, minWidth: 50, padding: '3px 0', fontSize: 10, border: 'none', borderRadius: 5, background: '#EAF3DE', color: '#27500A', cursor: 'pointer' }}>Payer</button>
                   </div>
                 </div>
               )}
@@ -351,9 +356,25 @@ export default function POS() {
       {selectedTable && menu && (
         <PanelCommande
           table={selectedTable} menu={menu}
-          loading={createCmd.isPending}
+          commandeExistante={selectedTable.commandeExistante}
+          loading={createCmd.isPending || updateStatut.isPending}
           onClose={() => setSelectedTable(null)}
-          onSave={data => createCmd.mutate(data)}
+          onSave={data => {
+            if (selectedTable.commandeExistante) {
+              // Ajouter lignes à la commande existante via API PUT
+              const { lignes, notes } = data;
+              const cmd = selectedTable.commandeExistante;
+              // Calculer nouveau total
+              const newTotal = lignes.reduce((s, l) => s + l.prix * l.quantite, 0);
+              fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}/yakro/commandes/${cmd.id}/ajouter-lignes`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${JSON.parse(localStorage.getItem('2ig-auth')||'{}')?.state?.token}` },
+                body: JSON.stringify({ lignes, notes })
+              }).then(r => r.json()).then(() => { qc.invalidateQueries(['tables']); setSelectedTable(null); showToast('Articles ajoutés ✓'); }).catch(e => showToast(e.message, 'error'));
+            } else {
+              createCmd.mutate(data);
+            }
+          }}
         />
       )}
 

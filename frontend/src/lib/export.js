@@ -295,3 +295,94 @@ export function exportMouvementsStock(mouvements) {
   ]);
   return { entetes, lignes };
 }
+
+// ── TICKET YAKRO GRILL avec logo et formatage restaurant ─────────────────────
+export function exportTicketYakro(commande) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [80, 200] }); // Format ticket 80mm
+  const w = 80;
+  const now = new Date();
+
+  // En-tête rouge Yakro
+  doc.setFillColor(139, 26, 26); // #8B1A1A
+  doc.rect(0, 0, w, 28, 'F');
+
+  // Texte logo
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('YAKRO GRILL', w/2, 12, { align: 'center' });
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Restaurant • Yamoussoukro', w/2, 18, { align: 'center' });
+  doc.text('Tél: +225 XX XX XX XX XX', w/2, 23, { align: 'center' });
+
+  let y = 34;
+
+  // Infos commande
+  doc.setTextColor(30, 30, 30);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`N° ${commande.numero}`, w/2, y, { align: 'center' }); y += 5;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.text(`Table ${commande.table?.numero || 'Emporter'} • ${commande.nbCouverts} couvert(s)`, w/2, y, { align: 'center' }); y += 4;
+  doc.text(now.toLocaleString('fr', { dateStyle: 'short', timeStyle: 'short' }), w/2, y, { align: 'center' }); y += 3;
+
+  // Séparateur
+  doc.setDrawColor(200);
+  doc.line(4, y, w-4, y); y += 5;
+
+  // Articles
+  doc.setFontSize(8);
+  (commande.lignes || []).forEach(l => {
+    const nom = l.menu?.nom || l.nom || `Article`;
+    const montant = ((l.prixUnitaire || l.prix || 0) * (l.quantite || 1)).toLocaleString('fr');
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${l.quantite || 1}×`, 4, y);
+    doc.setFont('helvetica', 'normal');
+    // Nom tronqué si trop long
+    const nomTronc = nom.length > 22 ? nom.slice(0, 22) + '…' : nom;
+    doc.text(nomTronc, 14, y);
+    doc.text(`${montant} F`, w-4, y, { align: 'right' });
+    y += 5;
+    if (y > 180) { doc.addPage([80, 200]); y = 10; }
+  });
+
+  // Séparateur
+  doc.line(4, y, w-4, y); y += 4;
+
+  // Remise si applicable
+  if (commande.remise > 0) {
+    doc.setFontSize(8);
+    doc.text('Remise :', 4, y);
+    doc.text(`-${commande.remise.toLocaleString('fr')} F`, w-4, y, { align: 'right' }); y += 5;
+  }
+
+  // Total
+  doc.setFillColor(139, 26, 26);
+  doc.rect(4, y-2, w-8, 8, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('TOTAL', 8, y+4);
+  doc.text(`${commande.total?.toLocaleString('fr')} F`, w-6, y+4, { align: 'right' });
+  y += 12;
+
+  // Pied de page
+  doc.setTextColor(120, 120, 120);
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Merci de votre visite !', w/2, y, { align: 'center' }); y += 4;
+  doc.text('Yakro Grill - Groupe 2iG', w/2, y, { align: 'center' });
+
+  // Ouvrir pour impression navigateur
+  const blob = doc.output('blob');
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
+  if (win) {
+    win.onload = () => { win.print(); setTimeout(() => URL.revokeObjectURL(url), 2000); };
+  } else {
+    // Fallback : télécharger
+    doc.save(`ticket_${commande.numero}.pdf`);
+  }
+}

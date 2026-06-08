@@ -74,7 +74,7 @@ router.post('/', auth, requireRole('DG', 'RH', 'DIRECTEUR'), async (req, res) =>
     });
 
     await prisma.auditLog.create({
-      data: { utilisateurId: req.user.id, filiale, action: 'CREATE', entite: 'Employe', entiteId: employe.id }
+      data: { utilisateurId: req.user.id, utilisateurNom: `${req.user.prenom} ${req.user.nom}`, filiale, action: 'CREATE', entite: 'Employe', entiteId: employe.id, entiteLabel: `${prenom} ${nom} — ${poste}` }
     });
 
     res.status(201).json(employe);

@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { employesAPI } from '../../lib/api';
+import { getDepartements, getPostes } from '../../lib/catalogue-rh';
 import { useAuthStore } from '../../store';
 import { Plus, Search, ChevronRight, X } from 'lucide-react';
 import TemplateButton from '../../components/ui/TemplateButton';
@@ -13,37 +14,91 @@ const FILIALES_LABELS = { YAKRO_GRILL: 'Yakro Grill', TOPTELSIG: 'TOPTELSIG', LI
 const FILIALES_COLORS = { YAKRO_GRILL: '#8B1A1A', TOPTELSIG: '#1a3f6f', LIYA: '#E85D04', GROUPE: '#444' };
 const STATUT_BADGE = { ACTIF: 'badge-green', CONGE: 'badge-amber', SUSPENDU: 'badge-red', DEMISSIONNAIRE: 'badge-amber', QUITTE: 'badge-gray' };
 
-function ModalCreateEmploye({ onClose, onSave }) {
-  const [form, setForm] = useState({ matricule: '', nom: '', prenom: '', telephone: '', poste: '', departement: '', filiale: 'YAKRO_GRILL', dateEmbauche: '', salaireBase: '' });
+// Remplacer la fonction ModalCreateEmploye existante
+function ModalCreateEmploye({ onClose, onSave, loading }) {
+  const { filiale: filialeConnexion } = useAuthStore();
+  const [form, setForm] = useState({
+    matricule: '', nom: '', prenom: '', telephone: '', email: '',
+    filiale: filialeConnexion === 'GROUPE' ? 'YAKRO_GRILL' : filialeConnexion,
+    departement: '', poste: '', dateEmbauche: new Date().toISOString().split('T')[0],
+    salaireBase: '', adresse: '', numeroCni: '',
+  });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  // Cascade filiale → département → poste
+  const depts = getDepartements(form.filiale);
+  const postes = getPostes(form.filiale, form.departement);
+
+  // Auto-matricule
+  useEffect(() => {
+    if (!form.filiale || !form.departement) return;
+    const prefix = { YAKRO_GRILL: 'YG', TOPTELSIG: 'TOP', LIYA: 'LIY', GROUPE: 'GRP' }[form.filiale] || 'EMP';
+    const deptCode = form.departement.slice(0, 3).toUpperCase();
+    const ts = Date.now().toString().slice(-4);
+    if (!form.matricule) set('matricule', `${prefix}-${deptCode}-${ts}`);
+  }, [form.filiale, form.departement]);
+
+  const handleFilialeChange = (v) => { set('filiale', v); set('departement', ''); set('poste', ''); set('matricule', ''); };
+  const handleDeptChange = (v) => { set('departement', v); set('poste', postes[0] || ''); };
+
+  const isValid = form.matricule && form.nom && form.prenom && form.telephone && form.poste && form.filiale && form.dateEmbauche && form.salaireBase;
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
+      <div className="modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h3 style={{ margin: 0, fontFamily: 'Syne', fontSize: 16 }}>Nouvel employé</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          {[['Matricule', 'matricule'], ['Nom', 'nom'], ['Prénom', 'prenom'], ['Téléphone', 'telephone'], ['Poste', 'poste'], ['Département', 'departement']].map(([label, key]) => (
-            <div key={key}><label className="label">{label}</label><input className="input" value={form[key]} onChange={e => set(key, e.target.value)} /></div>
-          ))}
+        <div className="form-grid">
+          {/* Filiale */}
           <div>
-            <label className="label">Filiale</label>
-            <select className="input" value={form.filiale} onChange={e => set('filiale', e.target.value)}>
+            <label className="label">Filiale *</label>
+            <select className="input" value={form.filiale} onChange={e => handleFilialeChange(e.target.value)}>
               {Object.entries(FILIALES_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
-          <div><label className="label">Date d'embauche</label><input className="input" type="date" value={form.dateEmbauche} onChange={e => set('dateEmbauche', e.target.value)} /></div>
-          <div style={{ gridColumn: '1/-1' }}><label className="label">Salaire de base (FCFA)</label><input className="input" type="number" value={form.salaireBase} onChange={e => set('salaireBase', e.target.value)} /></div>
+          {/* Département cascade */}
+          <div>
+            <label className="label">Département *</label>
+            <select className="input" value={form.departement} onChange={e => handleDeptChange(e.target.value)}>
+              <option value="">— Choisir —</option>
+              {depts.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
+            </select>
+          </div>
+          {/* Poste cascade */}
+          <div className="full">
+            <label className="label">Poste *</label>
+            <select className="input" value={form.poste} onChange={e => set('poste', e.target.value)} disabled={!form.departement}>
+              <option value="">— Choisir le département d'abord —</option>
+              {postes.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+          {/* Matricule auto */}
+          <div>
+            <label className="label">Matricule * <span style={{ color: '#888', fontSize: 10, fontWeight: 400 }}>(auto-généré)</span></label>
+            <input className="input" value={form.matricule} onChange={e => set('matricule', e.target.value)} placeholder="YG-CUI-0001" />
+          </div>
+          <div><label className="label">Date d'embauche *</label><input className="input" type="date" value={form.dateEmbauche} onChange={e => set('dateEmbauche', e.target.value)} /></div>
+          <div><label className="label">Prénom *</label><input className="input" value={form.prenom} onChange={e => set('prenom', e.target.value)} /></div>
+          <div><label className="label">Nom *</label><input className="input" value={form.nom} onChange={e => set('nom', e.target.value)} /></div>
+          <div><label className="label">Téléphone *</label><input className="input" value={form.telephone} onChange={e => set('telephone', e.target.value)} placeholder="07XXXXXXXX" /></div>
+          <div><label className="label">Email</label><input className="input" type="email" value={form.email} onChange={e => set('email', e.target.value)} /></div>
+          <div className="full"><label className="label">Salaire de base (FCFA) *</label><input className="input" type="number" value={form.salaireBase} onChange={e => set('salaireBase', e.target.value)} placeholder="150000" /></div>
+          <div className="full"><label className="label">Adresse</label><input className="input" value={form.adresse} onChange={e => set('adresse', e.target.value)} /></div>
+          <div><label className="label">N° CNI</label><input className="input" value={form.numeroCni} onChange={e => set('numeroCni', e.target.value)} /></div>
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
           <button className="btn btn-ghost btn-sm" onClick={onClose}>Annuler</button>
-          <button className="btn btn-primary btn-sm" onClick={() => onSave(form)}>Créer</button>
+          <button className="btn btn-primary btn-sm" disabled={!isValid || loading} onClick={() => onSave({ ...form, salaireBase: Number(form.salaireBase) })}>
+            {loading ? 'Création...' : 'Créer l\'employé'}
+          </button>
         </div>
       </div>
     </div>
   );
 }
+
 
 function EmployeDetail({ employe, onClose }) {
   const [tab, setTab] = useState('info');
@@ -240,7 +295,7 @@ export default function RHPage() {
         )}
       </div>
 
-      {showCreate && <ModalCreateEmploye onClose={() => setShowCreate(false)} onSave={d => createMut.mutate(d)} />}
+      {showCreate && <ModalCreateEmploye onClose={() => setShowCreate(false)} onSave={d => createMut.mutate(d)} loading={createMut.isPending} />}
       {selected && <EmployeDetail employe={detail || selected} onClose={() => setSelected(null)} />}
     </div>
   );

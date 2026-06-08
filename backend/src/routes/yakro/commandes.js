@@ -247,3 +247,44 @@ router.get('/stats', auth, yakro, async (req, res) => {
 });
 
 module.exports = router;
+
+// POST /:id/ajouter-lignes — Ajouter des articles à une commande EN_COURS
+router.post('/:id/ajouter-lignes', auth, yakro, async (req, res) => {
+  try {
+    const { lignes, notes } = req.body;
+    const commande = await prisma.commandeYakro.findUnique({ where: { id: req.params.id } });
+    if (!commande) return res.status(404).json({ error: 'Commande introuvable' });
+    if (commande.statut === 'PAYEE') return res.status(400).json({ error: 'Commande déjà payée' });
+    if (commande.statut === 'ANNULEE') return res.status(400).json({ error: 'Commande annulée' });
+
+    const lignesData = [];
+    let ajout = 0;
+    for (const l of lignes) {
+      const item = await prisma.menuYakro.findUnique({ where: { id: l.menuId || l.id } });
+      if (!item || !item.disponible) continue;
+      const prix = l.prixUnitaire || l.prix || item.prix;
+      ajout += prix * (l.quantite || 1);
+      lignesData.push({ commandeId: req.params.id, menuId: item.id, quantite: l.quantite || 1, prixUnitaire: prix, notes: l.notes });
+    }
+
+    if (lignesData.length === 0) return res.status(400).json({ error: 'Aucun article valide' });
+
+    await prisma.$transaction([
+      prisma.ligneCommandeYakro.createMany({ data: lignesData }),
+      prisma.commandeYakro.update({
+        where: { id: req.params.id },
+        data: {
+          sousTotal: { increment: ajout },
+          total: { increment: ajout },
+          notes: notes ? `${commande.notes || ''} | ${notes}` : commande.notes,
+        }
+      })
+    ]);
+
+    const updated = await prisma.commandeYakro.findUnique({
+      where: { id: req.params.id },
+      include: { lignes: { include: { menu: true } }, table: true }
+    });
+    res.json(updated);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
