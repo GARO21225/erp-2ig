@@ -85,54 +85,86 @@ router.put('/:id', auth, toptelsig, async (req, res) => {
 router.post('/:id/paiements', auth, toptelsig, async (req, res) => {
   try {
     const { venteId, echeancierId, montant, typePaiement, reference, notes } = req.body;
+    const montantPaye = Number(montant);
 
-    const paiement = await prisma.paiementFoncier.create({
-      data: {
-        venteId,
-        souscripteurId: req.params.id,
-        echeancierId,
-        montant: Number(montant),
-        typePaiement,
-        reference,
-        notes,
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Enregistrer le paiement
+      const paiement = await tx.paiementFoncier.create({
+        data: { venteId, souscripteurId: req.params.id, echeancierId, montant: montantPaye, typePaiement, reference, notes, statut: 'VALIDE' }
+      });
+
+      let excedent = 0;
+
+      // 2. Mettre à jour l'échéance ciblée
+      if (echeancierId) {
+        const ech = await tx.echeancier.findUnique({ where: { id: echeancierId } });
+        const totalPaye = ech.montantPaye + montantPaye;
+        excedent = Math.max(0, totalPaye - ech.montant);
+        const nouveauStatut = totalPaye >= ech.montant ? 'PAYE' : totalPaye > 0 ? 'PARTIEL' : 'EN_ATTENTE';
+        await tx.echeancier.update({
+          where: { id: echeancierId },
+          data: { montantPaye: Math.min(totalPaye, ech.montant), statut: nouveauStatut }
+        });
       }
+
+      // 3. Recalculer les échéances restantes si paiement supérieur
+      // Logique : déduire le montant total payé du capital restant et recalculer les mensualités
+      const vente = await tx.venteFoncier.findUnique({ where: { id: venteId } });
+      const touteEcheances = await tx.echeancier.findMany({
+        where: { venteId },
+        orderBy: { numero: 'asc' }
+      });
+
+      // Calculer total déjà payé (toutes échéances confondues)
+      const totalDejaPayeAll = touteEcheances.reduce((s, e) => s + e.montantPaye, 0);
+      const capitalRestant = vente.prixVente - totalDejaPayeAll;
+
+      // Échéances encore en attente/partiel/retard
+      const echRestantes = touteEcheances.filter(e => e.statut !== 'PAYE' && e.statut !== 'ANNULE');
+
+      if (echRestantes.length > 0 && capitalRestant > 0) {
+        // Recalculer la mensualité égale pour les échéances restantes
+        const nouvelleMensualite = Math.round(capitalRestant / echRestantes.length);
+        for (const ech of echRestantes) {
+          await tx.echeancier.update({
+            where: { id: ech.id },
+            data: { montant: nouvelleMensualite }
+          });
+        }
+      } else if (capitalRestant <= 0) {
+        // Tout est payé → marquer la vente comme soldée
+        await tx.venteFoncier.update({ where: { id: venteId }, data: { statut: 'SOLDE' } });
+        await tx.lot.update({ where: { id: vente.lotId }, data: { statut: 'VENDU' } });
+      }
+
+      // 4. Encaisser dans caisse TOPTELSIG
+      const caisse = await tx.caisse.findFirst({ where: { filiale: 'TOPTELSIG', actif: true } });
+      if (caisse) {
+        await tx.encaissement.create({
+          data: {
+            caisseId: caisse.id, filiale: 'TOPTELSIG', montant: montantPaye,
+            typePaiement, reference, motif: `Paiement foncier - Vente ${venteId.slice(-8)}`,
+            entiteRef: req.params.id, entiteType: 'souscripteur', operateurId: req.user.id,
+          }
+        });
+        await tx.caisse.update({ where: { id: caisse.id }, data: { solde: { increment: montantPaye } } });
+      }
+
+      // 5. Audit
+      await tx.auditLog.create({
+        data: {
+          utilisateurId: req.user.id, utilisateurNom: `${req.user.prenom} ${req.user.nom}`,
+          filiale: 'TOPTELSIG', action: 'PAIEMENT', entite: 'PaiementFoncier',
+          entiteId: paiement.id,
+          entiteLabel: `${montantPaye.toLocaleString('fr')} F — Souscripteur ${req.params.id.slice(-6)}`,
+          apres: { montant: montantPaye, typePaiement, capitalRestant: Math.max(0, capitalRestant) }
+        }
+      });
+
+      return { paiement, capitalRestant: Math.max(0, capitalRestant), mensualiteRecalculee: echRestantes.length > 0 ? Math.round(capitalRestant / echRestantes.length) : 0 };
     });
 
-    // Mettre à jour échéancier
-    if (echeancierId) {
-      const echeancier = await prisma.echeancier.findUnique({ where: { id: echeancierId } });
-      const nouveauMontantPaye = echeancier.montantPaye + Number(montant);
-      const nouveauStatut = nouveauMontantPaye >= echeancier.montant ? 'PAYE' :
-                            nouveauMontantPaye > 0 ? 'PARTIEL' : 'EN_ATTENTE';
-
-      await prisma.echeancier.update({
-        where: { id: echeancierId },
-        data: { montantPaye: nouveauMontantPaye, statut: nouveauStatut }
-      });
-    }
-
-    // Encaisser dans caisse TOPTELSIG
-    const caisse = await prisma.caisse.findFirst({ where: { filiale: 'TOPTELSIG', actif: true } });
-    if (caisse) {
-      await prisma.$transaction([
-        prisma.encaissement.create({
-          data: {
-            caisseId: caisse.id,
-            filiale: 'TOPTELSIG',
-            montant: Number(montant),
-            typePaiement,
-            reference,
-            motif: `Paiement foncier souscripteur`,
-            entiteRef: req.params.id,
-            entiteType: 'souscripteur',
-            operateurId: req.user.id,
-          }
-        }),
-        prisma.caisse.update({ where: { id: caisse.id }, data: { solde: { increment: Number(montant) } } })
-      ]);
-    }
-
-    res.status(201).json(paiement);
+    res.status(201).json(result);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

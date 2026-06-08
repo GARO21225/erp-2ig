@@ -168,7 +168,7 @@ router.post('/import', auth, toptelsig, upload.single('fichier'), async (req, re
   }
 });
 
-// PUT /:id/statut — Changer le statut d'un lot (LITIGE, ANNULE, etc.)
+
 router.put('/:id/statut', auth, toptelsig, async (req, res) => {
   try {
     const { statut, motif } = req.body;
@@ -195,6 +195,48 @@ router.get('/disponibles/:projetId', auth, toptelsig, async (req, res) => {
   try {
     const lots = await prisma.lot.findMany({
       where: { projetId: req.params.projetId, statut: 'DISPONIBLE' },
+      orderBy: [{ ilot: 'asc' }, { numero: 'asc' }]
+    });
+    res.json(lots);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT /:id — Modifier un lot
+router.put('/:id', auth, toptelsig, async (req, res) => {
+  try {
+    const { numero, superficie, prix, ilot, statut } = req.body;
+    const lot = await prisma.lot.findUnique({ where: { id: req.params.id } });
+    if (!lot) return res.status(404).json({ error: 'Lot introuvable' });
+    if (lot.statut === 'VENDU' && statut !== 'VENDU') {
+      const venteActive = await prisma.venteFoncier.findFirst({ where: { lotId: req.params.id, statut: { notIn: ['ANNULEE'] } } });
+      if (venteActive) return res.status(400).json({ error: 'Lot vendu — impossible de modifier sans annuler la vente' });
+    }
+    const updated = await prisma.lot.update({
+      where: { id: req.params.id },
+      data: { ...(numero && { numero }), ...(superficie && { superficie: Number(superficie) }), ...(prix && { prix: Number(prix) }), ...(ilot !== undefined && { ilot }), ...(statut && { statut }) }
+    });
+    res.json(updated);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /:id — Supprimer un lot
+router.delete('/:id', auth, requireRole('DG', 'DIRECTEUR', 'RESP_FONCIER'), async (req, res) => {
+  try {
+    const lot = await prisma.lot.findUnique({ where: { id: req.params.id } });
+    if (!lot) return res.status(404).json({ error: 'Lot introuvable' });
+    if (lot.statut === 'VENDU') return res.status(400).json({ error: 'Lot vendu — suppression impossible' });
+    const venteExist = await prisma.venteFoncier.findFirst({ where: { lotId: req.params.id } });
+    if (venteExist) return res.status(400).json({ error: 'Lot lié à une vente — suppression impossible' });
+    await prisma.lot.delete({ where: { id: req.params.id } });
+    res.json({ message: 'Lot supprimé' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /projet/:projetId — Tous les lots d'un projet
+router.get('/projet/:projetId', auth, toptelsig, async (req, res) => {
+  try {
+    const lots = await prisma.lot.findMany({
+      where: { projetId: req.params.projetId },
       orderBy: [{ ilot: 'asc' }, { numero: 'asc' }]
     });
     res.json(lots);

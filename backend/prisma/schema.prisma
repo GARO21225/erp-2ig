@@ -803,8 +803,7 @@ model DepenseFoncier {
   montant         Float
   description     String
   date            DateTime      @default(now())
-  initiateurId    String?       // Employé initiateur (liste déroulante)
-  initiateur      Employe?      @relation("InitiateurDepense", fields: [initiateurId], references: [id])
+  initiateurId    String?       // Employé initiateur (userId, pas de FK Prisma pour éviter circularité)
   beneficiaire    String?       // Texte libre ou prescripteur
   beneficiaireId  String?       // Prescripteur (optionnel)
   typePaiement    TypePaiement?

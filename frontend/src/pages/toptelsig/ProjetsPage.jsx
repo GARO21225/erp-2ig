@@ -192,6 +192,110 @@ function ModalProjet({ projet, onClose, onSave, loading }) {
   );
 }
 
+
+// ── LotsPanel : liste + CRUD des lots d'un projet ──────────────────────────
+function LotsPanel({ projet }) {
+  const qc = useQueryClient();
+  const [editLot, setEditLot] = useState(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newLot, setNewLot] = useState({ numero: '', ilot: '', superficie: '', prix: '' });
+
+  const { data: lots = [] } = useQuery({
+    queryKey: ['lots-projet', projet?.id],
+    queryFn: () => toptelsigAPI.lotsProjet(projet.id),
+    enabled: !!projet?.id,
+  });
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, data }) => toptelsigAPI.updateLot(id, data),
+    onSuccess: () => { qc.invalidateQueries(['lots-projet', projet.id]); setEditLot(null); }
+  });
+  const deleteMut = useMutation({
+    mutationFn: toptelsigAPI.deleteLot,
+    onSuccess: () => qc.invalidateQueries(['lots-projet', projet.id]),
+    onError: (e) => alert(e?.error || e.message),
+  });
+  const createMut = useMutation({
+    mutationFn: (data) => toptelsigAPI.createLot(data),
+    onSuccess: () => { qc.invalidateQueries(['lots-projet', projet.id]); setShowAdd(false); setNewLot({ numero: '', ilot: '', superficie: '', prix: '' }); }
+  });
+
+  const STATUT_COLORS = { DISPONIBLE: '#27500A', RESERVE: '#BA7517', VENDU: '#A32D2D', LITIGE: '#888', ANNULE: '#888' };
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 600 }}>📦 Lots ({lots.length})</span>
+        <button className="btn btn-ghost btn-xs" onClick={() => setShowAdd(!showAdd)}>
+          <Plus size={11} /> Ajouter lot
+        </button>
+      </div>
+
+      {showAdd && (
+        <div style={{ background: '#F7F7F5', borderRadius: 8, padding: 10, marginBottom: 8, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr auto', gap: 6, alignItems: 'end' }}>
+          <div><label className="label" style={{ fontSize: 10 }}>N° lot</label><input className="input" style={{ fontSize: 12 }} value={newLot.numero} onChange={e => setNewLot(f => ({...f, numero: e.target.value}))} placeholder="A-001" /></div>
+          <div><label className="label" style={{ fontSize: 10 }}>Îlot</label><input className="input" style={{ fontSize: 12 }} value={newLot.ilot} onChange={e => setNewLot(f => ({...f, ilot: e.target.value}))} placeholder="A" /></div>
+          <div><label className="label" style={{ fontSize: 10 }}>Superficie m²</label><input className="input" type="number" style={{ fontSize: 12 }} value={newLot.superficie} onChange={e => setNewLot(f => ({...f, superficie: e.target.value}))} /></div>
+          <div><label className="label" style={{ fontSize: 10 }}>Prix FCFA</label><input className="input" type="number" style={{ fontSize: 12 }} value={newLot.prix} onChange={e => setNewLot(f => ({...f, prix: e.target.value}))} /></div>
+          <button className="btn btn-primary btn-xs" style={{ background: '#1a3f6f' }}
+            disabled={!newLot.numero || !newLot.superficie || !newLot.prix || createMut.isPending}
+            onClick={() => createMut.mutate({ projetId: projet.id, numero: newLot.numero, ilot: newLot.ilot || null, superficie: Number(newLot.superficie), prix: Number(newLot.prix) })}>
+            ✓
+          </button>
+        </div>
+      )}
+
+      {lots.length > 0 && (
+        <div className="table-container">
+          <table className="table-erp" style={{ fontSize: 11 }}>
+            <thead><tr><th>N° Lot</th><th>Îlot</th><th>Superficie</th><th>Prix FCFA</th><th>Statut</th><th></th></tr></thead>
+            <tbody>
+              {lots.slice(0, 50).map(l => (
+                <tr key={l.id}>
+                  {editLot?.id === l.id ? (
+                    <>
+                      <td><input className="input" style={{ fontSize: 11, padding: '3px 6px' }} defaultValue={l.numero} onChange={e => setEditLot(f => ({...f, numero: e.target.value}))} /></td>
+                      <td><input className="input" style={{ fontSize: 11, padding: '3px 6px' }} defaultValue={l.ilot || ''} onChange={e => setEditLot(f => ({...f, ilot: e.target.value}))} /></td>
+                      <td><input className="input" type="number" style={{ fontSize: 11, padding: '3px 6px' }} defaultValue={l.superficie} onChange={e => setEditLot(f => ({...f, superficie: e.target.value}))} /></td>
+                      <td><input className="input" type="number" style={{ fontSize: 11, padding: '3px 6px' }} defaultValue={l.prix} onChange={e => setEditLot(f => ({...f, prix: e.target.value}))} /></td>
+                      <td><select className="input" style={{ fontSize: 11, padding: '3px 6px' }} value={editLot.statut || l.statut} onChange={e => setEditLot(f => ({...f, statut: e.target.value}))}>
+                        {['DISPONIBLE','RESERVE','LITIGE','ANNULE'].map(s => <option key={s} value={s}>{s}</option>)}
+                      </select></td>
+                      <td style={{ display: 'flex', gap: 3 }}>
+                        <button className="btn btn-primary btn-xs" onClick={() => updateMut.mutate({ id: l.id, data: editLot })}>✓</button>
+                        <button className="btn btn-ghost btn-xs" onClick={() => setEditLot(null)}>✕</button>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td style={{ fontWeight: 500 }}>{l.numero}</td>
+                      <td style={{ color: '#888' }}>{l.ilot || '—'}</td>
+                      <td>{l.superficie?.toLocaleString('fr')} m²</td>
+                      <td style={{ fontWeight: 500 }}>{l.prix?.toLocaleString('fr')} F</td>
+                      <td><span className="badge" style={{ fontSize: 10, color: STATUT_COLORS[l.statut], background: STATUT_COLORS[l.statut]+'18' }}>{l.statut}</span></td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 3 }}>
+                          <button className="btn btn-ghost btn-xs" onClick={() => setEditLot({...l})} title="Modifier"><Edit2 size={10} /></button>
+                          {l.statut !== 'VENDU' && (
+                            <button className="btn btn-ghost btn-xs" style={{ color: '#A32D2D' }}
+                              onClick={() => { if(confirm(`Supprimer Lot ${l.numero} ?`)) deleteMut.mutate(l.id); }}
+                              title="Supprimer"><Trash2 size={10} /></button>
+                          )}
+                        </div>
+                      </td>
+                    </>
+                  )}
+                </tr>
+              ))}
+              {lots.length > 50 && <tr><td colSpan={6} style={{ textAlign: 'center', color: '#888', fontSize: 10 }}>{lots.length - 50} lots supplémentaires — utiliser l'export Excel</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ProjetsPage() {
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
