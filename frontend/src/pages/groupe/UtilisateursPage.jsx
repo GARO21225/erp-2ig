@@ -35,24 +35,24 @@ export default function UtilisateursPage() {
 
   const updateRole = useMutation({
     mutationFn: ({ id, data }) => authAPI.updateRole(id, data),
-    onSuccess: () => { qc.invalidateQueries(['utilisateurs']); setEditUser(null); showToast('Rôle mis à jour'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['utilisateurs'], exact: false }); setEditUser(null); showToast('Rôle mis à jour'); },
     onError: (e) => showToast(e?.response?.data?.error || 'Erreur', 'error'),
   });
 
   const createUser = useMutation({
     mutationFn: (data) => authAPI.register(data),
-    onSuccess: () => { qc.invalidateQueries(['utilisateurs']); setShowCreate(false); showToast('Compte créé'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['utilisateurs'], exact: false }); setShowCreate(false); showToast('Compte créé'); },
     onError: (e) => showToast(e?.response?.data?.error || 'Erreur création', 'error'),
   });
 
   const toggleActif = useMutation({
     mutationFn: ({ id, actif }) => authAPI.updateRole(id, { actif }),
-    onSuccess: (_, { actif }) => { qc.invalidateQueries(['utilisateurs']); showToast(actif ? 'Compte activé' : 'Compte désactivé'); },
+    onSuccess: (_, { actif }) => { qc.invalidateQueries({ queryKey: ['utilisateurs'], exact: false }); showToast(actif ? 'Compte activé' : 'Compte désactivé'); },
   });
 
   const unlock = useMutation({
     mutationFn: (id) => authAPI.unlockAccount(id),
-    onSuccess: () => { qc.invalidateQueries(['utilisateurs']); showToast('Compte débloqué'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['utilisateurs'], exact: false }); showToast('Compte débloqué'); },
   });
 
   const filtered = users.filter(u =>

@@ -15,6 +15,10 @@ router.get('/', auth, toptelsig, async (req, res) => {
     const [total, depenses] = await Promise.all([
       prisma.depenseFoncier.count({ where }),
       prisma.depenseFoncier.findMany({
+      include: {
+        projet: { select: { nom: true, code: true } },
+        initiateur: { select: { nom: true, prenom: true, poste: true } },
+      },
         where,
         skip: (page - 1) * limit,
         take: Number(limit),
