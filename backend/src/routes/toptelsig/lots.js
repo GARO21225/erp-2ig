@@ -1,7 +1,7 @@
 // ── LOTS ──────────────────────────────
 const router = require('express').Router();
 const prisma = require('../../lib/prisma');
-const { auth, requireFiliale } = require('../../middleware/auth');
+const { auth, requireFiliale, requireRole } = require('../../middleware/auth');
 const toptelsig = requireFiliale('TOPTELSIG');
 
 router.get('/', auth, toptelsig, async (req, res) => {
