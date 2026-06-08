@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from './store';
 import Layout from './components/layout/Layout';
 import LoginPage from './pages/LoginPage';
+import TablesPage from './pages/yakro/TablesPage';
 import UtilisateursPage from './pages/groupe/UtilisateursPage';
 import DashboardGroupe from './pages/groupe/DashboardGroupe';
 import RHPage from './pages/groupe/RHPage';
@@ -47,6 +48,7 @@ export default function App() {
             <Route path="yakro/pos" element={<POS />} />
             <Route path="yakro/commandes" element={<CommandesYakro />} />
             <Route path="yakro/menu" element={<MenuPage />} />
+            <Route path="yakro/tables" element={<TablesPage />} />
             <Route path="yakro/reservations" element={<ReservationsYakro />} />
             <Route path="yakro/caisse" element={<CaisseYakro />} />
             <Route path="toptelsig/projets" element={<ProjetsPage />} />

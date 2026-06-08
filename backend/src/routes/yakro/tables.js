@@ -51,3 +51,22 @@ router.put('/:id/statut', auth, yakro, async (req, res) => {
 });
 
 module.exports = router;
+
+// PUT /:id — Modifier une table
+router.put('/:id', auth, yakro, async (req, res) => {
+  try {
+    const t = await prisma.tableRestaurant.update({ where: { id: req.params.id }, data: req.body });
+    res.json(t);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /:id — Supprimer une table
+router.delete('/:id', auth, yakro, async (req, res) => {
+  try {
+    const t = await prisma.tableRestaurant.findUnique({ where: { id: req.params.id } });
+    if (!t) return res.status(404).json({ error: 'Table introuvable' });
+    if (t.statut === 'OCCUPEE') return res.status(400).json({ error: 'Table occupée — impossible de la supprimer' });
+    await prisma.tableRestaurant.delete({ where: { id: req.params.id } });
+    res.json({ message: 'Table supprimée' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});

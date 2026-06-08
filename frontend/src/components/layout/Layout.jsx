@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '../../store';
 import { authAPI } from '../../lib/api';
 import {
-  LayoutDashboard, Users, Wallet, Package, ChevronDown, ChevronRight, Shield,
+  LayoutDashboard, Users, Wallet, Package, ChevronDown, ChevronRight, Shield, Settings,
   Flame, MapPin, Truck, Search, Bell, LogOut, Menu, X,
   ClipboardList, BookOpen, Calendar,
   Building2, Map, Bike, Layers, FileText, TrendingUp
@@ -26,6 +26,7 @@ const NAV = {
   ],
   YAKRO_GRILL: [
     { label: 'POS — Salle', to: '/yakro/pos', icon: Layers },
+    { label: 'Config. Tables', to: '/yakro/tables', icon: Settings },
     { label: 'Commandes', to: '/yakro/commandes', icon: ClipboardList },
     { label: 'Menu & Carte', to: '/yakro/menu', icon: BookOpen },
     { label: 'Réservations', to: '/yakro/reservations', icon: Calendar },

@@ -37,6 +37,7 @@ export const authAPI = {
 
 // ── DASHBOARD
 export const dashboardAPI = {
+  scoreSante: () => api.get('/dashboard/score-sante').then(r => r.data),
   groupe: () => api.get('/dashboard/groupe'),
   scoreSante: () => api.get('/dashboard/score-sante'),
 };
@@ -83,6 +84,9 @@ export const stocksAPI = {
 export const yakroAPI = {
   tables: () => api.get('/yakro/tables'),
   updateTable: (id, statut) => api.put(`/yakro/tables/${id}/statut`, { statut }),
+  createTable: (data) => api.post('/yakro/tables', data).then(r => r.data),
+  updateTableFull: (id, data) => api.put(`/yakro/tables/${id}`, data).then(r => r.data),
+  deleteTable: (id) => api.delete(`/yakro/tables/${id}`).then(r => r.data),
   commandes: (params) => api.get('/yakro/commandes', { params }),
   caisse: () => api.get('/yakro/commandes/caisse'),
   createCommande: (data) => api.post('/yakro/commandes', data),
@@ -198,4 +202,11 @@ export const alertesAPI = {
 export const rotationsAPI = {
   generer: (data) => api.post('/employes/rotations/generer', data),
   semaine: (params) => api.get('/employes/rotations/semaine', { params }),
+};
+
+export const documentsAPI = {
+  upload: (formData) => api.post('/documents/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data),
+  list: (params) => api.get('/documents', { params }).then(r => r.data),
+  delete: (id) => api.delete(`/documents/${id}`).then(r => r.data),
+  viewUrl: (id) => `${api.defaults.baseURL}/documents/${id}`,
 };

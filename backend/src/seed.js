@@ -4,9 +4,27 @@
  */
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const fs = require('fs');
+const path = require('path');
+
+async function runMigrations() {
+  const migrationsDir = path.join(__dirname, '../prisma/migrations');
+  if (!fs.existsSync(migrationsDir)) return;
+  const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
+  for (const file of files) {
+    const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+    try {
+      await prisma.$executeRawUnsafe(sql);
+      console.log(`✅ Migration ${file} OK`);
+    } catch(e) {
+      console.log(`⚠ Migration ${file}: ${e.message}`);
+    }
+  }
+}
 
 async function seed() {
   console.log('🌱 Seed ERP 2IG...');
+  await runMigrations();
 
   // 1. Caisses (une par filiale)
   const caisses = [
