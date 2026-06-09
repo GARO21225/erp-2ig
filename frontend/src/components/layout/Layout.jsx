@@ -35,6 +35,7 @@ const NAV = {
     { label: 'Caisse du jour', to: '/yakro/caisse', icon: Wallet },
   ],
   TOPTELSIG: [
+    { label: 'Dashboard TOPTELSIG', to: '/toptelsig/dashboard', icon: LayoutDashboard },
     { label: 'Projets fonciers', to: '/toptelsig/projets', icon: Building2 },
     { label: 'Souscripteurs', to: '/toptelsig/souscripteurs', icon: Users },
     { label: 'Prescripteurs', to: '/toptelsig/prescripteurs', icon: TrendingUp },

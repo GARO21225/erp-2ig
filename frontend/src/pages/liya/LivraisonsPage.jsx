@@ -16,8 +16,27 @@ const STATUT_MAP = {
 };
 
 function ModalCreateLivraison({ motos, onClose, onSave }) {
+  const [clientType, setClientType] = useState('ordinaire'); // 'ordinaire' | 'stock3pl'
+  const [stock3plId, setStock3plId] = useState('');
   const [form, setForm] = useState({ clientNom: '', clientTel: '', adressePrise: '', adresseLivraison: '', montant: '', typePaiement: 'ORANGE_MONEY', motoId: '', notes: '' });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const { data: stocks3pl = [] } = useQuery({
+    queryKey: ['stock3pl-dispo'],
+    queryFn: () => liyaAPI.stock3pl({ statut: 'EN_STOCK', limit: 100 }),
+    staleTime: 30000,
+  });
+  const listeStocks = Array.isArray(stocks3pl) ? stocks3pl : [];
+
+  // Quand on sélectionne un article 3PL, pré-remplir le client
+  const handleStock3plChange = (id) => {
+    setStock3plId(id);
+    const item = listeStocks.find(s => s.id === id);
+    if (item) {
+      set('clientNom', item.clientNom);
+      set('clientTel', item.clientTel);
+    }
+  };
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
@@ -25,6 +44,37 @@ function ModalCreateLivraison({ motos, onClose, onSave }) {
           <h3 style={{ margin: 0, fontFamily: 'Syne', fontSize: 16 }}>Nouvelle livraison</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
         </div>
+        {/* Choix type client */}
+        <div style={{ display:'flex', gap:8, marginBottom:16 }}>
+          {[['ordinaire','🧑 Client ordinaire'],['stock3pl','📦 Stock clients 3PL']].map(([key,label]) => (
+            <button key={key} type="button"
+              onClick={() => { setClientType(key); setStock3plId(''); }}
+              style={{ flex:1, padding:'8px', borderRadius:8, border:`1.5px solid ${clientType===key?'#E85D04':'#e8e7e1'}`, background:clientType===key?'#FFF0EB':'white', color:clientType===key?'#E85D04':'#666', fontSize:12, fontWeight:clientType===key?600:400, cursor:'pointer' }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Article 3PL si applicable */}
+        {clientType === 'stock3pl' && (
+          <div style={{ marginBottom:12 }}>
+            <label className="label">Article en stock (3PL)</label>
+            <select className="input" value={stock3plId} onChange={e => handleStock3plChange(e.target.value)}>
+              <option value="">— Sélectionner un article —</option>
+              {listeStocks.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.clientNom} · {s.article} ({s.quantite} {s.unite})
+                </option>
+              ))}
+            </select>
+            {stock3plId && (
+              <div style={{ fontSize:11, color:'#E85D04', marginTop:4, background:'#FFF0EB', borderRadius:6, padding:'4px 8px' }}>
+                Client pré-rempli depuis le stock 3PL
+              </div>
+            )}
+          </div>
+        )}
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div><label className="label">Nom client</label><input className="input" value={form.clientNom} onChange={e => set('clientNom', e.target.value)} /></div>
           <div><label className="label">Téléphone</label><input className="input" value={form.clientTel} onChange={e => set('clientTel', e.target.value)} /></div>

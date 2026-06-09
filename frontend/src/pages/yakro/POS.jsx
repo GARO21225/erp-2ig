@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { exportTicketYakro } from '../../lib/export';
-import { yakroAPI } from '../../lib/api';
+import { yakroAPI, employesAPI } from '../../lib/api';
 import { Plus, X, Minus, ShoppingBag, Banknote, Smartphone, CreditCard, CheckCircle } from 'lucide-react';
 
 const STATUT_TABLE = {
@@ -28,6 +28,15 @@ function PanelCommande({ table, menu, onClose, onSave, loading }) {
   const [notes, setNotes] = useState('');
   const [nbCouverts, setNbCouverts] = useState(table?.capacite || 2);
   const [cat, setCat] = useState(Object.keys(menu?.grouped || {})[0] || '');
+  const [serveurId, setServeurId] = useState('');
+
+  // Charger la liste des serveurs/barmans Yakro
+  const { data: serveurs } = useQuery({
+    queryKey: ['serveurs-yakro'],
+    queryFn: () => employesAPI.list({ filiale: 'YAKRO_GRILL', statut: 'ACTIF', limit: 50 }),
+    staleTime: 60000,
+  });
+  const listeServeurs = Array.isArray(serveurs) ? serveurs : (serveurs?.data || []);
 
   const addArticle = (item) => setLignes(prev => {
     const ex = prev.find(l => l.menuId === item.id);
@@ -123,7 +132,7 @@ function PanelCommande({ table, menu, onClose, onSave, loading }) {
             <span style={{ fontFamily: 'Syne', fontWeight: 800, fontSize: 22, color: '#8B1A1A' }}>{total.toLocaleString('fr')} F</span>
           </div>
           <button disabled={lignes.length === 0 || loading}
-            onClick={() => onSave({ tableId: table.id, lignes, notes, nbCouverts })}
+            onClick={() => onSave({ tableId: table.id, lignes, notes, nbCouverts, serveurId: serveurId || null })}
             style={{ width: '100%', padding: 12, background: lignes.length === 0 ? '#ddd' : '#8B1A1A', color: 'white', border: 'none', borderRadius: 10, fontFamily: 'Syne', fontWeight: 700, fontSize: 15, cursor: lignes.length === 0 ? 'not-allowed' : 'pointer' }}>
             {loading ? 'Envoi...' : 'Envoyer en cuisine'}
           </button>

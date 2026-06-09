@@ -349,8 +349,10 @@ export default function ProjetsPage() {
       <div className="grid-kpi" style={{ marginBottom:20 }}>
         {[
           { label:'Projets actifs', value: listeProjets.filter(p=>p.statut==='EN_COURS').length },
-          { label:'Total lots', value: listeProjets.reduce((s,p)=>s+p.nombreLots,0).toLocaleString('fr') },
-          { label:'Lots vendus', value: listeProjets.reduce((s,p)=>s+(p._count?.lots||0),0).toLocaleString('fr') },
+          { label:'Total lots', value: listeProjets.reduce((s,p)=>s+(p._count?.lots||0),0).toLocaleString('fr') },
+          { label:'Lots disponibles', value: listeProjets.reduce((s,p)=>s+(p.statsLots?.DISPONIBLE||0),0).toLocaleString('fr') },
+          { label:'Lots vendus', value: listeProjets.reduce((s,p)=>s+(p.statsLots?.VENDU||0),0).toLocaleString('fr') },
+          { label:'En réserve', value: listeProjets.reduce((s,p)=>s+(p.statsLots?.RESERVE||0),0).toLocaleString('fr') },
           { label:'Villes couvertes', value: [...new Set(listeProjets.map(p=>p.ville))].filter(Boolean).length },
         ].map((k,i) => (
           <div key={i} className="kpi">
@@ -387,19 +389,25 @@ export default function ProjetsPage() {
 
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:4, marginBottom:10 }}>
                 {[
-                  { label:'Lots total', value: p.nombreLots },
+                  { label:'Total', value: p._count?.lots || 0 },
+                  { label:'Disponibles', value: p.statsLots?.DISPONIBLE||0, color:'#27500A' },
+                  { label:'Vendus', value: p.statsLots?.VENDU||0, color:'#A32D2D' },
                   { label:'Prix min', value: p.prixLotMin>=1000000 ? `${(p.prixLotMin/1000000).toFixed(1)}M` : `${Math.round(p.prixLotMin/1000)}k` },
-                  { label:'Prix max', value: p.prixLotMax>=1000000 ? `${(p.prixLotMax/1000000).toFixed(1)}M` : `${Math.round(p.prixLotMax/1000)}k` },
                 ].map((m,i) => (
                   <div key={i} style={{ background:'#F7F7F5', borderRadius:6, padding:'5px 8px', textAlign:'center' }}>
                     <div style={{ fontSize:9, color:'#888' }}>{m.label}</div>
-                    <div style={{ fontFamily:'Syne', fontWeight:700, fontSize:13 }}>{m.value}</div>
+                    <div style={{ fontFamily:'Syne', fontWeight:700, fontSize:13, color:m.color||'#1a1a1a' }}>{m.value}</div>
                   </div>
                 ))}
               </div>
 
-              <div style={{ display:'flex', gap:6 }}>
-                <button className="btn btn-ghost btn-xs" onClick={e => { e.stopPropagation(); setEditProjet(p); }}>Modifier</button>
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                <button className="btn btn-ghost btn-xs" onClick={e => { e.stopPropagation(); setEditProjet(p); }}>✏️ Modifier</button>
+                <select style={{ fontSize:10, padding:'3px 6px', borderRadius:6, border:'0.5px solid #ddd', cursor:'pointer' }}
+                  value={p.statut} onClick={e => e.stopPropagation()}
+                  onChange={e => { e.stopPropagation(); updateMut.mutate({ id:p.id, data:{ statut:e.target.value } }); }}>
+                  {['EN_COURS','PLANIFIE','SUSPENDU','TERMINE','ARCHIVE'].map(s=><option key={s} value={s}>{s}</option>)}
+                </select>
               </div>
 
               {/* Panneau import lots */}
