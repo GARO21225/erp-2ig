@@ -28,6 +28,7 @@ const NAV = {
   YAKRO_GRILL: [
     { label: 'POS — Salle', to: '/yakro/pos', icon: Layers },
     { label: 'Config. Tables', to: '/yakro/tables', icon: Settings },
+    { label: 'Assignations service', to: '/yakro/assignations', icon: Users },
     { label: 'Commandes', to: '/yakro/commandes', icon: ClipboardList },
     { label: 'Menu & Carte', to: '/yakro/menu', icon: BookOpen },
     { label: 'Réservations', to: '/yakro/reservations', icon: Calendar },

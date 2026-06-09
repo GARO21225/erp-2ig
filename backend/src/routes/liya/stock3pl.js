@@ -94,3 +94,14 @@ router.get('/rapport', auth, liya, async (req, res) => {
 });
 
 module.exports = router;
+
+// PUT /:id/sortir — Marquer comme sorti
+router.put('/:id/sortir', auth, liya, async (req, res) => {
+  try {
+    const item = await prisma.stockClient3pl.update({
+      where: { id: req.params.id },
+      data: { statut: 'SORTI', dateSortie: new Date() }
+    });
+    res.json(item);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});

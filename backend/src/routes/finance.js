@@ -229,3 +229,52 @@ router.get('/caisses/:id/journal', auth, async (req, res) => {
     res.json(journal);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+// GET /api/finance/stats — KPI finance avec courbe
+router.get('/stats', auth, async (req, res) => {
+  try {
+    const { periode = 'mois', filiale } = req.query;
+    const now = new Date();
+    let debut;
+    if (periode === 'aujourd') { debut = new Date(now); debut.setHours(0,0,0,0); }
+    else if (periode === 'semaine') { debut = new Date(now); debut.setDate(now.getDate()-7); }
+    else if (periode === 'mois') { debut = new Date(now.getFullYear(), now.getMonth(), 1); }
+    else if (periode === 'trimestre') { debut = new Date(now); debut.setMonth(now.getMonth()-3); }
+    else debut = new Date(2020, 0, 1);
+
+    const whereBase = { createdAt: { gte: debut } };
+    if (filiale && req.user.filiale !== 'GROUPE') whereBase.filiale = req.user.filiale;
+    else if (filiale) whereBase.filiale = filiale;
+
+    const [encTotal, decTotal, encParJour, decParJour, decParCateg] = await Promise.all([
+      prisma.encaissement.aggregate({ _sum: { montant: true }, where: whereBase }),
+      prisma.decaissement.aggregate({ _sum: { montant: true }, where: whereBase }),
+      prisma.encaissement.groupBy({ by: ['createdAt'], _sum: { montant: true }, where: whereBase, orderBy: { createdAt: 'asc' } }),
+      prisma.decaissement.groupBy({ by: ['createdAt'], _sum: { montant: true }, where: whereBase, orderBy: { createdAt: 'asc' } }),
+      prisma.decaissement.groupBy({ by: ['categorie'], _sum: { montant: true }, where: whereBase, orderBy: { _sum: { montant: 'desc' } }, take: 6 }),
+    ]);
+
+    // Construire courbe 7 jours
+    const courbeMap = {};
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const k = d.toLocaleDateString('fr', { weekday: 'short', day: 'numeric' });
+      courbeMap[k] = { jour: k, encaissements: 0, decaissements: 0 };
+    }
+    encParJour.forEach(e => {
+      const k = new Date(e.createdAt).toLocaleDateString('fr', { weekday: 'short', day: 'numeric' });
+      if (courbeMap[k]) courbeMap[k].encaissements += e._sum.montant || 0;
+    });
+    decParJour.forEach(e => {
+      const k = new Date(e.createdAt).toLocaleDateString('fr', { weekday: 'short', day: 'numeric' });
+      if (courbeMap[k]) courbeMap[k].decaissements += e._sum.montant || 0;
+    });
+
+    res.json({
+      totalEncaissements: encTotal._sum.montant || 0,
+      totalDecaissements: decTotal._sum.montant || 0,
+      courbe: Object.values(courbeMap),
+      parCategorie: decParCateg.map(d => ({ categorie: d.categorie || 'Autre', montant: d._sum.montant || 0 })),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
