@@ -958,9 +958,11 @@ model PleinCarburant {
 }
 
 model StockClient3PL {
-  id          String   @id @default(cuid())
-  clientNom   String
-  clientTel   String
+  id           String   @id @default(cuid())
+  partenaireId String?
+  partenaire   Partenaire? @relation(fields: [partenaireId], references: [id])
+  clientNom    String
+  clientTel    String
   article     String
   quantite    Float
   unite       String   @default("unité")
@@ -1004,7 +1006,7 @@ model Partenaire {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  stocks3pl    StockClient3pl[]
+  stocks3pl    StockClient3PL[]
 
   @@map("partenaires")
 }
