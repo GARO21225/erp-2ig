@@ -124,7 +124,17 @@ router.get('/', auth, async (req, res) => {
 });
 
 // GET /api/documents/:id — Récupérer et servir un document
-router.get('/:id', auth, async (req, res) => {
+// Middleware flexible : token dans header OU query param (pour window.open GED)
+const authOrQuery = async (req, res, next) => {
+  // Si token dans query string → injecter dans header
+  if (req.query.token && !req.headers.authorization) {
+    req.headers.authorization = `Bearer ${req.query.token}`;
+  }
+  const { auth } = require('../middleware/auth');
+  return auth(req, res, next);
+};
+
+router.get('/:id', authOrQuery, async (req, res) => {
   try {
     const doc = await prisma.document.findUnique({ where: { id: req.params.id } });
     if (!doc) return res.status(404).json({ error: 'Document introuvable' });

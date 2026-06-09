@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { liyaAPI } from '../../lib/api';
+import { liyaAPI, partenairesLiyaAPI } from '../../lib/api';
 import { Plus, X, Truck, CheckCircle } from 'lucide-react';
 import FilterBar from '../../components/ui/FilterBar';
 import ExportBar from '../../components/ui/ExportBar';
@@ -27,6 +27,13 @@ function ModalCreateLivraison({ motos, onClose, onSave }) {
     staleTime: 30000,
   });
   const listeStocks = Array.isArray(stocks3pl) ? stocks3pl : [];
+
+  const { data: partenaires = [] } = useQuery({
+    queryKey: ['partenaires-liya'],
+    queryFn: () => partenairesLiyaAPI.list({ actif: true }),
+    staleTime: 60000,
+  });
+  const listePartenaires = Array.isArray(partenaires) ? partenaires : [];
 
   // Quand on sélectionne un article 3PL, pré-remplir le client
   const handleStock3plChange = (id) => {
@@ -59,8 +66,20 @@ function ModalCreateLivraison({ motos, onClose, onSave }) {
         {clientType === 'stock3pl' && (
           <div style={{ marginBottom:12 }}>
             <label className="label">Article en stock (3PL)</label>
+            {listePartenaires.length > 0 && (
+              <div style={{ marginBottom:8 }}>
+                <label className="label">Partenaire (optionnel)</label>
+                <select className="input" style={{ fontSize:11 }} onChange={e => {
+                  const p = listePartenaires.find(x=>x.id===e.target.value);
+                  if(p) { set('clientNom', p.nom); set('clientTel', p.telephone); }
+                }}>
+                  <option value="">— Choisir un partenaire enregistré —</option>
+                  {listePartenaires.map(p => <option key={p.id} value={p.id}>{p.nom} · {p.typeActivite||''}</option>)}
+                </select>
+              </div>
+            )}
             <select className="input" value={stock3plId} onChange={e => handleStock3plChange(e.target.value)}>
-              <option value="">— Sélectionner un article —</option>
+              <option value="">— Sélectionner un article en stock —</option>
               {listeStocks.map(s => (
                 <option key={s.id} value={s.id}>
                   {s.clientNom} · {s.article} ({s.quantite} {s.unite})

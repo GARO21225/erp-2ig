@@ -219,3 +219,10 @@ export const documentsAPI = {
 export function getApiBaseUrl() {
   return api.defaults.baseURL || 'http://localhost:4000/api';
 }
+
+export const partenairesLiyaAPI = {
+  list: (params) => api.get('/liya/partenaires', { params }),
+  create: (data) => api.post('/liya/partenaires', data),
+  update: (id, data) => api.put(`/liya/partenaires/${id}`, data),
+  delete: (id) => api.delete(`/liya/partenaires/${id}`),
+};

@@ -270,11 +270,21 @@ router.get('/stats', auth, async (req, res) => {
       if (courbeMap[k]) courbeMap[k].decaissements += e._sum.montant || 0;
     });
 
+    // Répartition par type de paiement
+    const encParPaiement = await prisma.encaissement.groupBy({
+      by: ['typePaiement'], _sum: { montant: true }, where: whereBase,
+      orderBy: { _sum: { montant: 'desc' } }
+    });
+
     res.json({
       totalEncaissements: encTotal._sum.montant || 0,
       totalDecaissements: decTotal._sum.montant || 0,
       courbe: Object.values(courbeMap),
       parCategorie: decParCateg.map(d => ({ categorie: d.categorie || 'Autre', montant: d._sum.montant || 0 })),
+      parTypePaiement: encParPaiement.map(e => ({
+        name: e.typePaiement?.replace('_', ' ') || 'Autre',
+        value: e._sum.montant || 0
+      })),
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

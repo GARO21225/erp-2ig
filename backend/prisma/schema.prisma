@@ -988,3 +988,23 @@ model StockClient3PL {
 // VenteFoncier: @@index([souscripteurId])
 // MouvementStock: @@index([filiale, type, createdAt])
 // PaiementFoncier: @@index([venteId])
+
+// ── PARTENAIRES LIYA (clients réguliers stock 3PL)
+model Partenaire {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  nom          String
+  raisonSociale String?
+  telephone    String
+  email        String?
+  adresse      String?
+  typeActivite String?   // Ex: Pharmacie, Supermarché, Boutique...
+  actif        Boolean  @default(true)
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  stocks3pl    StockClient3pl[]
+
+  @@map("partenaires")
+}

@@ -26,16 +26,16 @@ const NAV = {
     { label: 'Stocks & Achats', to: '/stocks', icon: Package },
   ],
   YAKRO_GRILL: [
-    { label: 'POS — Salle', to: '/yakro/pos', icon: Layers },
-    { label: 'Config. Tables', to: '/yakro/tables', icon: Settings },
-    { label: 'Assignations service', to: '/yakro/assignations', icon: Users },
+    { label: 'Plan de Salle (POS)', to: '/yakro/pos', icon: Layers },
     { label: 'Commandes', to: '/yakro/commandes', icon: ClipboardList },
     { label: 'Menu & Carte', to: '/yakro/menu', icon: BookOpen },
-    { label: 'Réservations', to: '/yakro/reservations', icon: Calendar },
     { label: 'Caisse du jour', to: '/yakro/caisse', icon: Wallet },
+    { label: 'Réservations', to: '/yakro/reservations', icon: Calendar },
+    { label: 'Config. Tables', to: '/yakro/tables', icon: Settings },
   ],
   TOPTELSIG: [
     { label: 'Dashboard TOPTELSIG', to: '/toptelsig/dashboard', icon: LayoutDashboard },
+    { label: 'CRM — Prospects', to: '/toptelsig/prospects', icon: Users },
     { label: 'Projets fonciers', to: '/toptelsig/projets', icon: Building2 },
     { label: 'Souscripteurs', to: '/toptelsig/souscripteurs', icon: Users },
     { label: 'Prescripteurs', to: '/toptelsig/prescripteurs', icon: TrendingUp },
@@ -138,9 +138,8 @@ export default function Layout() {
         <>
           <div style={{ padding: '12px 16px 4px', fontSize: 9, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', color: '#aaa' }}>Communs</div>
           {[
+            { label: 'Stocks & Approvisionnements', to: '/stocks', icon: Package },
             { label: 'RH & Équipes', to: '/rh', icon: Users },
-            { label: 'Finance', to: '/finance', icon: Wallet },
-            { label: 'Stocks', to: '/stocks', icon: Package },
           ].map(item => (
             <NavLink key={item.to} to={item.to} onClick={onItemClick}
               style={({ isActive }) => ({

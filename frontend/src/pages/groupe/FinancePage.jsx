@@ -82,6 +82,7 @@ export default function FinancePage() {
   const tresorerie = (caisses || []).reduce((s, c) => s + c.solde, 0);
   const courbe = stats?.courbe || [];
   const parCateg = stats?.parCategorie || [];
+  const parPaiement = stats?.parTypePaiement || [];
 
   const exportData = () => {
     const rows = (enc || []).map(e => [
@@ -214,6 +215,45 @@ export default function FinancePage() {
           )}
         </div>
       </div>
+
+      {/* Répartition par type de paiement */}
+      {parPaiement.length > 0 && (
+        <div className="card" style={{ marginBottom:20 }}>
+          <div style={{ fontFamily:'Syne', fontWeight:700, fontSize:14, marginBottom:12 }}>
+            💳 Répartition encaissements par mode de paiement
+          </div>
+          <div style={{ display:'flex', alignItems:'center', gap:20, flexWrap:'wrap' }}>
+            <ResponsiveContainer width="40%" height={180} style={{ minWidth:180 }}>
+              <PieChart>
+                <Pie data={parPaiement} cx="50%" cy="50%" outerRadius={70} paddingAngle={3} dataKey="value">
+                  {parPaiement.map((_, i) => <Cell key={i} fill={['#E87722','#27500A','#FFCD00','#1a3f6f','#00B9F1','#5F5E5A'][i]} />)}
+                </Pie>
+                <Tooltip formatter={(v) => [fmtF(v), '']} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div style={{ flex:1, display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))', gap:8 }}>
+              {parPaiement.map((p, i) => {
+                const colors = ['#E87722','#27500A','#FFCD00','#1a3f6f','#00B9F1','#5F5E5A'];
+                const totalPmt = parPaiement.reduce((s,x)=>s+x.value,0);
+                const pct = totalPmt > 0 ? Math.round(p.value/totalPmt*100) : 0;
+                return (
+                  <div key={i} style={{ background:'#F7F7F5', borderRadius:8, padding:'8px 12px' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
+                      <div style={{ width:10, height:10, borderRadius:'50%', background:colors[i], flexShrink:0 }} />
+                      <div style={{ fontSize:11, fontWeight:500 }}>{p.name}</div>
+                    </div>
+                    <div style={{ fontFamily:'Syne', fontWeight:700, fontSize:14, color:colors[i] }}>{fmtF(p.value)}</div>
+                    <div style={{ fontSize:10, color:'#888', marginTop:2 }}>{pct}% du total</div>
+                    <div style={{ height:3, background:'#e8e7e1', borderRadius:2, marginTop:4 }}>
+                      <div style={{ height:'100%', width:`${pct}%`, background:colors[i], borderRadius:2 }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tableaux */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>

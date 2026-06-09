@@ -256,6 +256,26 @@ export default function DashboardToptelsig() {
         </div>
       </div>
 
+      {/* Caisse TOPTELSIG : Vendu - Dépenses = Solde net */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:20 }}>
+        {[
+          { label:'Total encaissé (ventes)', value:fmtF(caPercu), color:'#27500A', icon:'💰', sub:'Paiements reçus des souscripteurs' },
+          { label:'Total dépenses payées', value:fmtF(totalDepenses), color:'#A32D2D', icon:'💳', sub:'Dépenses validées et payées' },
+          { label:'Solde net TOPTELSIG', value:fmtF(caPercu-totalDepenses), color: caPercu-totalDepenses>=0?'#1a3f6f':'#A32D2D', icon:'⚖️', sub: caPercu-totalDepenses>=0?'Excédent':'Déficit' },
+        ].map((k,i) => (
+          <div key={i} className="kpi" style={{ borderLeft:`3px solid ${k.color}` }}>
+            <div style={{ display:'flex', justifyContent:'space-between' }}>
+              <div>
+                <div className="kpi-label">{k.label}</div>
+                <div className="kpi-value" style={{ fontSize:20, color:k.color }}>{k.value}</div>
+                <div style={{ fontSize:10, color:'#888', marginTop:2 }}>{k.sub}</div>
+              </div>
+              <div style={{ fontSize:24 }}>{k.icon}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* Ventes récentes */}
       <div className="card" style={{ padding:0, overflow:'hidden', marginBottom:20 }}>
         <div style={{ padding:'12px 20px', borderBottom:'0.5px solid #e8e7e1', display:'flex', justifyContent:'space-between', alignItems:'center' }}>

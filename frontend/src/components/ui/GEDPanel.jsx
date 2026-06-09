@@ -29,6 +29,11 @@ const MIME_ICONS = {
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '📝',
 };
 
+function getToken() {
+  try { return JSON.parse(localStorage.getItem('2ig-auth') || '{}')?.state?.token || ''; }
+  catch { return ''; }
+}
+
 export default function GEDPanel({ entiteType, entiteId, compact = false }) {
   const qc = useQueryClient();
   const inputRef = useRef(null);
@@ -129,7 +134,7 @@ export default function GEDPanel({ entiteType, entiteId, compact = false }) {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 4 }}>
-                <button onClick={() => window.open(documentsAPI.viewUrl(doc.id), '_blank')}
+                <button onClick={() => window.open(`${documentsAPI.viewUrl(doc.id)}?token=${getToken()}`, '_blank')}
                   style={{ background: '#EEF3FB', border: 'none', borderRadius: 6, padding: '4px 6px', cursor: 'pointer' }}>
                   <Eye size={12} color="#1a3f6f" />
                 </button>
