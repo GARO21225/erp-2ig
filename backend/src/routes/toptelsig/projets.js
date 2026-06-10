@@ -17,12 +17,30 @@ router.get('/', auth, toptelsig, async (req, res) => {
       }
     });
 
+    // Récupérer avancement phases pour chaque projet
+    const projetsIds = projets.map(p => p.id);
+    const phasesAll = await prisma.phaseFoncier.findMany({
+      where: { projetId: { in: projetsIds } },
+      select: { projetId: true, avancement: true, statut: true }
+    });
+
     const enriched = projets.map(p => {
       const stats = p.lots.reduce((acc, l) => {
         acc[l.statut] = (acc[l.statut] || 0) + 1;
         return acc;
       }, {});
-      return { ...p, statsLots: stats };
+
+      // Calcul avancement depuis les phases
+      const phases = phasesAll.filter(ph => ph.projetId === p.id);
+      const avancementPhases = phases.length > 0
+        ? Math.round(phases.reduce((s, ph) => s + (ph.avancement || 0), 0) / phases.length)
+        : p.avancement || 0;
+      const lotsVendus = stats['VENDU'] || 0;
+      const totalLots = p.lots.length;
+      const bonusLots = totalLots > 0 ? Math.round(lotsVendus / totalLots * 30) : 0;
+      const avancement = Math.min(Math.round(avancementPhases * 0.7 + bonusLots), 100);
+
+      return { ...p, statsLots: stats, avancement };
     });
 
     res.json(enriched);

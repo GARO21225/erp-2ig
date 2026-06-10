@@ -76,7 +76,6 @@ router.get('/:id', auth, toptelsig, async (req, res) => {
               souscripteur: { select: { id:true, prenom:true, nom:true, telephone:true, statut:true, commercialNom:true, sourceAcquisition:true } },
               echeanciers: { orderBy: { numero: 'asc' } },
               paiements: { select: { montant:true, createdAt:true, typePaiement:true } },
-              prescripteur: { select: { prenom:true, nom:true } },
             }
           },
           reservations: { include: { souscripteur: { select: { prenom:true, nom:true, telephone:true } } }, take: 1 }
@@ -154,6 +153,27 @@ router.get('/:id', auth, toptelsig, async (req, res) => {
     const nbLivValides = phases.reduce((s, p) => s + p.livrables.filter(l => l.statut === 'VALIDE').length, 0);
     const nbLivRetard  = phases.reduce((s, p) => s + p.livrables.filter(l => l.datePrevue && new Date(l.datePrevue) < new Date() && l.statut !== 'VALIDE').length, 0);
 
+    // Calcul avancement automatique basé sur phases
+    // Règle : moyenne des avancements des phases + bonus si lots vendus
+    const avancementPhases = nbPhases > 0
+      ? Math.round(phases.reduce((s, p) => s + (p.avancement || 0), 0) / nbPhases)
+      : 0;
+    const avancementLots = lots.length > 0
+      ? Math.round(lotsVendus / lots.length * 30) // max 30% du score commercial
+      : 0;
+    const avancementCalcule = Math.min(
+      Math.round(avancementPhases * 0.7 + avancementLots),
+      100
+    );
+
+    // Mettre à jour le projet si l'avancement a changé (en arrière-plan, sans bloquer)
+    if (nbPhases > 0 && Math.abs((projet.avancement || 0) - avancementCalcule) > 2) {
+      prisma.projetFoncier.update({
+        where: { id: pid },
+        data: { avancement: avancementCalcule }
+      }).catch(() => {}); // silencieux
+    }
+
     // Encaissements mensuels : UNE SEULE requête (pas de boucle)
     const debut12mois = new Date(); debut12mois.setMonth(debut12mois.getMonth() - 11); debut12mois.setDate(1); debut12mois.setHours(0,0,0,0);
     const paiementsMensuels = await prisma.paiementFoncier.findMany({
@@ -182,7 +202,7 @@ router.get('/:id', auth, toptelsig, async (req, res) => {
     })).filter(p => p.montant > 0 || p.budget > 0);
 
     res.json({
-      projet,
+      projet: { ...projet, avancement: avancementCalcule || projet.avancement || 0 },
       kpi: {
         commercial: { totalLots: lots.length, lotsDispos, lotsReserves, lotsVendus, tauxComm: lots.length > 0 ? Math.round(lotsVendus / lots.length * 100) : 0 },
         finances:   { caPrevu, caEnc, resteAEncaisser: caPrevu - caEnc, depPayees, depEngagees, resultatBrut, marge, roi },

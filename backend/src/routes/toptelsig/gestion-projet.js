@@ -89,7 +89,7 @@ router.put('/phases/:id', auth, toptelsig, async (req, res) => {
     const data = {};
     if (nom !== undefined) data.nom = nom;
     if (statut !== undefined) data.statut = statut;
-    if (avancement !== undefined) data.avancement = avancement;
+    if (avancement !== undefined) data.avancement = Number(avancement);
     if (description !== undefined) data.description = description;
     if (dateDebut !== undefined) data.dateDebut = dateDebut ? new Date(dateDebut) : null;
     if (dateFin !== undefined) data.dateFin = dateFin ? new Date(dateFin) : null;
@@ -97,6 +97,20 @@ router.put('/phases/:id', auth, toptelsig, async (req, res) => {
     if (responsableNom !== undefined) data.responsableNom = responsableNom;
     if (ordre !== undefined) data.ordre = ordre;
     const phase = await prisma.phaseFoncier.update({ where: { id: req.params.id }, data });
+
+    // Recalculer l'avancement du projet en arrière-plan
+    const toutes = await prisma.phaseFoncier.findMany({
+      where: { projetId: phase.projetId },
+      select: { avancement: true, statut: true }
+    });
+    if (toutes.length > 0) {
+      const avg = Math.round(toutes.reduce((s, p) => s + (p.avancement || 0), 0) / toutes.length);
+      await prisma.projetFoncier.update({
+        where: { id: phase.projetId },
+        data: { avancement: Math.min(avg, 100) }
+      });
+    }
+
     res.json(phase);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
