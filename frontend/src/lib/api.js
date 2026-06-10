@@ -146,6 +146,7 @@ export const toptelsigAPI = {
   createLivrable: (data) => api.post('/toptelsig/gestion-projet/livrables', data),
   updateLivrable: (id, data) => api.put(`/toptelsig/gestion-projet/livrables/${id}`, data),
   createTache: (data) => api.post('/toptelsig/gestion-projet/taches', data),
+  updateTache: (id, data) => api.put(`/toptelsig/gestion-projet/taches/${id}`, data),
   depenses: (params) => api.get('/toptelsig/depenses', { params }),
   crmProspects: (params) => api.get('/toptelsig/crm/prospects', { params }),
   crmDashboard: () => api.get('/toptelsig/crm/dashboard'),
