@@ -269,10 +269,11 @@ function LotsPanel({ projet }) {
                     </>
                   ) : (
                     <>
-                      <td style={{ fontWeight: 500 }}>{l.numero}</td>
+                      <td style={{ fontWeight: 600 }}>{l.numero}</td>
                       <td style={{ color: '#888' }}>{l.ilot || '—'}</td>
-                      <td>{l.superficie?.toLocaleString('fr')} m²</td>
-                      <td style={{ fontWeight: 500 }}>{l.prix?.toLocaleString('fr')} F</td>
+                      <td>{l.superficie ? l.superficie.toLocaleString('fr') : '—'}</td>
+                      <td style={{ fontWeight: 600, color:'#1a3f6f' }}>{l.prix ? l.prix.toLocaleString('fr') + ' F' : '—'}</td>
+                      <td style={{ fontSize:10, color:'#888' }}>{l.superficie && l.prix ? Math.round(l.prix/l.superficie).toLocaleString('fr') + ' F/m²' : '—'}</td>
                       <td><span className="badge" style={{ fontSize: 10, color: STATUT_COLORS[l.statut], background: STATUT_COLORS[l.statut]+'18' }}>{l.statut}</span></td>
                       <td>
                         <div style={{ display: 'flex', gap: 3 }}>

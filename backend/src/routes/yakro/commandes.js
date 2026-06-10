@@ -288,3 +288,50 @@ router.post('/:id/ajouter-lignes', auth, yakro, async (req, res) => {
     res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+// GET /yakro/caisse-detail — Caisse du jour avec départage Bar/Cuisine
+router.get('/caisse-detail', auth, yakro, async (req, res) => {
+  try {
+    const auj = new Date(); auj.setHours(0,0,0,0);
+    const demain = new Date(auj); demain.setDate(demain.getDate()+1);
+
+    const CATS_BAR = ['BIERE','VIN','CHAMPAGNE','COCKTAIL_ALCOOLISE','COCKTAIL_SANS_ALCOOL','SUCRERIE','TISANE'];
+
+    const lignes = await prisma.ligneCommandeYakro.findMany({
+      where: { commande: { statut: 'PAYEE', createdAt: { gte: auj, lt: demain } } },
+      include: { menu: { select: { categorie: true, nom: true } } }
+    });
+
+    let totalBar = 0, totalCuisine = 0;
+    const parCateg = {};
+
+    for (const l of lignes) {
+      const montant = l.prixUnitaire * l.quantite;
+      const isBar = CATS_BAR.includes(l.menu?.categorie);
+      if (isBar) totalBar += montant;
+      else totalCuisine += montant;
+      
+      const cat = l.menu?.categorie || 'AUTRE';
+      parCateg[cat] = (parCateg[cat] || 0) + montant;
+    }
+
+    const paiements = await prisma.paiementYakro.groupBy({
+      by: ['typePaiement'],
+      _sum: { montant: true },
+      where: { createdAt: { gte: auj, lt: demain } }
+    });
+
+    const nbCommandes = await prisma.commandeYakro.count({ where: { statut: 'PAYEE', createdAt: { gte: auj, lt: demain } } });
+
+    res.json({
+      totalJour: totalBar + totalCuisine,
+      totalBar, totalCuisine,
+      pctBar: totalBar + totalCuisine > 0 ? Math.round(totalBar / (totalBar + totalCuisine) * 100) : 0,
+      pctCuisine: totalBar + totalCuisine > 0 ? Math.round(totalCuisine / (totalBar + totalCuisine) * 100) : 0,
+      nbCommandes,
+      parCategorie: Object.entries(parCateg).sort((a,b)=>b[1]-a[1]).map(([cat, montant]) => ({ categorie: cat, montant, isBar: CATS_BAR.includes(cat) })),
+      parPaiement: paiements.map(p => ({ type: p.typePaiement, montant: p._sum.montant || 0 })),
+      reinvestissement: { bar: Math.round(totalBar * 0.5), cuisine: Math.round(totalCuisine * 0.5), total: Math.round((totalBar + totalCuisine) * 0.5) },
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});

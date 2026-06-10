@@ -252,21 +252,7 @@ export default function SouscripteurDetail() {
           {/* Documents GED */}
           {tab === 'documents' && (
             <div>
-              {s.documents?.length === 0 && (
-                                  <GEDPanel entiteType="souscripteur" entiteId={s?.id} />
-              )}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
-                {s.documents?.map(d => (
-                  <a key={d.id} href={d.url} target="_blank" rel="noreferrer"
-                    style={{ display: 'flex', gap: 10, padding: '10px 12px', background: 'white', border: '0.5px solid #e8e7e1', borderRadius: 10, textDecoration: 'none', color: '#1a1a1a' }}>
-                    <FileText size={20} color="#1a3f6f" style={{ flexShrink: 0 }} />
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 500 }}>{d.nom}</div>
-                      <div style={{ fontSize: 11, color: '#888' }}>{d.type} · v{d.version}</div>
-                    </div>
-                  </a>
-                ))}
-              </div>
+              <GEDPanel entiteType="souscripteur" entiteId={s?.id} />
               <div style={{ marginTop: 12 }}>
                 <span className="badge badge-toptelsig" style={{ padding: '4px 10px', fontSize: 11 }}>
                   ↑ Upload via API POST /documents

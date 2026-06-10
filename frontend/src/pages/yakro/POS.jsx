@@ -317,7 +317,7 @@ export default function POS() {
           const resa = t.reservations?.[0];
           return (
             <div key={t.id}
-              onClick={() => t.statut === 'LIBRE' && setSelectedTable(t)}
+              onClick={() => { if(t.statut === 'LIBRE') setSelectedTable(t); }}
               style={{ border: `1.5px solid ${s.border}`, background: s.bg, borderRadius: 12, padding: 14, cursor: t.statut === 'LIBRE' ? 'pointer' : 'default', minHeight: 120 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                 <div style={{ fontFamily: 'Syne', fontWeight: 800, fontSize: 18, color: s.color }}>T{t.numero}</div>
@@ -327,17 +327,28 @@ export default function POS() {
 
               {commande && (
                 <div>
-                  <div style={{ fontSize: 11, color: '#888' }}>{commande.lignes?.length || 0} article(s)</div>
+                  <div style={{ fontSize: 11, color: '#888' }}>
+                    {commande.lignes?.length || 0} article(s)
+                    {commande.serveur && <span style={{ marginLeft:6, color:'#1a3f6f' }}>· {commande.serveur.prenom}</span>}
+                  </div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: '#8B1A1A', marginBottom: 6 }}>{commande.total?.toLocaleString('fr')} F</div>
-                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                    {commande.statut === 'EN_COURS' && (
+                  <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginTop: 2 }}>
+                    {(commande.statut === 'EN_COURS' || commande.statut === 'CUISINE') && (
                       <button onClick={(e) => { e.stopPropagation(); setSelectedTable({ ...t, commandeExistante: commande }); }}
-                        style={{ flex: 1, minWidth: 60, padding: '3px 0', fontSize: 10, border: 'none', borderRadius: 5, background: '#EEF3FB', color: '#1a3f6f', cursor: 'pointer' }}>+ Articles</button>
+                        style={{ flex: 1, minWidth: 55, padding: '4px 2px', fontSize: 9, fontWeight: 600, border: 'none', borderRadius: 5, background: '#EEF3FB', color: '#1a3f6f', cursor: 'pointer' }}>➕ Articles</button>
                     )}
-                    <button onClick={(e) => { e.stopPropagation(); updateStatut.mutate({ id: commande.id, statut: 'CUISINE' }); }}
-                      style={{ flex: 1, minWidth: 50, padding: '3px 0', fontSize: 10, border: 'none', borderRadius: 5, background: '#FAEEDA', color: '#412402', cursor: 'pointer' }}>Cuisine</button>
-                    <button onClick={(e) => { e.stopPropagation(); setPaiementCommande(commande); }}
-                      style={{ flex: 1, minWidth: 50, padding: '3px 0', fontSize: 10, border: 'none', borderRadius: 5, background: '#EAF3DE', color: '#27500A', cursor: 'pointer' }}>Payer</button>
+                    {commande.statut === 'EN_COURS' && (
+                      <button onClick={(e) => { e.stopPropagation(); updateStatut.mutate({ id: commande.id, statut: 'CUISINE' }); }}
+                        style={{ flex: 1, minWidth: 55, padding: '4px 2px', fontSize: 9, fontWeight: 600, border: 'none', borderRadius: 5, background: '#FAEEDA', color: '#412402', cursor: 'pointer' }}>🍳 Cuisine</button>
+                    )}
+                    {commande.statut === 'CUISINE' && (
+                      <button onClick={(e) => { e.stopPropagation(); updateStatut.mutate({ id: commande.id, statut: 'PRET' }); }}
+                        style={{ flex: 1, minWidth: 55, padding: '4px 2px', fontSize: 9, fontWeight: 600, border: 'none', borderRadius: 5, background: '#EAF3DE', color: '#27500A', cursor: 'pointer' }}>✅ Prêt</button>
+                    )}
+                    {(commande.statut === 'PRET' || commande.statut === 'CUISINE' || commande.statut === 'EN_COURS') && (
+                      <button onClick={(e) => { e.stopPropagation(); setPaiementCommande(commande); }}
+                        style={{ flex: 1, minWidth: 55, padding: '4px 2px', fontSize: 9, fontWeight: 700, border: 'none', borderRadius: 5, background: '#8B1A1A', color: 'white', cursor: 'pointer' }}>💳 Caisse</button>
+                    )}
                   </div>
                 </div>
               )}

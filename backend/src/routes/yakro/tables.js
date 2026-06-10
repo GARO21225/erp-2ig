@@ -12,7 +12,10 @@ router.get('/', auth, yakro, async (req, res) => {
         commandes: {
           where: { statut: { in: ['EN_COURS', 'CUISINE', 'PRETE', 'SERVIE'] } },
           take: 1,
-          include: { lignes: { include: { menu: true } } }
+          include: {
+            lignes: { include: { menu: true } },
+            serveur: { select: { id:true, prenom:true, nom:true, poste:true } }
+          }
         },
         reservations: {
           where: {

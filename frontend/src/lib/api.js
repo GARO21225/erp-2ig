@@ -44,6 +44,7 @@ export const dashboardAPI = {
 
 // ── EMPLOYÉS
 export const employesAPI = {
+  update: (id, data) => api.put(`/employes/${id}`, data),
   list: (params) => api.get('/employes', { params }),
   get: (id) => api.get(`/employes/${id}`),
   create: (data) => api.post('/employes', data),

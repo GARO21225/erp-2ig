@@ -3,12 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { financeAPI } from '../../lib/api';
 import { useAuthStore } from '../../store';
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  AreaChart, Area, BarChart, Bar, PieChart, Pie, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend, Cell
 } from 'recharts';
 import { TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownLeft, Plus, X } from 'lucide-react';
 import ExportBar from '../../components/ui/ExportBar';
-import FilterBar from '../../components/ui/FilterBar';
 import { exportExcel } from '../../lib/export';
 
 const fmtF = (n) => {
@@ -39,7 +38,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 export default function FinancePage() {
   const { filiale } = useAuthStore();
   const qc = useQueryClient();
-  const [periode, setPeriode] = useState('mois');
+  const [periode, setPeriode] = useState('month');
   const [filialeFilter, setFilialeFilter] = useState(filiale === 'GROUPE' ? '' : filiale);
   const [showEnc, setShowEnc] = useState(false);
   const [showDec, setShowDec] = useState(false);
@@ -64,7 +63,7 @@ export default function FinancePage() {
 
   const { data: caisses } = useQuery({
     queryKey: ['caisses'],
-    queryFn: financeAPI.caisses,
+    queryFn: () => financeAPI.caisses(),
   });
 
   const createEnc = useMutation({
@@ -111,7 +110,15 @@ export default function FinancePage() {
 
       {/* Filtres */}
       <div style={{ display:'flex', gap:8, marginBottom:16, flexWrap:'wrap', alignItems:'center' }}>
-        <FilterBar selected={periode} onChange={setPeriode} />
+        <div style={{ display:'flex', gap:4 }}>
+          {[['today',"Aujourd'hui"],['week','7 jours'],['month','Mois'],['year','Année']].map(([k,l]) => (
+            <button key={k} onClick={() => setPeriode(k)}
+              style={{ padding:'5px 12px', borderRadius:16, border:'none', fontSize:11, cursor:'pointer',
+                background: periode===k ? '#1a3f6f' : '#F1EFE8', color: periode===k ? 'white' : '#555' }}>
+              {l}
+            </button>
+          ))}
+        </div>
         {filiale === 'GROUPE' && (
           <select className="input" style={{ width:150 }} value={filialeFilter} onChange={e => setFilialeFilter(e.target.value)}>
             <option value="">Toutes filiales</option>

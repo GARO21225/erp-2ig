@@ -48,7 +48,13 @@ function ModalCreateEmploye({ onClose, onSave, loading }) {
       <div className="modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h3 style={{ margin: 0, fontFamily: 'Syne', fontSize: 16 }}>Nouvel employé</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+          <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+            <button onClick={() => setShowEdit(employe)} style={{ padding:'5px 12px', borderRadius:7, border:'0.5px solid #1a3f6f', background:'#EEF3FB', color:'#1a3f6f', fontSize:11, cursor:'pointer', fontWeight:500 }}>✏️ Modifier</button>
+            {employe.statut === 'ACTIF' && <button onClick={() => { if(confirm('Suspendre cet employé ?')) onSuspend(employe.id); }} style={{ padding:'5px 12px', borderRadius:7, border:'0.5px solid #F7C1C1', background:'#FDF2F2', color:'#A32D2D', fontSize:11, cursor:'pointer' }}>⏸ Suspendre</button>}
+            {employe.statut === 'SUSPENDU' && <button onClick={() => onReintegre(employe.id)} style={{ padding:'5px 12px', borderRadius:7, border:'0.5px solid #C0DD97', background:'#EAF3DE', color:'#27500A', fontSize:11, cursor:'pointer' }}>✅ Réintégrer</button>}
+            {employe.statut !== 'QUITTE' && <button onClick={() => { if(confirm('Enregistrer le départ de cet employé ?')) onQuitte(employe.id); }} style={{ padding:'5px 12px', borderRadius:7, border:'0.5px solid #e8e7e1', background:'white', color:'#888', fontSize:11, cursor:'pointer' }}>🚪 Départ</button>}
+            <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', marginLeft:4 }}><X size={18} /></button>
+          </div>
         </div>
         <div className="form-grid">
           {/* Filiale */}
@@ -100,6 +106,83 @@ function ModalCreateEmploye({ onClose, onSave, loading }) {
 }
 
 
+
+function ModalEditEmploye({ employe, onClose, onSave, loading }) {
+  const [form, setForm] = useState({
+    nom: employe.nom || '',
+    prenom: employe.prenom || '',
+    telephone: employe.telephone || '',
+    email: employe.email || '',
+    poste: employe.poste || '',
+    departement: employe.departement || '',
+    filiale: employe.filiale || 'YAKRO_GRILL',
+    salaireBase: employe.salaireBase || '',
+    adresse: employe.adresse || '',
+    numeroCni: employe.numeroCni || '',
+    statut: employe.statut || 'ACTIF',
+  });
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const depts = getDepartements(form.filiale);
+  const postes = getPostes(form.filiale, form.departement);
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <h3 style={{ margin: 0, fontFamily: 'Syne', fontSize: 16 }}>
+            ✏️ Modifier — {employe.prenom} {employe.nom}
+          </h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
+        </div>
+
+        <div className="form-grid">
+          <div>
+            <label className="label">Filiale</label>
+            <select className="input" value={form.filiale} onChange={e => { set('filiale', e.target.value); set('departement', ''); set('poste', ''); }}>
+              {Object.entries(FILIALES_LABELS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label">Département</label>
+            <select className="input" value={form.departement} onChange={e => { set('departement', e.target.value); set('poste', ''); }}>
+              <option value="">— Choisir —</option>
+              {depts.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
+            </select>
+          </div>
+          <div className="full">
+            <label className="label">Poste</label>
+            <select className="input" value={form.poste} onChange={e => set('poste', e.target.value)}>
+              <option value="">{form.poste || '— Choisir —'}</option>
+              {postes.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+          <div><label className="label">Prénom</label><input className="input" value={form.prenom} onChange={e => set('prenom', e.target.value)} /></div>
+          <div><label className="label">Nom</label><input className="input" value={form.nom} onChange={e => set('nom', e.target.value)} /></div>
+          <div><label className="label">Téléphone</label><input className="input" value={form.telephone} onChange={e => set('telephone', e.target.value)} /></div>
+          <div><label className="label">Email</label><input className="input" type="email" value={form.email} onChange={e => set('email', e.target.value)} /></div>
+          <div><label className="label">Salaire de base (FCFA)</label><input className="input" type="number" value={form.salaireBase} onChange={e => set('salaireBase', e.target.value)} /></div>
+          <div>
+            <label className="label">Statut</label>
+            <select className="input" value={form.statut} onChange={e => set('statut', e.target.value)}>
+              {['ACTIF','SUSPENDU','CONGE','QUITTE','DEMISSIONNAIRE'].map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div className="full"><label className="label">Adresse</label><input className="input" value={form.adresse} onChange={e => set('adresse', e.target.value)} /></div>
+          <div><label className="label">N° CNI</label><input className="input" value={form.numeroCni} onChange={e => set('numeroCni', e.target.value)} /></div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>Annuler</button>
+          <button className="btn btn-primary btn-sm" disabled={loading}
+            onClick={() => onSave({ ...form, salaireBase: Number(form.salaireBase) })}>
+            {loading ? 'Enregistrement...' : '✅ Enregistrer'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function EmployeDetail({ employe, onClose }) {
   const [tab, setTab] = useState('info');
   if (!employe) return null;
@@ -124,12 +207,18 @@ function EmployeDetail({ employe, onClose }) {
               </div>
             </div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+          <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+            <button onClick={() => setShowEdit(employe)} style={{ padding:'5px 12px', borderRadius:7, border:'0.5px solid #1a3f6f', background:'#EEF3FB', color:'#1a3f6f', fontSize:11, cursor:'pointer', fontWeight:500 }}>✏️ Modifier</button>
+            {employe.statut === 'ACTIF' && <button onClick={() => { if(confirm('Suspendre cet employé ?')) onSuspend(employe.id); }} style={{ padding:'5px 12px', borderRadius:7, border:'0.5px solid #F7C1C1', background:'#FDF2F2', color:'#A32D2D', fontSize:11, cursor:'pointer' }}>⏸ Suspendre</button>}
+            {employe.statut === 'SUSPENDU' && <button onClick={() => onReintegre(employe.id)} style={{ padding:'5px 12px', borderRadius:7, border:'0.5px solid #C0DD97', background:'#EAF3DE', color:'#27500A', fontSize:11, cursor:'pointer' }}>✅ Réintégrer</button>}
+            {employe.statut !== 'QUITTE' && <button onClick={() => { if(confirm('Enregistrer le départ de cet employé ?')) onQuitte(employe.id); }} style={{ padding:'5px 12px', borderRadius:7, border:'0.5px solid #e8e7e1', background:'white', color:'#888', fontSize:11, cursor:'pointer' }}>🚪 Départ</button>}
+            <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', marginLeft:4 }}><X size={18} /></button>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 2, marginBottom: 20, borderBottom: '0.5px solid #e8e7e1' }}>
-          {['info', 'conges', 'avances', 'fiches'].map(t => (
+          {['info', 'conges', 'avances', 'fiches', 'ged'].map(t => (
             <button key={t} onClick={() => setTab(t)} style={{ padding: '6px 14px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 12, fontWeight: tab === t ? 600 : 400, color: tab === t ? '#1a1a1a' : '#888', borderBottom: tab === t ? `2px solid ${color}` : '2px solid transparent' }}>
-              {t === 'info' ? 'Infos' : t === 'conges' ? 'Congés' : t === 'avances' ? 'Avances' : 'Paie'}
+              {t === 'info' ? 'Infos' : t === 'conges' ? 'Congés' : t === 'avances' ? 'Avances' : t === 'fiches' ? 'Paie' : '📁 GED'}
             </button>
           ))}
         </div>
@@ -153,6 +242,7 @@ function EmployeDetail({ employe, onClose }) {
             ))}
           </div>
         )}
+        {tab === 'ged' && <GEDPanel entiteType="employe" entiteId={employe?.id} />}
         {tab === 'avances' && (
           <div>{employe.avances?.map(a => (
             <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '0.5px solid #f0efe9' }}>
@@ -181,7 +271,36 @@ export default function RHPage() {
     queryFn: () => employesAPI.list({ filiale: filialeFilter || undefined, search: search || undefined, statut: statutFilter || undefined, limit: 100 }),
   });
   const { data: detail } = useQuery({ queryKey: ['employe', selected?.id], queryFn: () => employesAPI.get(selected.id), enabled: !!selected?.id });
-  const createMut = useMutation({ mutationFn: employesAPI.create, onSuccess: () => { qc.invalidateQueries(['employes']); setShowCreate(false); } });
+  const [showEdit, setShowEdit] = useState(null);
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type='success') => { setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
+
+  const createMut = useMutation({
+    mutationFn: employesAPI.create,
+    onSuccess: () => { qc.invalidateQueries(['employes']); setShowCreate(false); showToast('Employé créé ✓'); },
+    onError: (e) => showToast(e?.error || 'Erreur création', 'error'),
+  });
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, data }) => employesAPI.update(id, data),
+    onSuccess: () => { qc.invalidateQueries(['employes']); setShowEdit(null); showToast('Employé mis à jour ✓'); },
+    onError: (e) => showToast(e?.error || 'Erreur modification', 'error'),
+  });
+
+  const suspendMut = useMutation({
+    mutationFn: (id) => employesAPI.update(id, { statut: 'SUSPENDU' }),
+    onSuccess: () => { qc.invalidateQueries(['employes']); setSelected(null); showToast('Employé suspendu'); },
+  });
+
+  const reintegreMut = useMutation({
+    mutationFn: (id) => employesAPI.update(id, { statut: 'ACTIF' }),
+    onSuccess: () => { qc.invalidateQueries(['employes']); showToast('Employé réintégré ✓'); },
+  });
+
+  const quitteMut = useMutation({
+    mutationFn: (id) => employesAPI.update(id, { statut: 'QUITTE' }),
+    onSuccess: () => { qc.invalidateQueries(['employes']); setSelected(null); showToast('Départ enregistré'); },
+  });
 
   const employes = data?.data || [];
   const total = data?.total || 0;
@@ -296,7 +415,14 @@ export default function RHPage() {
       </div>
 
       {showCreate && <ModalCreateEmploye onClose={() => setShowCreate(false)} onSave={d => createMut.mutate(d)} loading={createMut.isPending} />}
-      {selected && <EmployeDetail employe={detail || selected} onClose={() => setSelected(null)} />}
+      {selected && <EmployeDetail employe={detail || selected} onClose={() => setSelected(null)}
+        onEdit={(e) => { setSelected(null); setShowEdit(e); }}
+        onSuspend={(id) => suspendMut.mutate(id)}
+        onReintegre={(id) => reintegreMut.mutate(id)}
+        onQuitte={(id) => quitteMut.mutate(id)}
+      />}
+      {showEdit && <ModalEditEmploye employe={showEdit} onClose={() => setShowEdit(null)} onSave={(d) => updateMut.mutate({ id: showEdit.id, data: d })} loading={updateMut.isPending} />}
+      {toast && <div style={{ position:'fixed', bottom:20, right:16, background: toast.type==='error'?'#A32D2D':'#27500A', color:'white', padding:'10px 18px', borderRadius:10, fontSize:13, zIndex:9999 }}>{toast.msg}</div>}
     </div>
   );
 }

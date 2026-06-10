@@ -233,13 +233,13 @@ router.get('/caisses/:id/journal', auth, async (req, res) => {
 // GET /api/finance/stats — KPI finance avec courbe
 router.get('/stats', auth, async (req, res) => {
   try {
-    const { periode = 'mois', filiale } = req.query;
+    const { periode = 'month', filiale } = req.query;
     const now = new Date();
     let debut;
-    if (periode === 'aujourd') { debut = new Date(now); debut.setHours(0,0,0,0); }
-    else if (periode === 'semaine') { debut = new Date(now); debut.setDate(now.getDate()-7); }
-    else if (periode === 'mois') { debut = new Date(now.getFullYear(), now.getMonth(), 1); }
-    else if (periode === 'trimestre') { debut = new Date(now); debut.setMonth(now.getMonth()-3); }
+    if (periode === 'today' || periode === 'aujourd') { debut = new Date(now); debut.setHours(0,0,0,0); }
+    else if (periode === 'week' || periode === 'semaine') { debut = new Date(now); debut.setDate(now.getDate()-7); }
+    else if (periode === 'month' || periode === 'mois') { debut = new Date(now.getFullYear(), now.getMonth(), 1); }
+    else if (periode === 'year' || periode === 'trimestre') { debut = new Date(now.getFullYear(), 0, 1); }
     else debut = new Date(2020, 0, 1);
 
     const whereBase = { createdAt: { gte: debut } };
