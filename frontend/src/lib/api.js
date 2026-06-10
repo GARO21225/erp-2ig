@@ -134,6 +134,11 @@ export const toptelsigAPI = {
 
   prescripteurs: (params) => api.get('/toptelsig/prescripteurs', { params }),
   depenses: (params) => api.get('/toptelsig/depenses', { params }),
+  crmProspects: (params) => api.get('/toptelsig/crm/prospects', { params }),
+  crmDashboard: () => api.get('/toptelsig/crm/dashboard'),
+  crmRelances: (id) => api.get(`/toptelsig/crm/${id}/relances`),
+  crmAddRelance: (id, data) => api.post(`/toptelsig/crm/${id}/relances`, data),
+  crmUpdate: (id, data) => api.put(`/toptelsig/crm/${id}`, data),
   exportDepenses: (params) => `${api.defaults.baseURL}/toptelsig/depenses/export?${new URLSearchParams(params || {}).toString()}`,
   createDepense: (data) => api.post('/toptelsig/depenses', data),
   validerDepense: (id) => api.put(`/toptelsig/depenses/${id}/valider`),

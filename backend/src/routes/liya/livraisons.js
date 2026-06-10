@@ -159,7 +159,6 @@ router.get('/:id/positions', auth, async (req, res) => {
   }
 });
 
-module.exports = router;
 
 // PUT /:id/echec — Déclarer un échec avec motif obligatoire
 router.put('/:id/echec', auth, liya, async (req, res) => {
@@ -257,3 +256,5 @@ router.get('/export', auth, liya, async (req, res) => {
     res.send(buf);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+module.exports = router;

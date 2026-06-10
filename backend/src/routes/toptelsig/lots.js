@@ -55,7 +55,6 @@ router.put('/:id', auth, toptelsig, async (req, res) => {
   }
 });
 
-module.exports = router;
 
 // ── Import Excel lots ─────────────────────────────────────────────────────────
 const multer = require('multer');
@@ -242,3 +241,5 @@ router.get('/projet/:projetId', auth, toptelsig, async (req, res) => {
     res.json(lots);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+module.exports = router;

@@ -6,7 +6,6 @@ import ImportButton from '../../components/ui/ImportButton';
 import ExportBar from '../../components/ui/ExportBar';
 import TemplateButton from '../../components/ui/TemplateButton';
 import { exportExcel, exportPDF } from '../../lib/export';
-import CarteProjetsCi from '../../components/ui/CarteProjetsCi';
 import { VILLES_CI, LOCALISATIONS_CI } from '../../lib/catalogue-rh';
 
 const STATUTS = { EN_COURS:'badge-blue', TERMINE:'badge-green', SUSPENDU:'badge-amber', ANNULE:'badge-red' };
@@ -362,13 +361,7 @@ export default function ProjetsPage() {
           </div>
         ))}
       </div>
-
-      {/* Carte Côte d'Ivoire */}
-      <div className="card" style={{ marginBottom: 20 }}>
-        <CarteProjetsCi projets={listeProjets} />
-      </div>
-
-      {/* Liste projets */}
+{/* Liste projets */}
       {listeProjets.length === 0 ? (
         <div className="card empty-state"><MapPin size={40} /><p>Aucun projet — créez votre premier projet foncier</p></div>
       ) : (

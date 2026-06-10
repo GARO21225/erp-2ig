@@ -93,7 +93,6 @@ router.get('/rapport', auth, liya, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-module.exports = router;
 
 // PUT /:id/sortir — Marquer comme sorti
 router.put('/:id/sortir', auth, liya, async (req, res) => {
@@ -105,3 +104,5 @@ router.put('/:id/sortir', auth, liya, async (req, res) => {
     res.json(item);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+module.exports = router;

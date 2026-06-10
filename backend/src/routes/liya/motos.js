@@ -117,7 +117,6 @@ router.get('/:id/historique', auth, liya, async (req, res) => {
   }
 });
 
-module.exports = router;
 
 // GET /template — Template Excel motos
 router.get('/template', auth, liya, (_, res) => {
@@ -176,3 +175,5 @@ router.get('/export', auth, liya, async (req, res) => {
     res.send(buf);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+module.exports = router;

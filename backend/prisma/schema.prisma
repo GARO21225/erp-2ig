@@ -677,6 +677,13 @@ model Souscripteur {
   statut          String   @default("PROSPECT") // PROSPECT, ACTIF, SUSPENDU, RESILIE
   prescripteurId  String?
   prescripteur    Prescripteur? @relation(fields: [prescripteurId], references: [id])
+  sourceAcquisition String?           // Référencement, réseaux sociaux, salon, bouche à oreille...
+  commercialId    String?             // Commercial responsable (userId)
+  commercialNom   String?             // Nom du commercial
+  raisonPerte     String?             // Pourquoi perdu
+  raisonConversion String?            // Pourquoi converti
+  canalConversion  String?            // Canal qui a généré la vente
+  relances        RelanceCRM[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -1009,4 +1016,24 @@ model Partenaire {
   stocks3pl    StockClient3PL[]
 
   @@map("partenaires")
+}
+
+// ── CRM COMMERCIAL TOPTELSIG ─────────────────────────────────────
+model RelanceCRM {
+  id              String   @id @default(cuid())
+  souscripteurId  String
+  souscripteur    Souscripteur @relation(fields: [souscripteurId], references: [id])
+  commercial      String               // ID utilisateur (libre)
+  commercialNom   String               // Nom complet du commercial
+  canal           String               // appel | whatsapp | sms | email | visite | linkedin
+  statut          String               // effectuee | planifiee | annulee
+  notes           String?              // Résumé de l'échange
+  prochain        DateTime?            // Date de prochaine relance planifiée
+  dateRelance     DateTime @default(now())
+  dureeMin        Int?                 // Durée en minutes (appels)
+  resultat        String?              // interesse | pas_interesse | rappeler | converti | perdu
+  createdAt       DateTime @default(now())
+
+  @@index([souscripteurId, dateRelance])
+  @@map("relances_crm")
 }

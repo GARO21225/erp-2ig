@@ -53,7 +53,6 @@ router.put('/:id/statut', auth, yakro, async (req, res) => {
   }
 });
 
-module.exports = router;
 
 // PUT /:id — Modifier une table
 router.put('/:id', auth, yakro, async (req, res) => {
@@ -73,3 +72,5 @@ router.delete('/:id', auth, yakro, async (req, res) => {
     res.json({ message: 'Table supprimée' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+module.exports = router;

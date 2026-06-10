@@ -246,7 +246,6 @@ router.get('/stats', auth, yakro, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-module.exports = router;
 
 // POST /:id/ajouter-lignes — Ajouter des articles à une commande EN_COURS
 router.post('/:id/ajouter-lignes', auth, yakro, async (req, res) => {
@@ -335,3 +334,5 @@ router.get('/caisse-detail', auth, yakro, async (req, res) => {
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+module.exports = router;

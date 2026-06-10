@@ -230,7 +230,6 @@ function getCategoriesDepenses() {
   };
 }
 
-module.exports = router;
 
 // GET /export — Export Excel dépenses
 router.get('/export', auth, toptelsig, async (req, res) => {
@@ -257,3 +256,5 @@ router.get('/export', auth, toptelsig, async (req, res) => {
     res.send(buf);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+module.exports = router;

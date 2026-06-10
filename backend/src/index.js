@@ -42,6 +42,7 @@ app.use('/api/toptelsig/projets',       require('./routes/toptelsig/projets'));
 app.use('/api/toptelsig/lots',          require('./routes/toptelsig/lots'));
 app.use('/api/toptelsig/souscripteurs', require('./routes/toptelsig/souscripteurs'));
 app.use('/api/toptelsig/ventes',        require('./routes/toptelsig/ventes'));
+app.use('/api/toptelsig/crm', require('./routes/toptelsig/crm'));
 app.use('/api/toptelsig/depenses',      require('./routes/toptelsig/depenses'));
 app.use('/api/toptelsig/prescripteurs', require('./routes/toptelsig/prescripteurs'));
 app.use('/api/liya/livraisons', require('./routes/liya/livraisons'));

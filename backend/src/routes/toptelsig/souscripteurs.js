@@ -170,7 +170,6 @@ router.post('/:id/paiements', auth, toptelsig, async (req, res) => {
   }
 });
 
-module.exports = router;
 
 // GET /template — Template Excel souscripteurs
 router.get('/template', auth, toptelsig, (_, res) => {
@@ -203,3 +202,5 @@ router.post('/import', auth, toptelsig, upload2.single('fichier'), async (req, r
     res.json({ imported: created.length, errors, total: rows.length });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+module.exports = router;
