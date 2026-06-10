@@ -91,7 +91,7 @@ router.get('/:id', auth, toptelsig, async (req, res) => {
             orderBy: { createdAt: 'asc' },
             include: { taches: { orderBy: { createdAt: 'asc' } } }
           },
-          livrables: { orderBy: [{ ordre:'asc' }, { createdAt:'asc' }] },
+          livrables: { orderBy: { createdAt: 'asc' } },
           depenses: { select: { id:true, montant:true, statut:true, categorie:true }, take: 20 }
         }
       }),
@@ -104,13 +104,13 @@ router.get('/:id', auth, toptelsig, async (req, res) => {
 
       prisma.paiementFoncier.aggregate({
         _sum: { montant: true }, _count: { id: true },
-        where: { venteFoncier: { lot: { projetId: pid } } }
+        where: { vente: { lot: { projetId: pid } } }
       }),
 
       prisma.paiementFoncier.groupBy({
         by: ['typePaiement'],
         _sum: { montant: true }, _count: { id: true },
-        where: { venteFoncier: { lot: { projetId: pid } } }
+        where: { vente: { lot: { projetId: pid } } }
       }),
 
       prisma.depenseFoncier.findMany({
@@ -125,7 +125,7 @@ router.get('/:id', auth, toptelsig, async (req, res) => {
       }),
 
       prisma.echeancier.count({
-        where: { statut: 'RETARD', venteFoncier: { lot: { projetId: pid } } }
+        where: { statut: 'RETARD', vente: { lot: { projetId: pid } } }
       }),
     ]);
 
@@ -157,7 +157,7 @@ router.get('/:id', auth, toptelsig, async (req, res) => {
     // Encaissements mensuels : UNE SEULE requête (pas de boucle)
     const debut12mois = new Date(); debut12mois.setMonth(debut12mois.getMonth() - 11); debut12mois.setDate(1); debut12mois.setHours(0,0,0,0);
     const paiementsMensuels = await prisma.paiementFoncier.findMany({
-      where: { venteFoncier: { lot: { projetId: pid } }, createdAt: { gte: debut12mois } },
+      where: { vente: { lot: { projetId: pid } }, createdAt: { gte: debut12mois } },
       select: { montant: true, createdAt: true }
     });
 

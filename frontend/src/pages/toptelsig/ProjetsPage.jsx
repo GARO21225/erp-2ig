@@ -713,11 +713,12 @@ function CarteProjet({ projet, isOpen, onToggle, onEdit }) {
     { key: 'ged', label: '📁 GED' },
   ];
 
-  const { data: detail, isLoading, refetch } = useQuery({
+  const { data: detail, isLoading, error: detailError, refetch } = useQuery({
     queryKey: ['projet-complet', projet.id],
     queryFn: () => toptelsigAPI.projetComplet(projet.id),
     enabled: isOpen,
     staleTime: 30000,
+    retry: 1,
   });
 
   const updateStatut = useMutation({
@@ -778,6 +779,12 @@ function CarteProjet({ projet, isOpen, onToggle, onEdit }) {
           </div>
 
           {/* Contenu onglet */}
+          {detailError && (
+            <div style={{ padding:16, background:'#FCEBEB', borderRadius:8, color:'#A32D2D', fontSize:12 }}>
+              ⚠ Erreur chargement : {detailError?.message || detailError?.error || 'Erreur serveur'}
+              <button className="btn btn-ghost btn-xs" style={{ marginLeft:8 }} onClick={refetch}>Réessayer</button>
+            </div>
+          )}
           {onglet === 'resume'    && <OngletResume    data={detail} projet={projet} />}
           {onglet === 'lots'     && <OngletLots      lots={detail?.lots}           projetId={projet.id} onRefresh={refetch} />}
           {onglet === 'crm'      && <OngletCRM       souscripteurs={detail?.souscripteurs} kpi={detail?.kpi} />}

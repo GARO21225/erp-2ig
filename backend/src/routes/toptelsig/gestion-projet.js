@@ -30,7 +30,7 @@ router.get('/projet/:projetId', auth, toptelsig, async (req, res) => {
             activites: {
               include: { taches: { orderBy: { createdAt: 'asc' } } }
             },
-            livrables: { orderBy: { ordre: 'asc' } },
+            livrables: { orderBy: { createdAt: 'asc' } },
             depenses: { select: { id:true, montant:true, statut:true, categorie:true } }
           }
         },
@@ -47,7 +47,7 @@ router.get('/projet/:projetId', auth, toptelsig, async (req, res) => {
     const lotsDispos = projet.lots.filter(l => l.statut === 'DISPONIBLE').length;
     const caRealise = await prisma.paiementFoncier.aggregate({
       _sum: { montant: true },
-      where: { venteFoncier: { lot: { projetId: req.params.projetId } } }
+      where: { vente: { lot: { projetId: req.params.projetId } } }
     });
     const depTotal = await prisma.depenseFoncier.aggregate({
       _sum: { montant: true },
@@ -203,7 +203,7 @@ router.get('/dashboard/:projetId', auth, toptelsig, async (req, res) => {
     const [projet, ventes, paiements, depenses, livrables, phases] = await Promise.all([
       prisma.projetFoncier.findUnique({ where: { id: pid }, include: { lots: true } }),
       prisma.venteFoncier.findMany({ where: { lot: { projetId: pid } }, include: { echeanciers: true } }),
-      prisma.paiementFoncier.aggregate({ _sum:{ montant:true }, where:{ venteFoncier:{ lot:{ projetId:pid } } } }),
+      prisma.paiementFoncier.aggregate({ _sum:{ montant:true }, where:{ vente:{ lot:{ projetId:pid } } } }),
       prisma.depenseFoncier.aggregate({ _sum:{ montant:true }, where:{ projetId:pid, statut:{ in:['PAYEE','VALIDEE_FINALE'] } } }),
       prisma.livrableFoncier.groupBy({ by:['statut'], _count:{ id:true }, where:{ phase:{ projetId:pid } } }),
       prisma.phaseFoncier.findMany({ where:{ projetId:pid }, select:{ statut:true, avancement:true } }),
