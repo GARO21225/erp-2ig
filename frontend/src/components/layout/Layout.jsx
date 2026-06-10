@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '../../store';
 import { authAPI } from '../../lib/api';
 import {
-  LayoutDashboard, Users, Wallet, Package, ChevronDown, ChevronRight, Shield, Settings, Clock,
+  LayoutDashboard, Users, Wallet, Package, ChevronDown, ChevronRight, Shield, Settings, Clock, Target,
   Flame, MapPin, Truck, Search, Bell, LogOut, Menu, X,
   ClipboardList, BookOpen, Calendar,
   Building2, Map, Bike, Layers, FileText, TrendingUp
@@ -36,6 +36,7 @@ const NAV = {
   TOPTELSIG: [
     { label: 'Dashboard TOPTELSIG', to: '/toptelsig/dashboard', icon: LayoutDashboard },
     { label: 'CRM — Prospects', to: '/toptelsig/prospects', icon: Users },
+    { label: 'Gestion de Projet', to: '/toptelsig/gestion-projet', icon: Target },
     { label: 'Projets fonciers', to: '/toptelsig/projets', icon: Building2 },
     { label: 'Souscripteurs', to: '/toptelsig/souscripteurs', icon: Users },
     { label: 'Prescripteurs', to: '/toptelsig/prescripteurs', icon: TrendingUp },

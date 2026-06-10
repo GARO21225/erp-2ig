@@ -640,6 +640,14 @@ model ProjetFoncier {
 
   lots            Lot[]
   depenses        DepenseFoncier[]
+  phases          PhaseFoncier[]
+  responsableId   String?
+  responsableNom  String?
+  priorite        String?   @default("NORMALE") // HAUTE, NORMALE, BASSE
+  avancement      Int       @default(0)          // 0-100%
+  datFinReelle    DateTime?
+  caPrevu         Float?
+  budgetTotal     Float?
 
   @@map("projets_fonciers")
 }
@@ -805,8 +813,14 @@ model DepenseFoncier {
   id              String        @id @default(cuid())
   projetId        String
   projet          ProjetFoncier @relation(fields: [projetId], references: [id])
+  phaseId         String?
+  phase           PhaseFoncier? @relation(fields: [phaseId], references: [id])
+  activiteId      String?
+  activite        ActiviteFoncier? @relation(fields: [activiteId], references: [id])
   categorie       String
   sousCategorie   String?
+  budgetPrevu     Float?
+  budgetEngage    Float?
   montant         Float
   description     String
   date            DateTime      @default(now())
@@ -865,6 +879,92 @@ model DocumentFoncier {
 // ─────────────────────────────────────────────
 // FILIALE 3 : LiYA (LIVRAISON & LOGISTIQUE)
 // ─────────────────────────────────────────────
+
+
+// ── TOPTELSIG ÉTENDU — GESTION DE PROJET ─────────────────────────────────
+
+model PhaseFoncier {
+  id              String        @id @default(cuid())
+  projetId        String
+  projet          ProjetFoncier @relation(fields: [projetId], references: [id])
+  nom             String
+  ordre           Int           @default(1)
+  description     String?
+  dateDebut       DateTime?
+  dateFin         DateTime?
+  statut          String        @default("A_FAIRE") // A_FAIRE | EN_COURS | TERMINE | BLOQUE
+  avancement      Int           @default(0)
+  budgetPrevu     Float?
+  responsableId   String?
+  responsableNom  String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  activites       ActiviteFoncier[]
+  livrables       LivrableFoncier[]
+  depenses        DepenseFoncier[]
+
+  @@map("phases_foncier")
+}
+
+model ActiviteFoncier {
+  id              String       @id @default(cuid())
+  phaseId         String
+  phase           PhaseFoncier @relation(fields: [phaseId], references: [id])
+  nom             String
+  description     String?
+  dateDebut       DateTime?
+  dateFin         DateTime?
+  statut          String       @default("A_FAIRE")
+  avancement      Int          @default(0)
+  responsableId   String?
+  responsableNom  String?
+  createdAt       DateTime     @default(now())
+
+  taches          TacheFoncier[]
+  depenses        DepenseFoncier[]
+
+  @@map("activites_foncier")
+}
+
+model TacheFoncier {
+  id              String          @id @default(cuid())
+  activiteId      String
+  activite        ActiviteFoncier @relation(fields: [activiteId], references: [id])
+  nom             String
+  description     String?
+  dateEcheance    DateTime?
+  statut          String          @default("A_FAIRE")
+  priorite        String          @default("NORMALE")
+  assigneA        String?
+  assigneNom      String?
+  termine         Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+
+  @@map("taches_foncier")
+}
+
+model LivrableFoncier {
+  id              String       @id @default(cuid())
+  phaseId         String
+  phase           PhaseFoncier @relation(fields: [phaseId], references: [id])
+  nom             String
+  description     String?
+  typeLivrable    String       // TITRE_FONCIER | ACD | PLAN_PARCELLAIRE | RAPPORT_TOPO | PV | CONTRAT | AUTORISATION | AUTRE
+  responsableId   String?
+  responsableNom  String?
+  datePrevue      DateTime?
+  dateLivraison   DateTime?
+  statut          String       @default("A_PRODUIRE") // A_PRODUIRE | EN_COURS | SOUMIS | VALIDE | REFUSE | ARCHIVE
+  version         Int          @default(1)
+  obligatoire     Boolean      @default(false)
+  documentId      String?      // Lien vers GED
+  notes           String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@map("livrables_foncier")
+}
 
 model Moto {
   id                        String   @id @default(cuid())

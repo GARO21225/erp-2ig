@@ -13,9 +13,9 @@ router.get('/', auth, yakro, async (req, res) => {
           where: { statut: { in: ['EN_COURS', 'CUISINE', 'PRETE', 'SERVIE'] } },
           take: 1,
           include: {
-            lignes: { include: { menu: true } },
-            serveur: { select: { id:true, prenom:true, nom:true, poste:true } }
-          }
+            lignes: { include: { menu: true } }
+          },
+          // serveurId disponible dans la commande pour affichage côté frontend
         },
         reservations: {
           where: {
