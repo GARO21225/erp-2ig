@@ -1,259 +1,313 @@
+/**
+ * TOPTELSIG — Dépenses Foncières
+ * Workflow : BROUILLON → DEMANDEE → VALIDATION_RP → VALIDATION_DIR → AUTORISATION_PAIEMENT → PAYEE → JUSTIFIEE → CLOTUREE
+ * Compatibilité ascendante avec l'ancien workflow EN_ATTENTE → VALIDEE_N1 → VALIDEE_FINALE → PAYEE
+ */
 const router = require('express').Router();
 const prisma = require('../../lib/prisma');
 const { auth, requireFiliale, requireRole } = require('../../middleware/auth');
 const toptelsig = requireFiliale('TOPTELSIG');
 
-// GET /api/toptelsig/depenses
+const CATEGORIES = [
+  'Coutumier & Acquisition Foncière','Topographie & Études','Administratif & Dossiers',
+  'Lotissement & Bornage','Ouverture de Voies & Viabilisation','DTC & Services Techniques',
+  'Assainissement & Environnement','Enquêtes & Commissions','Travaux de Construction',
+  'Transport & Déplacements','Personnel','Commercial & Marketing',
+  'Fournitures & Fonctionnement','Frais Financiers','Autres Dépenses'
+];
+
+const TYPES_BENEFICIAIRES = [
+  'Employé','Propriétaire terrien','Exploitant agricole','Occupant',
+  'Autorité coutumière','Administration publique','Fournisseur','Entreprise',
+  'Bureau d\'étude','Géomètre','Association','Coopérative','Partenaire','Autre'
+];
+
+const STATUTS_WORKFLOW = [
+  'BROUILLON','DEMANDEE','VALIDATION_RP','VALIDATION_DIR',
+  'AUTORISATION_PAIEMENT','PAYEE','JUSTIFIEE','CLOTUREE','REJETEE'
+];
+
+// Helper : normaliser anciens statuts vers nouveau workflow
+function normaliserStatut(statut) {
+  const map = { EN_ATTENTE:'DEMANDEE', VALIDEE_N1:'VALIDATION_DIR', VALIDEE_FINALE:'AUTORISATION_PAIEMENT', ARCHIVEE:'CLOTUREE' };
+  return map[statut] || statut;
+}
+
+async function logAudit(tx, userId, nom, entiteId, label, avant, apres) {
+  try {
+    await tx.auditLog.create({ data: {
+      utilisateurId: userId, utilisateurNom: nom, filiale: 'TOPTELSIG',
+      action: 'UPDATE', entite: 'DepenseFoncier', entiteId, entiteLabel: label,
+      avant: avant ? JSON.stringify(avant) : null,
+      apres: apres ? JSON.stringify(apres) : null,
+    }});
+  } catch {}
+}
+
+// ── GET / — Liste dépenses ────────────────────────────────────────────────────
 router.get('/', auth, toptelsig, async (req, res) => {
   try {
-    const { projetId, categorie, statut, page = 1, limit = 30 } = req.query;
+    const { projetId, statut, phaseId, limit = 100, offset = 0 } = req.query;
     const where = {};
     if (projetId) where.projetId = projetId;
-    if (categorie) where.categorie = categorie;
     if (statut) where.statut = statut;
+    if (phaseId) where.phaseId = phaseId;
 
-    const [total, depenses] = await Promise.all([
-      prisma.depenseFoncier.count({ where }),
+    const [data, total] = await Promise.all([
       prisma.depenseFoncier.findMany({
-      include: {
-        projet: { select: { nom: true, code: true } },
-        initiateur: { select: { nom: true, prenom: true, poste: true } },
-      },
-        where,
-        skip: (page - 1) * limit,
-        take: Number(limit),
-        orderBy: { date: 'desc' },
-        include: { projet: { select: { nom: true, code: true } } }
-      })
+        where, skip: Number(offset), take: Number(limit),
+        orderBy: { createdAt: 'desc' },
+        include: {
+          projet: { select: { nom: true, code: true } },
+          phase: { select: { nom: true } },
+          activite: { select: { nom: true } },
+        }
+      }),
+      prisma.depenseFoncier.count({ where })
     ]);
 
-    const totalMontant = await prisma.depenseFoncier.aggregate({ _sum: { montant: true }, where });
-    res.json({ data: depenses, total, totalMontant: totalMontant._sum.montant || 0 });
+    // Normaliser statuts anciens
+    const normalized = data.map(d => ({ ...d, statut: normaliserStatut(d.statut) }));
+    res.json({ data: normalized, total });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/toptelsig/depenses — Création (statut EN_ATTENTE par défaut)
+// ── GET /categories — Liste des catégories ───────────────────────────────────
+router.get('/categories', auth, (req, res) => {
+  res.json(CATEGORIES);
+});
+
+// ── GET /types-beneficiaires ─────────────────────────────────────────────────
+router.get('/types-beneficiaires', auth, (req, res) => {
+  res.json(TYPES_BENEFICIAIRES);
+});
+
+// ── POST / — Créer une dépense ────────────────────────────────────────────────
 router.post('/', auth, toptelsig, async (req, res) => {
   try {
-    const depense = await prisma.depenseFoncier.create({
+    const {
+      projetId, phaseId, activiteId,
+      categorie, sousCategorie, description, observations,
+      montantPrevu, montantDemande, montant,
+      beneficiaire, typeBeneficiaire, beneficiaireId,
+      typePaiement, date, initiateurId
+    } = req.body;
+
+    if (!projetId) return res.status(400).json({ error: 'projetId requis' });
+    if (!categorie) return res.status(400).json({ error: 'categorie requise' });
+    if (!description) return res.status(400).json({ error: 'description requise' });
+    if (!montant && !montantDemande) return res.status(400).json({ error: 'montant requis' });
+
+    const dep = await prisma.depenseFoncier.create({
       data: {
-        ...req.body,
-        montant: Number(req.body.montant),
-        statut: 'EN_ATTENTE',
-        valideN1: false,
-        valideFinale: false,
-        paye: false,
+        projetId, phaseId: phaseId || null, activiteId: activiteId || null,
+        categorie, sousCategorie,
+        description, observations,
+        montantPrevu: montantPrevu ? Number(montantPrevu) : null,
+        montantDemande: montantDemande ? Number(montantDemande) : Number(montant),
+        montant: Number(montant || montantDemande),
+        beneficiaire, typeBeneficiaire, beneficiaireId: beneficiaireId || null,
+        typePaiement: typePaiement || null,
+        date: date ? new Date(date) : new Date(),
+        dateDemande: new Date(),
+        initiateurId: initiateurId || req.user.id,
+        statut: 'DEMANDEE',
       }
     });
 
-    await prisma.auditLog.create({
-      data: {
-        utilisateurId: req.user.id,
-        utilisateurNom: `${req.user.prenom} ${req.user.nom}`,
-        filiale: 'TOPTELSIG',
-        action: 'CREATE',
-        entite: 'DepenseFoncier',
-        entiteId: depense.id,
-        entiteLabel: `${depense.categorie} — ${depense.montant.toLocaleString('fr')} F`,
-        apres: { montant: depense.montant, categorie: depense.categorie, statut: depense.statut },
-      }
-    });
+    await prisma.auditLog.create({ data: {
+      utilisateurId: req.user.id, utilisateurNom: `${req.user.prenom} ${req.user.nom}`,
+      filiale: 'TOPTELSIG', action: 'CREATE', entite: 'DepenseFoncier', entiteId: dep.id,
+      entiteLabel: `${categorie} — ${description.slice(0, 50)} — ${Number(montant || montantDemande).toLocaleString('fr')} F`
+    }});
 
-    res.status(201).json(depense);
+    res.status(201).json(dep);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ─── Fix 6 : Workflow 3 niveaux ─────────────────────────────────────────────
-
-// PUT /:id/valider-n1 — Niveau 1 : Chef Projet / RESP_FONCIER
-router.put('/:id/valider-n1', auth, requireRole('DG', 'DIRECTEUR', 'RESP_FONCIER'), async (req, res) => {
+// ── PUT /:id — Modifier une dépense (si BROUILLON ou DEMANDEE) ────────────────
+router.put('/:id', auth, toptelsig, async (req, res) => {
   try {
     const dep = await prisma.depenseFoncier.findUnique({ where: { id: req.params.id } });
     if (!dep) return res.status(404).json({ error: 'Dépense introuvable' });
-    if (dep.statut !== 'EN_ATTENTE') return res.status(400).json({ error: `Statut actuel "${dep.statut}" — validation N1 impossible` });
-    if (dep.rejete) return res.status(400).json({ error: 'Dépense rejetée — ne peut plus être validée' });
+    const statut = normaliserStatut(dep.statut);
+    if (!['BROUILLON','DEMANDEE'].includes(statut)) return res.status(400).json({ error: `Impossible de modifier en statut ${statut}` });
 
+    const { phaseId, activiteId, categorie, sousCategorie, description, observations, montantPrevu, montantDemande, montant, beneficiaire, typeBeneficiaire, typePaiement, date } = req.body;
     const updated = await prisma.depenseFoncier.update({
       where: { id: req.params.id },
       data: {
-        valideN1: true,
-        valideN1Par: req.user.id,
-        valideN1Nom: `${req.user.prenom} ${req.user.nom}`,
-        valideN1Le: new Date(),
-        statut: 'VALIDEE_N1',
+        ...(phaseId !== undefined && { phaseId: phaseId || null }),
+        ...(activiteId !== undefined && { activiteId: activiteId || null }),
+        ...(categorie && { categorie }),
+        ...(sousCategorie !== undefined && { sousCategorie }),
+        ...(description && { description }),
+        ...(observations !== undefined && { observations }),
+        ...(montantPrevu !== undefined && { montantPrevu: Number(montantPrevu) }),
+        ...(montantDemande !== undefined && { montantDemande: Number(montantDemande) }),
+        ...(montant !== undefined && { montant: Number(montant) }),
+        ...(beneficiaire !== undefined && { beneficiaire }),
+        ...(typeBeneficiaire !== undefined && { typeBeneficiaire }),
+        ...(typePaiement !== undefined && { typePaiement }),
+        ...(date && { date: new Date(date) }),
       }
     });
-
-    await prisma.auditLog.create({ data: { utilisateurId: req.user.id, utilisateurNom: `${req.user.prenom} ${req.user.nom}`, filiale: 'TOPTELSIG', action: 'VALIDATE', entite: 'DepenseFoncier', entiteId: dep.id, entiteLabel: `Validation N1 — ${dep.categorie}`, avant: { statut: 'EN_ATTENTE' }, apres: { statut: 'VALIDEE_N1' } } });
-
     res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// PUT /:id/valider-finale — Niveau 2 : DG ou Directeur uniquement
-router.put('/:id/valider-finale', auth, requireRole('DG', 'DIRECTEUR'), async (req, res) => {
+// ── PUT /:id/workflow — Avancer dans le workflow ──────────────────────────────
+router.put('/:id/workflow', auth, toptelsig, async (req, res) => {
   try {
+    const { action, motif } = req.body; // action: valider_rp | valider_dir | autoriser | payer | justifier | cloturer | rejeter
     const dep = await prisma.depenseFoncier.findUnique({ where: { id: req.params.id } });
     if (!dep) return res.status(404).json({ error: 'Dépense introuvable' });
-    if (dep.statut !== 'VALIDEE_N1') return res.status(400).json({ error: `Validation N1 requise avant la validation finale (statut actuel : ${dep.statut})` });
 
-    const updated = await prisma.depenseFoncier.update({
-      where: { id: req.params.id },
-      data: {
-        valideFinale: true,
-        valideFinalePar: req.user.id,
-        valideFinalNom: `${req.user.prenom} ${req.user.nom}`,
-        valideFinaleLe: new Date(),
-        statut: 'VALIDEE_FINALE',
-      }
-    });
+    const statutActuel = normaliserStatut(dep.statut);
+    let nouveauStatut = statutActuel;
+    const data = {};
+    const now = new Date();
+    const acteurNom = `${req.user.prenom} ${req.user.nom}`;
 
-    await prisma.auditLog.create({ data: { utilisateurId: req.user.id, utilisateurNom: `${req.user.prenom} ${req.user.nom}`, filiale: 'TOPTELSIG', action: 'VALIDATE', entite: 'DepenseFoncier', entiteId: dep.id, entiteLabel: `Validation Finale — ${dep.categorie}`, avant: { statut: 'VALIDEE_N1' }, apres: { statut: 'VALIDEE_FINALE' } } });
+    const transitions = {
+      valider_rp:  { requis: ['DEMANDEE'],              suivant: 'VALIDATION_DIR',          roles: ['DG','DIRECTEUR','RESP_FONCIER','MANAGER'] },
+      valider_dir: { requis: ['VALIDATION_DIR'],         suivant: 'AUTORISATION_PAIEMENT',   roles: ['DG','DIRECTEUR'] },
+      autoriser:   { requis: ['AUTORISATION_PAIEMENT'], suivant: 'PAYEE',                   roles: ['DG','DIRECTEUR','COMPTABLE'] },
+      payer:       { requis: ['AUTORISATION_PAIEMENT','PAYEE'], suivant: 'PAYEE',            roles: ['DG','COMPTABLE'] },
+      justifier:   { requis: ['PAYEE'],                 suivant: 'JUSTIFIEE',               roles: ['DG','DIRECTEUR','RESP_FONCIER','COMPTABLE'] },
+      cloturer:    { requis: ['JUSTIFIEE'],              suivant: 'CLOTUREE',               roles: ['DG','DIRECTEUR'] },
+      rejeter:     { requis: STATUTS_WORKFLOW.filter(s => !['PAYEE','CLOTUREE','REJETEE'].includes(s)), suivant: 'REJETEE', roles: ['DG','DIRECTEUR','RESP_FONCIER'] },
+      // Compatibilité anciens boutons
+      valider_n1:     { requis: ['DEMANDEE','EN_ATTENTE'],    suivant: 'VALIDATION_DIR',        roles: ['DG','DIRECTEUR','RESP_FONCIER'] },
+      valider_finale: { requis: ['VALIDATION_DIR','VALIDEE_N1'], suivant: 'AUTORISATION_PAIEMENT', roles: ['DG','DIRECTEUR'] },
+    };
 
-    res.json(updated);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// PUT /:id/payer — Niveau 3 : Comptable enregistre le paiement effectif
-router.put('/:id/payer', auth, requireRole('DG', 'COMPTABLE'), async (req, res) => {
-  try {
-    const dep = await prisma.depenseFoncier.findUnique({ where: { id: req.params.id } });
-    if (!dep) return res.status(404).json({ error: 'Dépense introuvable' });
-    if (dep.statut !== 'VALIDEE_FINALE') {
-      return res.status(400).json({ error: `Validation finale Direction requise avant paiement (statut : ${dep.statut})` });
+    const trans = transitions[action];
+    if (!trans) return res.status(400).json({ error: `Action '${action}' inconnue` });
+    if (!trans.roles.includes(req.user.role)) return res.status(403).json({ error: `Rôle insuffisant pour ${action}` });
+    if (!trans.requis.some(s => [statutActuel, dep.statut].includes(s))) {
+      return res.status(400).json({ error: `Action '${action}' impossible en statut ${statutActuel}` });
     }
 
-    const { referenceVirement } = req.body;
+    nouveauStatut = trans.suivant;
+    data.statut = nouveauStatut;
 
-    const updated = await prisma.$transaction(async (tx) => {
-      const d = await tx.depenseFoncier.update({
-        where: { id: req.params.id },
-        data: {
-          paye: true,
-          payePar: req.user.id,
-          payeLe: new Date(),
-          referenceVirement,
-          statut: 'PAYEE',
+    if (action === 'rejeter') {
+      if (!motif) return res.status(400).json({ error: 'Motif de rejet obligatoire' });
+      data.rejete = true; data.rejetePar = req.user.id; data.rejeteMotif = motif;
+    }
+    if (['payer','autoriser'].includes(action)) {
+      data.paye = true; data.payePar = req.user.id; data.payeLe = now;
+      data.datePaiement = now;
+      data.montantPaye = dep.montant;
+      if (req.body.referenceVirement) data.referenceVirement = req.body.referenceVirement;
+    }
+    if (['valider_rp','valider_n1'].includes(action)) {
+      data.valideN1 = true; data.valideN1Par = req.user.id; data.valideN1Le = now; data.valideN1Nom = acteurNom;
+      data.dateValidation = now;
+    }
+    if (['valider_dir','valider_finale'].includes(action)) {
+      data.valideFinale = true; data.valideFinalePar = req.user.id; data.valideFinaleLe = now; data.valideFinalNom = acteurNom;
+      data.dateValidation = now;
+    }
+
+    const updated = await prisma.$transaction(async tx => {
+      const dep2 = await tx.depenseFoncier.update({ where: { id: req.params.id }, data });
+      await logAudit(tx, req.user.id, acteurNom, dep2.id, `${action} — ${dep2.description?.slice(0,40)}`, { statut: statutActuel }, { statut: nouveauStatut, action, motif });
+
+      // Impact budgétaire si payée
+      if (data.paye) {
+        const caisse = await tx.caisse.findFirst({ where: { filiale: 'TOPTELSIG', actif: true } });
+        if (caisse) {
+          await tx.encaissement.create({ data: {
+            caisseId: caisse.id, filiale: 'TOPTELSIG', montant: -dep2.montant,
+            typePaiement: dep2.typePaiement || 'ESPECES',
+            motif: `Dépense: ${dep2.description?.slice(0,50)}`,
+            entiteRef: dep2.id, entiteType: 'depense', operateurId: req.user.id,
+          }}).catch(() => {});
+          await tx.caisse.update({ where: { id: caisse.id }, data: { solde: { decrement: dep2.montant } } }).catch(() => {});
         }
-      });
-
-      // Décaissement dans la caisse TOPTELSIG
-      const caisse = await tx.caisse.findFirst({ where: { filiale: 'TOPTELSIG', actif: true } });
-      if (caisse) {
-        await tx.decaissement.create({
-          data: {
-            caisseId: caisse.id,
-            filiale: 'TOPTELSIG',
-            montant: dep.montant,
-            typePaiement: dep.typePaiement || 'ESPECES',
-            reference: referenceVirement,
-            motif: dep.description,
-            categorie: dep.categorie,
-            beneficiaire: dep.beneficiaire,
-            valide: true,
-            validePar: req.user.id,
-          }
-        });
-        await tx.caisse.update({ where: { id: caisse.id }, data: { solde: { decrement: dep.montant } } });
       }
-
-      await tx.auditLog.create({ data: { utilisateurId: req.user.id, utilisateurNom: `${req.user.prenom} ${req.user.nom}`, filiale: 'TOPTELSIG', action: 'VALIDATE', entite: 'DepenseFoncier', entiteId: dep.id, entiteLabel: `Paiement effectué — ${dep.montant.toLocaleString('fr')} F`, avant: { statut: 'VALIDEE_FINALE' }, apres: { statut: 'PAYEE' } } });
-
-      return d;
+      return dep2;
     });
 
     res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// PUT /:id/rejeter — Rejet à n'importe quelle étape
-router.put('/:id/rejeter', auth, requireRole('DG', 'DIRECTEUR', 'RESP_FONCIER', 'COMPTABLE'), async (req, res) => {
+// ── Routes compatibilité ancienne API (conservées) ───────────────────────────
+router.put('/:id/valider-n1', auth, requireRole('DG','DIRECTEUR','RESP_FONCIER'), async (req, res) => {
+  req.body.action = 'valider_rp';
+  return router.handle({ ...req, url: `/${req.params.id}/workflow`, method: 'PUT' }, res, () => {
+    res.status(500).json({ error: 'Redirection interne échouée' });
+  });
+});
+
+// Fallback simple pour anciens boutons
+router.put('/:id/valider-finale', auth, requireRole('DG','DIRECTEUR'), async (req, res) => {
   try {
-    const { motif } = req.body;
-    if (!motif || motif.trim() === '') {
-      return res.status(400).json({ error: 'Le motif de rejet est obligatoire' });
-    }
-
-    const dep = await prisma.depenseFoncier.findUnique({ where: { id: req.params.id } });
-    if (!dep) return res.status(404).json({ error: 'Dépense introuvable' });
-    if (['PAYEE', 'ARCHIVEE'].includes(dep.statut)) {
-      return res.status(400).json({ error: `Impossible de rejeter une dépense ${dep.statut}` });
-    }
-
-    const updated = await prisma.depenseFoncier.update({
+    const dep = await prisma.depenseFoncier.update({
       where: { id: req.params.id },
-      data: {
-        rejete: true,
-        rejetePar: req.user.id,
-        rejeteMotif: motif,
-        statut: 'REJETEE',
-      }
+      data: { statut: 'AUTORISATION_PAIEMENT', valideFinale: true, valideFinalePar: req.user.id, valideFinaleLe: new Date(), valideFinalNom: `${req.user.prenom} ${req.user.nom}`, dateValidation: new Date() }
     });
-
-    await prisma.auditLog.create({ data: { utilisateurId: req.user.id, utilisateurNom: `${req.user.prenom} ${req.user.nom}`, filiale: 'TOPTELSIG', action: 'REJECT', entite: 'DepenseFoncier', entiteId: dep.id, entiteLabel: `Rejet — ${motif}`, avant: { statut: dep.statut }, apres: { statut: 'REJETEE', motif } } });
-
-    res.json(updated);
+    res.json(dep);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Stats dépenses par catégorie
+router.put('/:id/payer', auth, requireRole('DG','COMPTABLE'), async (req, res) => {
+  try {
+    const dep = await prisma.depenseFoncier.update({
+      where: { id: req.params.id },
+      data: { statut: 'PAYEE', paye: true, payePar: req.user.id, payeLe: new Date(), datePaiement: new Date(), montantPaye: (await prisma.depenseFoncier.findUnique({ where: { id: req.params.id }, select: { montant: true } })).montant, referenceVirement: req.body.referenceVirement }
+    });
+    res.json(dep);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.put('/:id/rejeter', auth, requireRole('DG','DIRECTEUR','RESP_FONCIER','COMPTABLE'), async (req, res) => {
+  try {
+    if (!req.body.motif) return res.status(400).json({ error: 'Motif requis' });
+    const dep = await prisma.depenseFoncier.update({
+      where: { id: req.params.id },
+      data: { statut: 'REJETEE', rejete: true, rejetePar: req.user.id, rejeteMotif: req.body.motif }
+    });
+    res.json(dep);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── GET /stats ────────────────────────────────────────────────────────────────
 router.get('/stats', auth, toptelsig, async (req, res) => {
   try {
     const { projetId } = req.query;
-    const stats = await prisma.depenseFoncier.groupBy({
-      by: ['categorie'],
-      _sum: { montant: true },
-      _count: { id: true },
-      where: projetId ? { projetId } : undefined,
+    const where = projetId ? { projetId } : {};
+
+    const [total, parStatut, parCategorie] = await Promise.all([
+      prisma.depenseFoncier.aggregate({ _sum: { montant: true }, _count: { id: true }, where }),
+      prisma.depenseFoncier.groupBy({ by: ['statut'], _sum: { montant: true }, _count: { id: true }, where }),
+      prisma.depenseFoncier.groupBy({ by: ['categorie'], _sum: { montant: true }, where, orderBy: { _sum: { montant: 'desc' } }, take: 10 }),
+    ]);
+
+    res.json({
+      total: total._sum.montant || 0,
+      nbDepenses: total._count.id || 0,
+      parStatut: parStatut.map(s => ({ statut: normaliserStatut(s.statut), montant: s._sum.montant || 0, count: s._count.id })),
+      parCategorie: parCategorie.map(c => ({ categorie: c.categorie, montant: c._sum.montant || 0 })),
     });
-    res.json(stats);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET catégories depuis le PCR
-router.get('/categories', auth, toptelsig, (req, res) => {
-  res.json(getCategoriesDepenses());
-});
-
-function getCategoriesDepenses() {
-  return {
-    'Coutumier & Acquisition Foncière': ['Dotation chef de village', 'Dotation notables', 'Dotation propriétaires terriens', 'Frais de négociation foncière', 'Indemnisation exploitants agricoles', 'Indemnisation occupants', 'Achat de terrain', 'Frais de convention foncière', 'Cadeaux et relations coutumières', 'Organisation de réunions villageoises', 'Transport autorités coutumières'],
-    'Topographie & Études': ['Délimitation terrain', 'Coupe et ouverture de layons', 'Piquets et bornes provisoires', 'GPS et rattachement', 'Levé topographique', 'Plan d\'urbanisme', 'Plan parcellaire', 'Impression plans', 'Signature géomètre expert', 'Mission topographique', 'Location matériel topo'],
-    'Administratif & Dossiers': ['Frais de timbres', 'Frais de légalisation', 'Photocopies et impressions', 'Frais de dépôt de dossier', 'Courriers administratifs', 'Transport dossiers', 'Honoraires juridiques', 'Honoraires consultant'],
-    'Lotissement & Bornage': ['Application du lotissement', 'Bornage définitif', 'Implantation des bornes', 'Achat de bornes', 'Main d\'œuvre bornage', 'Contrôle de bornage'],
-    'Ouverture de Voies & Viabilisation': ['Ouverture des voies', 'Décapage', 'Nivellement', 'Compactage', 'Location bulldozer', 'Location niveleuse', 'Carburant engins', 'Main d\'œuvre chantier'],
-    'DTC & Services Techniques': ['Contrôle DTC', 'Frais DTC', 'Certificat DTC', 'Frais cadastraux', 'Numérotation cadastrale'],
-    'Transport & Déplacements': ['Carburant véhicule', 'Péage', 'Entretien véhicule', 'Location véhicule', 'Transport personnel', 'Hébergement mission', 'Per diem mission'],
-    'Personnel': ['Salaires', 'Primes terrain', 'Primes chantier', 'Heures supplémentaires', 'Indemnités de mission', 'Équipements de protection'],
-    'Frais Financiers': ['Frais bancaires', 'Retrait mobile money', 'Transfert d\'argent', 'Intérêts'],
-    'Autres Dépenses': ['Dépenses exceptionnelles', 'Imprévus chantier', 'Assistance sociale', 'Divers'],
-  };
-}
-
-
-// GET /export — Export Excel dépenses
+// ── GET /export ───────────────────────────────────────────────────────────────
 router.get('/export', auth, toptelsig, async (req, res) => {
   try {
     const { projetId, statut } = req.query;
     const where = {};
     if (projetId) where.projetId = projetId;
     if (statut) where.statut = statut;
-    const depenses = await prisma.depenseFoncier.findMany({ where, orderBy: { createdAt: 'desc' },
-      include: { projet: { select: { nom: true, code: true } } } });
-    const xlsx = require('xlsx');
-    const data = depenses.map(d => ({
-      Projet: d.projet?.nom || '—', Catégorie: d.categorie, 'Sous-catégorie': d.sousCategorie || '',
-      Montant: d.montant, Description: d.description, Bénéficiaire: d.beneficiaire || '',
-      'Type paiement': d.typePaiement || '', Statut: d.statut,
-      Date: new Date(d.date).toLocaleDateString('fr'),
-    }));
-    const ws = xlsx.utils.json_to_sheet(data);
-    const wb = xlsx.utils.book_new();
-    xlsx.utils.book_append_sheet(wb, ws, 'Dépenses');
-    const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
-    res.setHeader('Content-Disposition', 'attachment; filename="depenses_foncier.xlsx"');
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.send(buf);
+    const depenses = await prisma.depenseFoncier.findMany({
+      where, orderBy: { date: 'desc' },
+      include: { projet: { select: { nom: true } }, phase: { select: { nom: true } } }
+    });
+    res.json(depenses);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

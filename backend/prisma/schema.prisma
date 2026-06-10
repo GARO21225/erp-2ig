@@ -821,18 +821,30 @@ model DepenseFoncier {
   sousCategorie   String?
   budgetPrevu     Float?
   budgetEngage    Float?
-  montant         Float
-  description     String
-  date            DateTime      @default(now())
-  initiateurId    String?       // Employé initiateur (userId, pas de FK Prisma pour éviter circularité)
-  beneficiaire    String?       // Texte libre ou prescripteur
-  beneficiaireId  String?       // Prescripteur (optionnel)
-  typePaiement    TypePaiement?
-  justificatif    String?
+  // Montants multi-étapes
+  montantPrevu    Float?        // Budget prévu pour cette dépense
+  montantDemande  Float?        // Montant demandé
+  montant         Float         // Montant validé/payé (champ principal existant)
+  montantPaye     Float?        // Montant effectivement payé
 
-  // Workflow 3 niveaux
-  statut          String        @default("EN_ATTENTE")
-  // EN_ATTENTE → VALIDEE_N1 → VALIDEE_FINALE → PAYEE → ARCHIVEE | REJETEE
+  description     String
+  observations    String?       // Remarques internes
+
+  date            DateTime      @default(now())
+  dateDemande     DateTime?
+  dateValidation  DateTime?
+  datePaiement    DateTime?
+
+  initiateurId    String?       // Employé initiateur (userId, pas de FK Prisma)
+  beneficiaire    String?       // Nom du bénéficiaire
+  typeBeneficiaire String?      // Employé | PropriétaireTerrien | Fournisseur | etc.
+  beneficiaireId  String?       // Référence optionnelle
+  typePaiement    TypePaiement?
+  justificatif    String?       // URL/ID document GED
+
+  // Workflow enrichi
+  statut          String        @default("BROUILLON")
+  // BROUILLON → DEMANDEE → VALIDATION_RP → VALIDATION_DIR → AUTORISATION_PAIEMENT → PAYEE → JUSTIFIEE → CLOTUREE | REJETEE
 
   // Niveau 1 — Chef Projet / RESP_FONCIER
   valideN1        Boolean       @default(false)

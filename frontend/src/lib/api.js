@@ -202,12 +202,16 @@ export const prescripteursAPI = {
 export const depensesAPIv2 = {
   list: (params) => api.get('/toptelsig/depenses', { params }),
   create: (data) => api.post('/toptelsig/depenses', data),
+  update: (id, data) => api.put(`/toptelsig/depenses/${id}`, data),
+  workflow: (id, action, extra) => api.put(`/toptelsig/depenses/${id}/workflow`, { action, ...extra }),
   validerN1: (id) => api.put(`/toptelsig/depenses/${id}/valider-n1`),
   validerFinale: (id) => api.put(`/toptelsig/depenses/${id}/valider-finale`),
   payer: (id, data) => api.put(`/toptelsig/depenses/${id}/payer`, data),
   rejeter: (id, motif) => api.put(`/toptelsig/depenses/${id}/rejeter`, { motif }),
   stats: (params) => api.get('/toptelsig/depenses/stats', { params }),
   categories: () => api.get('/toptelsig/depenses/categories'),
+  typesBeneficiaires: () => api.get('/toptelsig/depenses/types-beneficiaires'),
+  phasesProjet: (projetId) => api.get(`/toptelsig/gestion-projet/projet/${projetId}`).then(d => d?.phases || []),
 };
 
 // ── STOCK 3PL LiYA
