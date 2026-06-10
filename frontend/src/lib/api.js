@@ -135,6 +135,9 @@ export const toptelsigAPI = {
   retards: () => api.get('/toptelsig/ventes/retards'),
 
   prescripteurs: (params) => api.get('/toptelsig/prescripteurs', { params }),
+  projetComplet: (projetId) => api.get(`/toptelsig/projet-complet/${projetId}`),
+  seedPhasesProjet: (projetId) => api.post(`/toptelsig/projet-complet/seed-phases/${projetId}`),
+  seedPhasesAll: () => api.post('/toptelsig/projet-complet/seed-phases-all'),
   gestionProjet: (projetId) => api.get(`/toptelsig/gestion-projet/projet/${projetId}`),
   dashboardProjet: (projetId) => api.get(`/toptelsig/gestion-projet/dashboard/${projetId}`),
   createPhase: (data) => api.post('/toptelsig/gestion-projet/phases', data),
