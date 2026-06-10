@@ -301,7 +301,54 @@ function FicheLot({ lot, onClose }) {
           <h3 style={{ margin: 0, fontFamily: 'Syne', fontSize: 16 }}>
             📍 Lot {lot.numero}{lot.ilot ? ` — Îlot ${lot.ilot}` : ''}
           </h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+          <div style={{ display:'flex', gap:6 }}>
+            <button style={{ fontSize:11, padding:'5px 10px', background:'#1a3f6f', color:'white', border:'none', borderRadius:7, cursor:'pointer' }}
+              onClick={() => {
+                const tel = vente?.souscripteur?.telephone?.replace(/\s/g,'') || '';
+                const nom = vente?.souscripteur ? `${vente.souscripteur.prenom} ${vente.souscripteur.nom}` : '';
+                const msg = encodeURIComponent(`🏘 Récapitulatif lot ${lot.numero}${lot.ilot?' (Îlot '+lot.ilot+')':''}
+━━━━━━━━━━━━━━━━━
+📐 Superficie : ${(lot.superficie||0).toLocaleString('fr')} m²
+💰 Prix : ${fmtF(lot.prix)}
+👤 Client : ${nom}
+💳 Total payé : ${fmtF(totalPaye)}
+📊 Restant : ${fmtF(vente?vente.prixVente-totalPaye:0)}
+✅ Taux : ${vente&&vente.prixVente>0?Math.round(totalPaye/vente.prixVente*100):0}%
+━━━━━━━━━━━━━━━━━
+2IG — TOPTELSIG`);
+                window.open(`https://wa.me/${tel}?text=${msg}`, '_blank');
+              }}>
+              💬 WhatsApp
+            </button>
+            <button style={{ fontSize:11, padding:'5px 10px', background:'#27500A', color:'white', border:'none', borderRadius:7, cursor:'pointer' }}
+              onClick={() => {
+                const nom = vente?.souscripteur ? `${vente.souscripteur.prenom} ${vente.souscripteur.nom}` : '';
+                const sujet = encodeURIComponent(`Récapitulatif lot ${lot.numero} — TOPTELSIG 2IG`);
+                const corps = encodeURIComponent(`Bonjour ${nom},
+
+Voici le récapitulatif de votre lot :
+
+Lot N° : ${lot.numero}
+Îlot : ${lot.ilot||'—'}
+Superficie : ${(lot.superficie||0).toLocaleString('fr')} m²
+Prix de vente : ${fmtF(lot.prix)}
+
+Total payé : ${fmtF(totalPaye)}
+Restant : ${fmtF(vente?vente.prixVente-totalPaye:0)}
+Taux de paiement : ${vente&&vente.prixVente>0?Math.round(totalPaye/vente.prixVente*100):0}%
+
+Cordialement,
+TOPTELSIG — Groupe 2IG`);
+                window.open(`mailto:${vente?.souscripteur?.email||''}?subject=${sujet}&body=${corps}`);
+              }}>
+              📧 Email
+            </button>
+            <button style={{ fontSize:11, padding:'5px 10px', background:'#888', color:'white', border:'none', borderRadius:7, cursor:'pointer' }}
+              onClick={() => window.print()}>
+              🖨️ Imprimer
+            </button>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+          </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
@@ -378,39 +425,64 @@ function FicheLot({ lot, onClose }) {
 }
 
 // ── Onglet CRM ────────────────────────────────────────────────────────────────
-function OngletCRM({ souscripteurs = [], kpi }) {
-  const PIPELINE = ['PROSPECT','CONTACTE','INTERESSE','NEGOCIE','CLIENT'];
-  const PIPELINE_COLORS = { PROSPECT:'#888', CONTACTE:'#BA7517', INTERESSE:'#1a3f6f', NEGOCIE:'#E87722', CLIENT:'#27500A' };
+function OngletCRM({ souscripteurs = [], kpi, projetId }) {
+  const [search, setSearch] = useState('');
+  const [statutFilter, setStatutFilter] = useState('');
+  const PIPELINE_COLORS = { PROSPECT:'#888', CONTACTE:'#BA7517', INTERESSE:'#1a3f6f', NEGOCIE:'#E87722', CLIENT:'#27500A', PERDU:'#A32D2D' };
+
+  const filtered = souscripteurs.filter(s =>
+    (!statutFilter || s.statut === statutFilter) &&
+    (!search || `${s.prenom} ${s.nom} ${s.telephone}`.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  const statsParStatut = Object.keys(PIPELINE_COLORS).reduce((acc, s) => {
+    acc[s] = souscripteurs.filter(x => x.statut === s).length;
+    return acc;
+  }, {});
 
   return (
     <div>
-      {/* Entonnoir */}
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${PIPELINE.length},1fr)`, gap: 8, marginBottom: 16 }}>
-        {PIPELINE.map(s => {
-          const count = souscripteurs.filter(x => x.statut === s).length;
-          const total = souscripteurs.length;
+      {/* Entonnoir visuel */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+        {Object.entries(PIPELINE_COLORS).map(([s, color]) => {
+          const count = statsParStatut[s] || 0;
           return (
-            <div key={s} style={{ background: PIPELINE_COLORS[s] + '15', border: `1.5px solid ${PIPELINE_COLORS[s]}30`, borderRadius: 10, padding: '10px', textAlign: 'center' }}>
-              <div style={{ fontFamily: 'Syne', fontWeight: 800, fontSize: 24, color: PIPELINE_COLORS[s] }}>{count}</div>
-              <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>{s}</div>
-              <Prog value={total > 0 ? count / total * 100 : 0} color={PIPELINE_COLORS[s]} h={3} />
+            <div key={s} style={{ background: color + '15', border: `1px solid ${color}30`, borderRadius: 8, padding: '8px 12px', textAlign: 'center', minWidth: 80, flex: 1, cursor: 'pointer',
+              outline: statutFilter === s ? `2px solid ${color}` : 'none' }}
+              onClick={() => setStatutFilter(statutFilter === s ? '' : s)}>
+              <div style={{ fontFamily: 'Syne', fontWeight: 800, fontSize: 20, color }}>{count}</div>
+              <div style={{ fontSize: 9, color: '#888', marginTop: 1 }}>{s}</div>
             </div>
           );
         })}
       </div>
 
-      {/* Liste prospects/clients */}
+      {/* Filtres + recherche */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+        <input className="input" style={{ flex: 1 }} placeholder="🔍 Nom, téléphone..."
+          value={search} onChange={e => setSearch(e.target.value)} />
+      </div>
+
+      {/* Tableau liste complète */}
       <div className="table-container">
         <table className="table-erp">
           <thead>
-            <tr><th>Nom</th><th>Téléphone</th><th>Statut</th><th>Commercial</th><th>Source</th><th>Relances</th><th>Dernière interaction</th></tr>
+            <tr>
+              <th>Nom</th><th>Téléphone</th><th>Email</th><th>Statut</th>
+              <th>Commercial</th><th>Source</th><th>Relances</th><th>Dernière interaction</th>
+            </tr>
           </thead>
           <tbody>
-            {souscripteurs.map(s => (
+            {filtered.map(s => (
               <tr key={s.id}>
-                <td style={{ fontWeight: 500 }}>{s.prenom} {s.nom}</td>
-                <td style={{ fontSize: 11, color: '#888' }}>{s.telephone}</td>
-                <td><span style={{ fontSize: 10, background: (PIPELINE_COLORS[s.statut] || '#888') + '18', color: PIPELINE_COLORS[s.statut] || '#888', borderRadius: 10, padding: '2px 8px' }}>{s.statut}</span></td>
+                <td style={{ fontWeight: 600 }}>{s.prenom} {s.nom}</td>
+                <td style={{ fontSize: 11 }}>{s.telephone}</td>
+                <td style={{ fontSize: 11, color: '#888' }}>{s.email || '—'}</td>
+                <td>
+                  <span style={{ fontSize: 10, background: (PIPELINE_COLORS[s.statut] || '#888') + '18', color: PIPELINE_COLORS[s.statut] || '#888', borderRadius: 10, padding: '2px 8px', fontWeight: 500 }}>
+                    {s.statut}
+                  </span>
+                </td>
                 <td style={{ fontSize: 11 }}>{s.commercialNom || '—'}</td>
                 <td style={{ fontSize: 11, color: '#888' }}>{s.sourceAcquisition || '—'}</td>
                 <td style={{ textAlign: 'center', fontWeight: 600, color: '#1a3f6f' }}>{s.relances?.length || 0}</td>
@@ -419,10 +491,13 @@ function OngletCRM({ souscripteurs = [], kpi }) {
                 </td>
               </tr>
             ))}
-            {souscripteurs.length === 0 && <tr><td colSpan={7}><div className="empty-state"><p>Aucun contact pour ce projet</p></div></td></tr>}
+            {filtered.length === 0 && (
+              <tr><td colSpan={8}><div className="empty-state"><p>Aucun contact pour ce projet</p></div></td></tr>
+            )}
           </tbody>
         </table>
       </div>
+      <div style={{ fontSize: 11, color: '#888', marginTop: 6 }}>{filtered.length} contact(s) affiché(s) sur {souscripteurs.length}</div>
     </div>
   );
 }

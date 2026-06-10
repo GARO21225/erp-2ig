@@ -116,6 +116,8 @@ export const toptelsigAPI = {
   getProjet: (id) => api.get(`/toptelsig/projets/${id}`),
   createProjet: (data) => api.post('/toptelsig/projets', data),
   updateProjet: (id, data) => api.put(`/toptelsig/projets/${id}`, data),
+  importLots: (projetId, file) => { const fd = new FormData(); fd.append('fichier', file); fd.append('projetId', projetId); return api.post('/toptelsig/lots/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }); },
+  templateLots: () => api.get('/toptelsig/lots/template', { responseType: 'blob' }),
   categoriesDepenses: () => api.get('/toptelsig/projets/categories-depenses'),
 
   lots: (params) => api.get('/toptelsig/lots', { params }),

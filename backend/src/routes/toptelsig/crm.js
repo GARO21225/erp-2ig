@@ -70,10 +70,11 @@ router.post('/:id/relances', auth, toptelsig, async (req, res) => {
     });
 
     // Si résultat = converti → passer en CLIENT
+    let souscripteurConverti = null;
     if (resultat === 'converti') {
-      await prisma.souscripteur.update({
+      souscripteurConverti = await prisma.souscripteur.update({
         where: { id: req.params.id },
-        data: { statut: 'CLIENT', canalConversion: canal, commercialId: req.user.id, commercialNom: `${req.user.prenom} ${req.user.nom}` }
+        data: { statut: 'CLIENT', canalConversion: canal, commercialId: req.user.id, commercialNom: `${req.user.prenom} ${req.user.nom}`, raisonConversion: req.body.notes?.slice(0,100) }
       });
     }
     if (resultat === 'perdu' && req.body.raisonPerte) {
@@ -83,7 +84,7 @@ router.post('/:id/relances', auth, toptelsig, async (req, res) => {
     // AuditLog
     await prisma.auditLog.create({ data: { utilisateurId: req.user.id, utilisateurNom: `${req.user.prenom} ${req.user.nom}`, filiale: 'TOPTELSIG', action: 'CREATE', entite: 'RelanceCRM', entiteId: relance.id, entiteLabel: `${canal} — ${resultat || 'en attente'}` } });
 
-    res.status(201).json(relance);
+    res.status(201).json({ ...relance, souscripteurConverti: souscripteurConverti ? { id: souscripteurConverti.id, statut: souscripteurConverti.statut } : null });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -74,7 +74,12 @@ router.get('/', auth, toptelsig, async (req, res) => {
 
 // ── GET /categories — Liste des catégories ───────────────────────────────────
 router.get('/categories', auth, (req, res) => {
-  res.json(CATEGORIES);
+  // Retourner objet { categorie: [sous-catégories] }
+  // Les catégories TOPTELSIG n'ont pas de sous-catégories formelles
+  // On retourne un objet pour compatibilité frontend (Object.keys)
+  const obj = {};
+  CATEGORIES.forEach(c => { obj[c] = []; });
+  res.json(obj);
 });
 
 // ── GET /types-beneficiaires ─────────────────────────────────────────────────

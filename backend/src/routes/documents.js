@@ -10,18 +10,29 @@ const path = require('path');
 const fs = require('fs');
 const logger = require('../lib/logger');
 
-const ALLOWED = { 'image/jpeg':'.jpg','image/jpg':'.jpg','image/png':'.png','application/pdf':'.pdf','application/msword':'.doc','application/vnd.openxmlformats-officedocument.wordprocessingml.document':'.docx' };
+const ALLOWED = {
+  'image/jpeg':'.jpg','image/jpg':'.jpg','image/png':'.png','image/gif':'.gif','image/webp':'.webp',
+  'application/pdf':'.pdf',
+  'application/msword':'.doc','application/vnd.openxmlformats-officedocument.wordprocessingml.document':'.docx',
+  'application/vnd.ms-excel':'.xls','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'.xlsx',
+  'application/vnd.ms-powerpoint':'.ppt','application/vnd.openxmlformats-officedocument.presentationml.presentation':'.pptx',
+  'text/plain':'.txt','text/csv':'.csv',
+  'application/zip':'.zip','application/x-rar-compressed':'.rar',
+  'video/mp4':'.mp4','video/quicktime':'.mov',
+  'application/octet-stream':'.bin', // DWG et autres formats inconnus
+};
 const TYPES_GED = ['CNI','EXTRAIT_NAISSANCE','DIPLOME','FACTURE','CONTRAT','PLAN','PHOTO','PERMIS','ASSURANCE','JUSTIFICATIF','BULLETIN','AUTRE'];
 const MAX_MB = process.env.STORAGE_PATH || process.env.CLOUDINARY_URL ? 15 : 2;
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_MB * 1024 * 1024 },
-  fileFilter: (req, file, cb) => ALLOWED[file.mimetype] ? cb(null, true) : cb(new Error(`Format non supporté: ${file.mimetype}`)),
+  fileFilter: (req, file, cb) => cb(null, true), // Accepter tous les formats
 });
 
 async function storeFile(buffer, originalname, mimetype) {
-  const filename = `${Date.now()}_${Math.random().toString(36).slice(2)}${ALLOWED[mimetype]||'.bin'}`;
+  const ext = ALLOWED[mimetype] || ('.' + (mimetype.split('/')[1]?.split('+')[0] || 'bin')).replace('vnd.', '');
+  const filename = `${Date.now()}_${Math.random().toString(36).slice(2)}${ext}`;
   if (process.env.STORAGE_PATH) {
     const dir = process.env.STORAGE_PATH;
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
