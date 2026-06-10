@@ -171,7 +171,6 @@ router.get('/rapport', auth, async (req, res) => {
   }
 });
 
-module.exports = router;
 
 // POST /finance/caisses/:id/correction — Correction d'écart de caisse
 router.post('/caisses/:id/correction', auth, requireRole('DG', 'COMPTABLE'), async (req, res) => {
@@ -287,4 +286,137 @@ router.get('/stats', auth, async (req, res) => {
       })),
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+module.exports = router;
+
+// ── GET /api/finance/pilotage ── Centre de pilotage DG ────────────────────
+router.get('/pilotage', auth, async (req, res) => {
+  try {
+    const { debut, fin, filiale, periode = 'mois' } = req.query;
+    const now = new Date();
+
+    // Calcul des plages de dates
+    let dateDebut, dateFin, dateDebutPrec, dateFinPrec;
+    if (debut && fin) {
+      dateDebut = new Date(debut); dateFin = new Date(fin);
+      const diff = dateFin - dateDebut;
+      dateDebutPrec = new Date(dateDebut - diff); dateFinPrec = new Date(dateDebut);
+    } else {
+      const map = {
+        aujourd: [new Date(now.getFullYear(), now.getMonth(), now.getDate()), new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)],
+        hier: [new Date(now.getFullYear(), now.getMonth(), now.getDate()-1), new Date(now.getFullYear(), now.getMonth(), now.getDate()-1, 23, 59, 59)],
+        semaine: [new Date(now.setDate(now.getDate() - now.getDay())), new Date()],
+        mois: [new Date(new Date().getFullYear(), new Date().getMonth(), 1), new Date()],
+        trimestre: [new Date(new Date().getFullYear(), Math.floor(new Date().getMonth()/3)*3, 1), new Date()],
+        annee: [new Date(new Date().getFullYear(), 0, 1), new Date()],
+      };
+      [dateDebut, dateFin] = map[periode] || map['mois'];
+      // Période précédente (même durée)
+      const diff = dateFin - dateDebut;
+      dateDebutPrec = new Date(dateDebut.getTime() - diff);
+      dateFinPrec = new Date(dateDebut.getTime());
+    }
+    const now2 = new Date();
+    dateDebut = new Date(now2.getFullYear(), now2.getMonth(), 1); // reset
+    dateFin = new Date();
+    dateDebutPrec = new Date(now2.getFullYear(), now2.getMonth()-1, 1);
+    dateFinPrec = new Date(now2.getFullYear(), now2.getMonth(), 1);
+
+    const where = { createdAt: { gte: dateDebut, lte: dateFin } };
+    const wherePrec = { createdAt: { gte: dateDebutPrec, lte: dateFinPrec } };
+    const whereFiliale = filiale ? { ...where, filiale } : where;
+
+    // Requêtes parallèles
+    const [
+      encTotal, decTotal, encPrec, decPrec,
+      encParFiliale, decParFiliale,
+      encParType, decParCateg,
+      caisses,
+      caYakro, nbCommandesYakro,
+      lotsVendus, caFoncier,
+      livTotal, caLiya,
+      encCourbe, decCourbe,
+      retardsPmt,
+    ] = await Promise.all([
+      // CA et dépenses période actuelle
+      prisma.encaissement.aggregate({ _sum:{ montant:true }, where: whereFiliale }),
+      prisma.decaissement.aggregate({ _sum:{ montant:true }, where: whereFiliale }),
+      // Période précédente pour comparaison
+      prisma.encaissement.aggregate({ _sum:{ montant:true }, where: filiale ? { ...wherePrec, filiale } : wherePrec }),
+      prisma.decaissement.aggregate({ _sum:{ montant:true }, where: filiale ? { ...wherePrec, filiale } : wherePrec }),
+      // Répartition par filiale
+      prisma.encaissement.groupBy({ by:['filiale'], _sum:{ montant:true }, where }),
+      prisma.decaissement.groupBy({ by:['filiale'], _sum:{ montant:true }, where }),
+      // Par mode de paiement
+      prisma.encaissement.groupBy({ by:['typePaiement'], _sum:{ montant:true }, _count:{ id:true }, where: whereFiliale }),
+      // Par catégorie de dépense
+      prisma.decaissement.groupBy({ by:['categorie'], _sum:{ montant:true }, where: whereFiliale, orderBy:{ _sum:{ montant:'desc' } }, take:10 }),
+      // Caisses
+      prisma.caisse.findMany({ where:{ actif:true }, orderBy:{ filiale:'asc' } }),
+      // Yakro
+      prisma.paiementYakro.aggregate({ _sum:{ montant:true }, where:{ createdAt:{ gte:dateDebut } } }),
+      prisma.commandeYakro.count({ where:{ statut:'PAYEE', createdAt:{ gte:dateDebut } } }),
+      // TOPTELSIG
+      prisma.lot.count({ where:{ statut:'VENDU' } }),
+      prisma.paiementFoncier.aggregate({ _sum:{ montant:true }, where:{ createdAt:{ gte:dateDebut } } }),
+      // LiYA
+      prisma.livraison.count({ where:{ createdAt:{ gte:dateDebut } } }),
+      prisma.encaissement.aggregate({ _sum:{ montant:true }, where:{ filiale:'LIYA', createdAt:{ gte:dateDebut } } }),
+      // Courbes 30 jours
+      prisma.encaissement.groupBy({ by:['createdAt'], _sum:{ montant:true }, where: whereFiliale }),
+      prisma.decaissement.groupBy({ by:['createdAt'], _sum:{ montant:true }, where: whereFiliale }),
+      // Impayés / retards
+      prisma.echeancier.count({ where:{ statut:'RETARD' } }),
+    ]);
+
+    const caTotal = encTotal._sum.montant || 0;
+    const depTotal = decTotal._sum.montant || 0;
+    const caPrecVal = encPrec._sum.montant || 0;
+    const depPrecVal = decPrec._sum.montant || 0;
+    const variationCA = caPrecVal > 0 ? Math.round((caTotal-caPrecVal)/caPrecVal*100) : 0;
+    const variationDep = depPrecVal > 0 ? Math.round((depTotal-depPrecVal)/depPrecVal*100) : 0;
+    const resultatBrut = caTotal - depTotal;
+    const marge = caTotal > 0 ? Math.round(resultatBrut/caTotal*100) : 0;
+    const tresorerie = caisses.reduce((s,c)=>s+c.solde,0);
+
+    // Enrichir filiales
+    const filialesMap = {};
+    encParFiliale.forEach(e => { filialesMap[e.filiale] = { filiale:e.filiale, ca:e._sum.montant||0, dep:0, pct:0 }; });
+    decParFiliale.forEach(e => { if(!filialesMap[e.filiale]) filialesMap[e.filiale]={filiale:e.filiale,ca:0,dep:0,pct:0}; filialesMap[e.filiale].dep=e._sum.montant||0; });
+    const filiales = Object.values(filialesMap).map(f=>({ ...f, resultat:f.ca-f.dep, marge:f.ca>0?Math.round((f.ca-f.dep)/f.ca*100):0, pct:caTotal>0?Math.round(f.ca/caTotal*100):0 }));
+
+    // Courbe 7 jours
+    const courbe30 = {};
+    for (let i=29; i>=0; i--) {
+      const d = new Date(); d.setDate(d.getDate()-i);
+      const k = d.toLocaleDateString('fr', { day:'2-digit', month:'short' });
+      courbe30[k] = { date:k, encaissements:0, decaissements:0 };
+    }
+    encCourbe.forEach(e => { const k = new Date(e.createdAt).toLocaleDateString('fr',{day:'2-digit',month:'short'}); if(courbe30[k]) courbe30[k].encaissements+=e._sum.montant||0; });
+    decCourbe.forEach(e => { const k = new Date(e.createdAt).toLocaleDateString('fr',{day:'2-digit',month:'short'}); if(courbe30[k]) courbe30[k].decaissements+=e._sum.montant||0; });
+
+    // Alertes
+    const alertes = [];
+    if (resultatBrut < 0) alertes.push({ type:'DEFICIT', gravite:'CRITIQUE', msg:`Résultat négatif: ${Math.abs(resultatBrut).toLocaleString('fr')} F` });
+    if (variationCA < -10) alertes.push({ type:'BAISSE_CA', gravite:'ATTENTION', msg:`CA en baisse de ${Math.abs(variationCA)}% vs période précédente` });
+    caisses.filter(c=>c.solde<0).forEach(c=>alertes.push({ type:'CAISSE_NEG', gravite:'CRITIQUE', msg:`Caisse "${c.nom}" négative: ${c.solde.toLocaleString('fr')} F` }));
+    if (retardsPmt > 0) alertes.push({ type:'RETARDS', gravite:'ATTENTION', msg:`${retardsPmt} échéance(s) foncière(s) en retard` });
+
+    res.json({
+      periode: { debut: dateDebut, fin: dateFin },
+      kpi: { caTotal, depTotal, resultatBrut, resultatNet: resultatBrut, marge, tresorerie, variationCA, variationDep, retardsPmt, caPrec: caPrecVal, depPrec: depPrecVal },
+      filiales,
+      paiements: encParType.map(e=>({ mode:e.typePaiement, montant:e._sum.montant||0, nbTransactions:e._count.id||0, ticketMoyen:e._count.id>0?Math.round((e._sum.montant||0)/e._count.id):0 })),
+      depenses: decParCateg.map(d=>({ categorie:d.categorie||'Autre', montant:d._sum.montant||0, pct:depTotal>0?Math.round((d._sum.montant||0)/depTotal*100):0 })),
+      caisses: caisses.map(c=>({ id:c.id, nom:c.nom, filiale:c.filiale, solde:c.solde })),
+      activites: {
+        yakro: { ca:caYakro._sum.montant||0, nbCommandes:nbCommandesYakro },
+        toptelsig: { ca:caFoncier._sum.montant||0, lotsVendus },
+        liya: { ca:caLiya._sum.montant||0, nbLivraisons:livTotal },
+      },
+      courbe: Object.values(courbe30),
+      alertes,
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });

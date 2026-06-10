@@ -71,6 +71,8 @@ export const financeAPI = {
   addDecaissement: (data) => api.post('/finance/decaissements', data),
   validerDecaissement: (id, data) => api.put(`/finance/decaissements/${id}/valider`, data),
   rapport: (params) => api.get('/finance/rapport', { params }),
+  pilotage: (params) => api.get('/finance/pilotage', { params }),
+  topClassements: (params) => api.get('/finance/pilotage', { params }),
 };
 
 // ── STOCKS

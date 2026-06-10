@@ -214,7 +214,6 @@ router.post('/:id/paie', auth, requireRole('DG', 'RH', 'COMPTABLE'), async (req,
   }
 });
 
-module.exports = router;
 
 // ── Import Excel employés ─────────────────────────────────────────────────────
 const multer = require('multer');
@@ -429,3 +428,5 @@ router.post('/:id/changement-poste', auth, requireRole('DG', 'DIRECTEUR', 'RH'),
     res.json({ message: 'Changement de poste enregistré' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+module.exports = router;

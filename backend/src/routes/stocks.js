@@ -191,7 +191,6 @@ router.put('/achats/:id/reception', auth, async (req, res) => {
   }
 });
 
-module.exports = router;
 
 // POST /stocks/mouvements/transfert — Transfert inter-filiales ou inter-dépôts
 router.post('/mouvements/transfert', auth, async (req, res) => {
@@ -342,3 +341,5 @@ router.get('/template-import', auth, (req, res) => {
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.send('\uFEFF' + [headers, ...example].map(r => r.join(';')).join('\r\n'));
 });
+
+module.exports = router;

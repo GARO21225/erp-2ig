@@ -367,7 +367,6 @@ async function logAudit(prisma, userId, action, ip, label, filiale = 'GROUPE', n
   } catch (e) { /* Non bloquant */ }
 }
 
-module.exports = router;
 
 // ── GET /api/auth/utilisateurs — Liste tous les utilisateurs (DG/RH)
 router.get('/utilisateurs', auth, async (req, res) => {
@@ -416,3 +415,5 @@ router.delete('/utilisateurs/:id', auth, async (req, res) => {
     res.json({ message: 'Compte désactivé' });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
+
+module.exports = router;
