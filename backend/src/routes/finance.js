@@ -288,7 +288,6 @@ router.get('/stats', auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-module.exports = router;
 
 // ── GET /api/finance/pilotage ── Centre de pilotage DG ────────────────────
 router.get('/pilotage', auth, async (req, res) => {
@@ -420,3 +419,5 @@ router.get('/pilotage', auth, async (req, res) => {
     });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
+
+module.exports = router;
