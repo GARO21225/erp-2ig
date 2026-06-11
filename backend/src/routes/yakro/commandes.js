@@ -62,7 +62,7 @@ router.get('/caisse', auth, yakro, async (req, res) => {
 // POST /api/yakro/commandes — Nouvelle commande
 router.post('/', auth, yakro, VALIDATORS.commande, async (req, res) => {
   try {
-    const { tableId, type, nbCouverts, lignes, notes, serveurId, remise = 0 } = req.body;
+    const { tableId, type, nbCouverts, lignes, notes, serveurId, serveurNom, remise = 0 } = req.body;
 
     let sousTotal = 0;
     const lignesData = [];
@@ -82,7 +82,7 @@ router.post('/', auth, yakro, VALIDATORS.commande, async (req, res) => {
 
     const numero = `YG-${Date.now()}`;
     const commande = await prisma.commandeYakro.create({
-      data: { numero, tableId, serveurId: serveurId || req.user.id, type: type || 'SUR_PLACE',
+      data: { numero, tableId, serveurId: serveurId || req.user.id, serveurNom: serveurNom || null, type: type || 'SUR_PLACE',
               nbCouverts: nbCouverts || 1, sousTotal, remise: remiseMontant, total, notes,
               lignes: { create: lignesData } },
       include: { table: true, lignes: true }

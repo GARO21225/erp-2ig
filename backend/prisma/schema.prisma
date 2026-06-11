@@ -508,6 +508,7 @@ model CommandeYakro {
   tableId     String?
   table       TableRestaurant? @relation(fields: [tableId], references: [id])
   serveurId   String?
+  serveurNom  String?  // Dénormalisé pour stats rapides
   type        String   @default("SUR_PLACE") // SUR_PLACE, EMPORTER, LIVRAISON
   statut      String   @default("EN_COURS") // EN_COURS, CUISINE, PRETE, SERVIE, ANNULEE, PAYEE
   nbCouverts  Int      @default(1)
@@ -1236,4 +1237,39 @@ model ModeleDocument {
   updatedAt       DateTime @updatedAt
 
   @@map("modeles_documents")
+}
+
+// ── YAKRO GRILL — ANNULATIONS & REMISES ─────────────────────────────────────
+model AnnulationYakro {
+  id            String   @id @default(cuid())
+  commandeId    String
+  ligneId       String?
+  menuNom       String
+  quantite      Int      @default(1)
+  montant       Float
+  motif         String
+  employeId     String?
+  employeNom    String
+  responsableId String?
+  responsableNom String?
+  createdAt     DateTime @default(now())
+
+  @@map("annulations_yakro")
+}
+
+model RemiseYakro {
+  id              String   @id @default(cuid())
+  commandeId      String
+  montantAvant    Float
+  montantRemise   Float
+  montantFinal    Float
+  motif           String
+  employeId       String?
+  employeNom      String
+  responsableId   String?
+  responsableNom  String?
+  valide          Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  @@map("remises_yakro")
 }

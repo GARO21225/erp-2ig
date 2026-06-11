@@ -26,8 +26,8 @@ const NAV = {
     { label: 'Stocks & Achats', to: '/stocks', icon: Package },
   ],
   YAKRO_GRILL: [
+    { label: 'Dashboard', to: '/yakro/dashboard', icon: Activity },
     { label: 'Plan de Salle (POS)', to: '/yakro/pos', icon: Layers },
-    { label: 'Commandes', to: '/yakro/commandes', icon: ClipboardList },
     { label: 'Menu & Carte', to: '/yakro/menu', icon: BookOpen },
     { label: 'Caisse du jour', to: '/yakro/caisse', icon: Wallet },
     { label: 'Réservations', to: '/yakro/reservations', icon: Calendar },

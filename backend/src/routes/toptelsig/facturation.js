@@ -15,20 +15,9 @@ async function genNumero(filiale, type) {
   const slug = { FACTURE:'FAC', PROFORMA:'PRF', RECU:'REC', SITUATION:'SIT', CONTRAT:'CTR', ATTESTATION:'ATT' }[type] || 'DOC';
   const fil = filiale.slice(0, 3).toUpperCase();
   const annee = new Date().getFullYear();
-
-  // Incrémenter atomiquement
-  const field = type === 'RECU' ? 'compteurRecu' : type === 'PROFORMA' ? 'compteurProforma' : 'compteurFacture';
-  const params = await prisma.$queryRaw`
-    UPDATE parametres_entreprise
-    SET ${prisma.raw(`"${field}" = "${field}" + 1`)}
-    WHERE filiale = ${filiale}
-    RETURNING ${prisma.raw(`"${field}"`)}
-  `.catch(async () => {
-    // Fallback si pas de paramètres
-    const count = await prisma.documentGenere.count({ where: { type, filiale } });
-    return [{ [field]: count + 1 }];
-  });
-  const num = params?.[0]?.[field] || 1;
+  // Compter les documents existants + 1 (simple, idempotent)
+  const count = await prisma.documentGenere.count({ where: { filiale } }).catch(() => 0);
+  const num = count + 1;
   return `${slug}-${fil}-${annee}-${String(num).padStart(6, '0')}`;
 }
 

@@ -132,7 +132,11 @@ function PanelCommande({ table, menu, onClose, onSave, loading }) {
             <span style={{ fontFamily: 'Syne', fontWeight: 800, fontSize: 22, color: '#8B1A1A' }}>{total.toLocaleString('fr')} F</span>
           </div>
           <button disabled={lignes.length === 0 || loading}
-            onClick={() => onSave({ tableId: table.id, lignes, notes, nbCouverts, serveurId: serveurId || null })}
+            onClick={() => {
+              const serveurChoisi = listeServeurs.find(s => s.id === serveurId);
+              const serveurNom = serveurChoisi ? `${serveurChoisi.prenom} ${serveurChoisi.nom}` : null;
+              onSave({ tableId: table.id, lignes, notes, nbCouverts, serveurId: serveurId || null, serveurNom });
+            }}
             style={{ width: '100%', padding: 12, background: lignes.length === 0 ? '#ddd' : '#8B1A1A', color: 'white', border: 'none', borderRadius: 10, fontFamily: 'Syne', fontWeight: 700, fontSize: 15, cursor: lignes.length === 0 ? 'not-allowed' : 'pointer' }}>
             {loading ? 'Envoi...' : 'Envoyer en cuisine'}
           </button>
