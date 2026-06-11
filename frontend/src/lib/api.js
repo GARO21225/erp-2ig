@@ -132,6 +132,7 @@ export const yakroAPI = {
   remisesYakro: (params) => api.get('/yakro/caisse-session/remises', { params }),
   createAnnulation: (data) => api.post('/yakro/caisse-session/annulations', data),
   createRemise: (data) => api.post('/yakro/caisse-session/remises', data),
+  historique: (params) => api.get('/yakro/commandes/historique', { params }),
 };
 
 // ── TOPTELSIG
@@ -140,6 +141,8 @@ export const toptelsigAPI = {
   getProjet: (id) => api.get(`/toptelsig/projets/${id}`),
   createProjet: (data) => api.post('/toptelsig/projets', data),
   updateProjet: (id, data) => api.put(`/toptelsig/projets/${id}`, data),
+  updateLot: (id, data) => api.put(`/toptelsig/lots/${id}`, data),
+  deleteLot: (id) => api.delete(`/toptelsig/lots/${id}`),
   importLots: (projetId, file) => { const fd = new FormData(); fd.append('fichier', file); fd.append('projetId', projetId); return api.post('/toptelsig/lots/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }); },
   templateLots: () => api.get('/toptelsig/lots/template', { responseType: 'blob' }),
   categoriesDepenses: () => api.get('/toptelsig/projets/categories-depenses'),
@@ -176,6 +179,7 @@ export const toptelsigAPI = {
   depenses: (params) => api.get('/toptelsig/depenses', { params }),
   crmProspects: (params) => api.get('/toptelsig/crm/prospects', { params }),
   crmDashboard: () => api.get('/toptelsig/crm/dashboard'),
+  crmTemplateImport: () => api.get('/toptelsig/crm/template-import', { responseType: 'blob' }),
   crmRelances: (id) => api.get(`/toptelsig/crm/${id}/relances`),
   crmAddRelance: (id, data) => api.post(`/toptelsig/crm/${id}/relances`, data),
   crmUpdate: (id, data) => api.put(`/toptelsig/crm/${id}`, data),

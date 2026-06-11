@@ -1,210 +1,304 @@
+/**
+ * YAKRO GRILL — Caisse du Jour
+ * Onglets : Résumé · Historique passages · Export
+ */
+import { useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { yakroAPI } from '../../lib/api';
-import { useState } from 'react';
-import FilterBar from '../../components/ui/FilterBar';
-import ExportBar from '../../components/ui/ExportBar';
-import { exportPDF } from '../../lib/export';
-import {
-  BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
-  ResponsiveContainer, Tooltip, Legend
-} from 'recharts';
+import { Download, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from 'recharts';
 
-const TYPE_COLORS = {
-  ESPECES:'#27500A', ORANGE_MONEY:'#E87722', MTN_MONEY:'#FFCC00',
-  MOOV_MONEY:'#0066CC', WAVE:'#1A73E8', BANQUE:'#5F5E5A'
-};
-const fmtF = n => n >= 1000000 ? `${(n/1000000).toFixed(2)}M F` : `${Math.round(n/1000)}k F`;
+const fmtF = n => n >= 1000000 ? `${(n/1000000).toFixed(2)}M F` : n >= 1000 ? `${Math.round(n/1000)}k F` : `${Math.round(n||0)} F`;
+const fmtFull = n => Math.round(n||0).toLocaleString('fr') + ' F';
+const fmtH = d => new Date(d).toLocaleTimeString('fr', { hour:'2-digit', minute:'2-digit' });
+const fmtD = d => new Date(d).toLocaleDateString('fr', { day:'2-digit', month:'short' });
+
+const PIE_COLORS = ['#27500A','#E87722','#FFCC00','#1a3f6f','#00B9F1','#5F5E5A'];
+const MODE_LABELS = { ESPECES:'Espèces', ORANGE_MONEY:'Orange Money', MTN_MONEY:'MTN Money', MOOV_MONEY:'Moov Money', WAVE:'Wave', BANQUE:'Banque/TPE' };
+
+function LigneCommande({ cmd }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ border:'0.5px solid #e8e7e1', borderRadius:8, overflow:'hidden', marginBottom:4 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px', cursor:'pointer', background:'white' }}
+        onClick={() => setOpen(v => !v)}>
+        <div style={{ width:24, textAlign:'center' }}>
+          {open ? <ChevronDown size={12} color="#888"/> : <ChevronRight size={12} color="#888"/>}
+        </div>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+            <span style={{ fontFamily:'Syne', fontWeight:700, fontSize:12 }}>{cmd.numero}</span>
+            <span style={{ fontSize:11, color:'#888' }}>{cmd.table}</span>
+            <span style={{ fontSize:10, background:'#EEF3FB', color:'#1a3f6f', borderRadius:6, padding:'1px 6px' }}>
+              👤 {cmd.serveurNom}
+            </span>
+            <span style={{ fontSize:10, color:'#888' }}>
+              {cmd.nbCouverts} pers.
+            </span>
+          </div>
+        </div>
+        <div style={{ flexShrink:0, textAlign:'right' }}>
+          <div style={{ fontFamily:'Syne', fontWeight:800, fontSize:14, color:'#8B1A1A' }}>{fmtFull(cmd.total)}</div>
+          <div style={{ fontSize:10, color:'#888' }}>{fmtH(cmd.createdAt)}</div>
+        </div>
+        <div style={{ flexShrink:0, display:'flex', gap:4, flexWrap:'wrap', maxWidth:140 }}>
+          {cmd.paiements.map((p,i) => (
+            <span key={i} style={{ fontSize:9, background:PIE_COLORS[i%PIE_COLORS.length]+'20', color:PIE_COLORS[i%PIE_COLORS.length], borderRadius:6, padding:'1px 5px', fontWeight:500 }}>
+              {MODE_LABELS[p.type]||p.type}
+            </span>
+          ))}
+        </div>
+      </div>
+      {open && (
+        <div style={{ background:'#FAFAF8', borderTop:'0.5px solid #f0efe9', padding:'8px 12px 10px 46px' }}>
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11 }}>
+            <thead>
+              <tr style={{ color:'#888', borderBottom:'0.5px solid #e8e7e1' }}>
+                <th style={{ textAlign:'left', padding:'3px 8px 3px 0' }}>Article</th>
+                <th style={{ textAlign:'center', padding:'3px 8px' }}>Qté</th>
+                <th style={{ textAlign:'right', padding:'3px 0 3px 8px' }}>P.U</th>
+                <th style={{ textAlign:'right', padding:'3px 0 3px 8px' }}>Sous-total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cmd.lignes.map((l,i) => (
+                <tr key={i} style={{ borderBottom:'0.5px solid #f5f5f5' }}>
+                  <td style={{ padding:'4px 8px 4px 0', fontWeight:500 }}>{l.nom}</td>
+                  <td style={{ textAlign:'center', padding:'4px 8px' }}>{l.quantite}</td>
+                  <td style={{ textAlign:'right', padding:'4px 0 4px 8px', color:'#888' }}>{fmtFull(l.prixUnitaire)}</td>
+                  <td style={{ textAlign:'right', padding:'4px 0 4px 8px', fontWeight:600 }}>{fmtFull(l.sous_total)}</td>
+                </tr>
+              ))}
+              <tr style={{ borderTop:'1.5px solid #e8e7e1', background:'#F7F7F5' }}>
+                <td colSpan={3} style={{ padding:'5px 8px 5px 0', fontWeight:700 }}>TOTAL</td>
+                <td style={{ textAlign:'right', padding:'5px 0 5px 8px', fontFamily:'Syne', fontWeight:800, color:'#8B1A1A' }}>{fmtFull(cmd.total)}</td>
+              </tr>
+            </tbody>
+          </table>
+          {cmd.paiements.length > 0 && (
+            <div style={{ marginTop:6, fontSize:10, color:'#888', display:'flex', gap:10, flexWrap:'wrap' }}>
+              {cmd.paiements.map((p,i) => (
+                <span key={i}>{MODE_LABELS[p.type]||p.type}: <strong>{fmtFull(p.montant)}</strong>{p.reference ? ` (${p.reference})` : ''}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function CaisseYakro() {
-  const [filtreDates, setFiltreDates] = useState(null);
+  const [onglet, setOnglet] = useState('resume');
+  const [dateFilter, setDateFilter] = useState(new Date().toISOString().slice(0,10));
+
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['caisse-yakro', filtreDates],
+    queryKey: ['caisse-yakro'],
     queryFn: yakroAPI.caisse,
-    refetchInterval: 30000,
+    staleTime: 30000,
+    refetchInterval: 60000,
+  });
+
+  const { data: historique = [], isLoading: loadHisto } = useQuery({
+    queryKey: ['historique-caisse', dateFilter],
+    queryFn: () => yakroAPI.historique({
+      dateDebut: dateFilter ? `${dateFilter}T00:00:00` : undefined,
+      dateFin: dateFilter ? `${dateFilter}T23:59:59` : undefined,
+      limit: 200,
+    }),
+    staleTime: 15000,
   });
 
   const total = data?.totalJour || 0;
   const totalBar = data?.totalBar || 0;
   const totalCuisine = data?.totalCuisine || 0;
-  const pctBar = data?.pctBar || 0;
-  const pctCuisine = data?.pctCuisine || 0;
   const parPaiement = data?.parPaiement || [];
-  const parCategorie = data?.parCategorie || [];
-  const rein = data?.reinvestissement || {};
   const nbCommandes = data?.nbCommandes || 0;
+  const ticketMoyen = nbCommandes > 0 ? Math.round(total / nbCommandes) : 0;
 
-  const exportPDFCaisse = () => {
-    const entetes = ['Catégorie','Montant (FCFA)','Type'];
-    const lignes = parCategorie.map(c => [c.categorie, c.montant.toLocaleString('fr'), c.isBar ? 'Bar' : 'Cuisine']);
-    lignes.push(['TOTAL BAR', totalBar.toLocaleString('fr'), ''], ['TOTAL CUISINE', totalCuisine.toLocaleString('fr'), ''], ['TOTAL GÉNÉRAL', total.toLocaleString('fr'), '']);
-    exportPDF('Caisse du Jour — Yakro Grill', 'caisse_yakro', entetes, lignes, { sousTitre: `${nbCommandes} commandes · ${new Date().toLocaleDateString('fr')}` });
+  const piePaiement = parPaiement.filter(p => p.montant > 0).map((p,i) => ({
+    name: MODE_LABELS[p.type] || p.type,
+    value: p.montant,
+    color: PIE_COLORS[i % PIE_COLORS.length],
+  }));
+
+  const exportCSV = () => {
+    const rows = [['Numéro','Heure','Table','Serveur','Couverts','Total','Modes paiement','Détail articles']];
+    (Array.isArray(historique) ? historique : []).forEach(c => {
+      rows.push([
+        c.numero, fmtH(c.createdAt), c.table, c.serveurNom, c.nbCouverts, c.total,
+        c.paiements.map(p=>`${MODE_LABELS[p.type]||p.type}:${p.montant}`).join(' / '),
+        c.lignes.map(l=>`${l.nom}×${l.quantite}`).join(', '),
+      ]);
+    });
+    const csv = '\uFEFF' + rows.map(r => r.join(';')).join('\r\n');
+    const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `caisse_yakro_${dateFilter}.csv`; a.click();
+    URL.revokeObjectURL(url);
   };
 
-  // Données pour camembert mode de paiement
-  const piePaiement = parPaiement.map(p => ({ name: p.type?.replace('_',' '), value: p.montant }));
-  const pieColors = Object.values(TYPE_COLORS);
+  const listHisto = Array.isArray(historique) ? historique : [];
+  const totalHisto = listHisto.reduce((s,c) => s + (c.total||0), 0);
 
   return (
     <div className="page-enter">
       <div className="page-header">
         <div>
-          <h1 style={{ margin:0, fontSize:20, fontFamily:'Syne', fontWeight:800, color:'#8B1A1A' }}>🏦 Caisse du jour</h1>
-          <p style={{ margin:'4px 0 0', fontSize:12, color:'#888' }}>Yakro Grill · {new Date().toLocaleDateString('fr', { weekday:'long', day:'2-digit', month:'long', year:'numeric' })}</p>
+          <h1 style={{ margin:0, fontFamily:'Syne', fontWeight:800, fontSize:20, color:'#8B1A1A' }}>🏦 Caisse du Jour</h1>
+          <p style={{ margin:'4px 0 0', fontSize:12, color:'#888' }}>
+            {nbCommandes} ticket(s) · <strong>{fmtF(total)}</strong> encaissé
+          </p>
         </div>
         <div style={{ display:'flex', gap:8 }}>
-          <FilterBar onChange={setFiltreDates} defaultPreset="today" color="#8B1A1A" />
-          <ExportBar onPDFClick={exportPDFCaisse} />
-          <button className="btn btn-ghost btn-sm" onClick={refetch}>🔄</button>
+          <button className="btn btn-ghost btn-sm" onClick={()=>refetch()}><RefreshCw size={13}/></button>
+          <button className="btn btn-ghost btn-sm" onClick={exportCSV}><Download size={13}/> Exporter CSV</button>
         </div>
       </div>
 
-      {/* KPI principaux */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:12, marginBottom:20 }}>
-        <div className="kpi" style={{ background:'linear-gradient(135deg, #8B1A1A, #A83030)', border:'none', color:'white' }}>
-          <div style={{ fontSize:11, opacity:0.8, marginBottom:4 }}>CA TOTAL du jour</div>
-          <div style={{ fontFamily:'Syne', fontWeight:800, fontSize:26 }}>{fmtF(total)}</div>
-          <div style={{ fontSize:11, opacity:0.7, marginTop:4 }}>{nbCommandes} commande(s) payée(s)</div>
-        </div>
-        <div className="kpi" style={{ borderLeft:'3px solid #E87722' }}>
-          <div className="kpi-label">🍺 CA Bar</div>
-          <div className="kpi-value" style={{ fontSize:22, color:'#E87722' }}>{fmtF(totalBar)}</div>
-          <div style={{ marginTop:6 }}>
-            <div style={{ height:4, background:'#f0efe9', borderRadius:2 }}>
-              <div style={{ width:`${pctBar}%`, height:'100%', background:'#E87722', borderRadius:2 }} />
-            </div>
-            <div style={{ fontSize:10, color:'#888', marginTop:2 }}>{pctBar}% du CA total</div>
-          </div>
-        </div>
-        <div className="kpi" style={{ borderLeft:'3px solid #8B1A1A' }}>
-          <div className="kpi-label">🍽️ CA Cuisine</div>
-          <div className="kpi-value" style={{ fontSize:22, color:'#8B1A1A' }}>{fmtF(totalCuisine)}</div>
-          <div style={{ marginTop:6 }}>
-            <div style={{ height:4, background:'#f0efe9', borderRadius:2 }}>
-              <div style={{ width:`${pctCuisine}%`, height:'100%', background:'#8B1A1A', borderRadius:2 }} />
-            </div>
-            <div style={{ fontSize:10, color:'#888', marginTop:2 }}>{pctCuisine}% du CA total</div>
-          </div>
-        </div>
-        <div className="kpi" style={{ borderLeft:'3px solid #27500A' }}>
-          <div className="kpi-label">💰 Réinvestissement (50%)</div>
-          <div className="kpi-value" style={{ fontSize:22, color:'#27500A' }}>{fmtF(rein.total || 0)}</div>
-          <div style={{ fontSize:10, color:'#888', marginTop:4 }}>
-            Bar: {fmtF(rein.bar||0)} · Cuisine: {fmtF(rein.cuisine||0)}
-          </div>
-        </div>
+      {/* Onglets */}
+      <div style={{ display:'flex', gap:4, borderBottom:'1px solid #e8e7e1', marginBottom:20 }}>
+        {[['resume','📊 Résumé'],['historique','🧾 Historique passages']].map(([k,v])=>(
+          <button key={k} onClick={()=>setOnglet(k)}
+            style={{ padding:'8px 16px', border:'none', background:'none', cursor:'pointer', fontSize:12,
+              fontWeight:onglet===k?600:400, color:onglet===k?'#8B1A1A':'#888',
+              borderBottom:onglet===k?'2px solid #8B1A1A':'2px solid transparent' }}>
+            {v}
+          </button>
+        ))}
       </div>
 
-      {/* Graphiques */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:20 }}>
-        {/* CA bar vs cuisine */}
-        <div className="card">
-          <div style={{ fontFamily:'Syne', fontWeight:700, fontSize:14, marginBottom:12 }}>
-            📊 Départage Bar vs Cuisine
+      {/* Onglet Résumé */}
+      {onglet === 'resume' && (
+        <>
+          {/* KPI */}
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:20 }}>
+            {[
+              { label:'CA Total', value:fmtF(total), color:'#8B1A1A' },
+              { label:'Bar 🍾', value:fmtF(totalBar), color:'#E87722' },
+              { label:'Cuisine 🍽️', value:fmtF(totalCuisine), color:'#27500A' },
+              { label:'Ticket moyen', value:fmtF(ticketMoyen), color:'#1a3f6f' },
+            ].map((k,i)=>(
+              <div key={i} className="kpi" style={{ borderTop:`3px solid ${k.color}` }}>
+                <div className="kpi-label">{k.label}</div>
+                <div style={{ fontFamily:'Syne', fontWeight:800, fontSize:20, color:k.color }}>{k.value}</div>
+              </div>
+            ))}
           </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={[{ name:'Bar 🍺', montant: totalBar, fill:'#E87722' }, { name:'Cuisine 🍽️', montant: totalCuisine, fill:'#8B1A1A' }]} barSize={40}>
-              <XAxis dataKey="name" tick={{ fontSize:12 }} />
-              <YAxis tick={{ fontSize:10 }} tickFormatter={v => v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : `${Math.round(v/1000)}k`} />
-              <Tooltip formatter={v => [v.toLocaleString('fr') + ' F', '']} />
-              <Bar dataKey="montant" radius={[6,6,0,0]}>
-                <Cell fill="#E87722" />
-                <Cell fill="#8B1A1A" />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-          <div style={{ display:'flex', gap:12, justifyContent:'center', marginTop:8, fontSize:12 }}>
-            <div style={{ display:'flex', alignItems:'center', gap:4 }}><span style={{ width:10, height:10, background:'#E87722', borderRadius:2, display:'inline-block' }} />Bar: {pctBar}%</div>
-            <div style={{ display:'flex', alignItems:'center', gap:4 }}><span style={{ width:10, height:10, background:'#8B1A1A', borderRadius:2, display:'inline-block' }} />Cuisine: {pctCuisine}%</div>
-          </div>
-        </div>
 
-        {/* Mode de paiement */}
-        <div className="card">
-          <div style={{ fontFamily:'Syne', fontWeight:700, fontSize:14, marginBottom:12 }}>
-            💳 Modes de paiement
-          </div>
-          {piePaiement.length > 0 ? (
-            <div style={{ display:'flex', gap:16, alignItems:'center' }}>
-              <ResponsiveContainer width="45%" height={180}>
-                <PieChart>
-                  <Pie data={piePaiement} cx="50%" cy="50%" outerRadius={70} dataKey="value" paddingAngle={3}>
-                    {piePaiement.map((_, i) => <Cell key={i} fill={pieColors[i % pieColors.length]} />)}
-                  </Pie>
-                  <Tooltip formatter={v => [fmtF(v), '']} />
-                </PieChart>
+          {/* Graphiques */}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:16 }}>
+            {/* Bar vs Cuisine */}
+            <div className="card">
+              <div style={{ fontFamily:'Syne', fontWeight:700, fontSize:13, marginBottom:12 }}>Bar vs Cuisine</div>
+              <ResponsiveContainer width="100%" height={150}>
+                <BarChart data={[
+                  { name:'Bar 🍾', montant: totalBar, fill:'#E87722' },
+                  { name:'Cuisine 🍽️', montant: totalCuisine, fill:'#8B1A1A' }
+                ]} barSize={50}>
+                  <XAxis dataKey="name" tick={{ fontSize:11 }}/>
+                  <YAxis tick={{ fontSize:9 }} tickFormatter={v=>v>=1000?`${Math.round(v/1000)}k`:v}/>
+                  <Tooltip formatter={v=>[fmtFull(v),'']}/>
+                  <Bar dataKey="montant" radius={[6,6,0,0]}>
+                    {[{fill:'#E87722'},{fill:'#8B1A1A'}].map((e,i)=>
+                      <Cell key={i} fill={e.fill}/>
+                    )}
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
-              <div style={{ flex:1, display:'flex', flexDirection:'column', gap:6 }}>
-                {piePaiement.map((p, i) => (
-                  <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:12 }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-                      <span style={{ width:8, height:8, borderRadius:'50%', background:pieColors[i%pieColors.length], display:'inline-block' }} />
-                      {p.name}
-                    </div>
-                    <strong style={{ color:pieColors[i%pieColors.length] }}>{fmtF(p.value)}</strong>
+            </div>
+
+            {/* Modes paiement */}
+            <div className="card">
+              <div style={{ fontFamily:'Syne', fontWeight:700, fontSize:13, marginBottom:12 }}>Modes de paiement</div>
+              {piePaiement.length > 0 ? (
+                <div style={{ display:'flex', gap:12, alignItems:'center' }}>
+                  <div style={{ width:110, height:110, flexShrink:0 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={piePaiement} cx="50%" cy="50%" outerRadius={50} innerRadius={22} paddingAngle={3} dataKey="value">
+                          {piePaiement.map((e,i)=><Cell key={i} fill={e.color}/>)}
+                        </Pie>
+                        <Tooltip formatter={v=>[fmtFull(v),'']}/>
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div style={{ flex:1, display:'flex', flexDirection:'column', gap:4 }}>
+                    {piePaiement.map((p,i)=>{
+                      const pct = total>0?Math.round(p.value/total*100):0;
+                      return (
+                        <div key={i}>
+                          <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, marginBottom:1 }}>
+                            <span style={{ display:'flex', alignItems:'center', gap:4 }}>
+                              <span style={{ width:7,height:7,borderRadius:'50%',background:p.color,display:'inline-block' }}/>
+                              {p.name}
+                            </span>
+                            <span style={{ fontWeight:600 }}>{pct}%</span>
+                          </div>
+                          <div style={{ height:3,background:'#F7F7F5',borderRadius:2 }}>
+                            <div style={{ height:'100%',width:`${pct}%`,background:p.color,borderRadius:2 }}/>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : <div style={{ height:110, display:'flex', alignItems:'center', justifyContent:'center', color:'#ccc', fontSize:12 }}>Aucun paiement</div>}
+            </div>
+          </div>
+
+          {/* Par catégorie */}
+          {data?.parCategorie?.length > 0 && (
+            <div className="card">
+              <div style={{ fontFamily:'Syne', fontWeight:700, fontSize:13, marginBottom:10 }}>Ventes par catégorie</div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))', gap:8 }}>
+                {data.parCategorie.slice(0,10).map((c,i) => (
+                  <div key={i} style={{ background:c.isBar?'#FEF6F0':'#F7F7F5', borderRadius:8, padding:'8px 12px', borderLeft:`3px solid ${c.isBar?'#E87722':'#8B1A1A'}` }}>
+                    <div style={{ fontSize:10, color:'#888', marginBottom:2 }}>{c.isBar?'🍾':'🍽️'} {c.categorie?.replace(/_/g,' ')}</div>
+                    <div style={{ fontFamily:'Syne', fontWeight:700, fontSize:14, color:c.isBar?'#E87722':'#8B1A1A' }}>{fmtF(c.montant)}</div>
                   </div>
                 ))}
               </div>
             </div>
+          )}
+        </>
+      )}
+
+      {/* Onglet Historique */}
+      {onglet === 'historique' && (
+        <div>
+          {/* Filtre date + stats */}
+          <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:14, flexWrap:'wrap' }}>
+            <div>
+              <label className="label" style={{ marginBottom:4 }}>Date</label>
+              <input type="date" className="input" style={{ width:160 }}
+                value={dateFilter} onChange={e=>setDateFilter(e.target.value)}/>
+            </div>
+            <div style={{ marginLeft:'auto', display:'flex', gap:10 }}>
+              {[
+                { label:`${listHisto.length} tickets`, color:'#1a3f6f' },
+                { label:`Total: ${fmtF(totalHisto)}`, color:'#8B1A1A' },
+              ].map((k,i)=>(
+                <div key={i} style={{ background:k.color+'12', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:600, color:k.color }}>
+                  {k.label}
+                </div>
+              ))}
+              <button className="btn btn-ghost btn-sm" onClick={exportCSV}><Download size={12}/> CSV</button>
+            </div>
+          </div>
+
+          {loadHisto ? (
+            <div style={{ textAlign:'center', color:'#888', padding:40 }}>Chargement...</div>
+          ) : listHisto.length === 0 ? (
+            <div className="empty-state"><p>Aucun ticket encaissé ce jour</p></div>
           ) : (
-            <div style={{ height:180, display:'flex', alignItems:'center', justifyContent:'center', color:'#ccc', fontSize:12 }}>
-              Aucun paiement aujourd'hui
+            <div>
+              {listHisto.map(cmd => <LigneCommande key={cmd.id} cmd={cmd}/>)}
             </div>
           )}
         </div>
-      </div>
-
-      {/* Détail par catégorie */}
-      <div className="card" style={{ padding:0, overflow:'hidden' }}>
-        <div style={{ padding:'12px 20px', borderBottom:'0.5px solid #e8e7e1', fontFamily:'Syne', fontWeight:700, fontSize:14 }}>
-          📋 Détail par catégorie de menu
-        </div>
-        <div className="table-container">
-          <table className="table-erp">
-            <thead>
-              <tr>
-                <th>Catégorie</th>
-                <th>Département</th>
-                <th>Montant</th>
-                <th>% du CA</th>
-                <th>Réinvest. (50%)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {parCategorie.map((c, i) => (
-                <tr key={i}>
-                  <td style={{ fontWeight:500 }}>{c.categorie}</td>
-                  <td>
-                    <span className={`badge ${c.isBar ? 'badge-liya' : 'badge-yakro'}`} style={{ fontSize:10 }}>
-                      {c.isBar ? '🍺 Bar' : '🍽️ Cuisine'}
-                    </span>
-                  </td>
-                  <td style={{ fontWeight:600, color: c.isBar ? '#E87722' : '#8B1A1A' }}>
-                    {c.montant.toLocaleString('fr')} F
-                  </td>
-                  <td style={{ fontSize:11, color:'#888' }}>
-                    {total > 0 ? Math.round(c.montant/total*100) : 0}%
-                  </td>
-                  <td style={{ color:'#27500A' }}>
-                    {Math.round(c.montant * 0.5).toLocaleString('fr')} F
-                  </td>
-                </tr>
-              ))}
-              {parCategorie.length === 0 && (
-                <tr><td colSpan={5}><div className="empty-state"><p>Aucune vente enregistrée aujourd'hui</p></div></td></tr>
-              )}
-              {parCategorie.length > 0 && (
-                <tr style={{ background:'#F7F7F5', fontWeight:700 }}>
-                  <td>TOTAL</td>
-                  <td></td>
-                  <td>{total.toLocaleString('fr')} F</td>
-                  <td>100%</td>
-                  <td style={{ color:'#27500A' }}>{(rein.total||0).toLocaleString('fr')} F</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -157,4 +157,16 @@ router.get('/dashboard', auth, toptelsig, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// GET /toptelsig/crm/template-import — Télécharger le template Excel
+router.get('/template-import', auth, (req, res) => {
+  const headers = ['prenom','nom','telephone','email','profession','source','commercial_nom'];
+  const examples = [
+    ['Jean','KOUAME','0708937608','jean@example.ci','Commerçant','Facebook','Marie DUPONT'],
+    ['Awa','TRAORE','0507123456','awa@example.ci','Fonctionnaire','WhatsApp','Paul DIALLO'],
+  ];
+  res.setHeader('Content-Disposition', 'attachment; filename="template_prospects_crm.csv"');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.send('\uFEFF' + [headers, ...examples].map(r => r.join(';')).join('\r\n'));
+});
+
 module.exports = router;

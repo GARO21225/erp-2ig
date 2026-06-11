@@ -335,4 +335,43 @@ router.get('/caisse-detail', auth, yakro, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// GET /yakro/commandes/historique — Historique des passages caisse
+router.get('/historique', auth, yakro, async (req, res) => {
+  try {
+    const { dateDebut, dateFin, limit = 100 } = req.query;
+    const auj = new Date(); auj.setHours(0,0,0,0);
+    const debut = dateDebut ? new Date(dateDebut) : auj;
+    const fin = dateFin ? new Date(dateFin) : new Date();
+
+    const commandes = await prisma.commandeYakro.findMany({
+      where: { statut: 'PAYEE', createdAt: { gte: debut, lte: fin } },
+      include: {
+        table: { select: { numero: true, zone: true } },
+        lignes: { include: { menu: { select: { nom: true, categorie: true } } } },
+        paiements: { select: { montant: true, type: true, reference: true, createdAt: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: Number(limit),
+    });
+
+    res.json(commandes.map(c => ({
+      id: c.id,
+      numero: c.numero,
+      table: c.table ? `Table ${c.table.numero} — ${c.table.zone}` : 'Emporter',
+      serveurNom: c.serveurNom || '—',
+      nbCouverts: c.nbCouverts || 1,
+      total: c.total || 0,
+      lignes: c.lignes.map(l => ({
+        nom: l.menu?.nom || '?',
+        categorie: l.menu?.categorie || '?',
+        quantite: l.quantite,
+        prixUnitaire: l.prixUnitaire,
+        sous_total: l.quantite * l.prixUnitaire,
+      })),
+      paiements: c.paiements.map(p => ({ montant: p.montant, type: p.type, reference: p.reference })),
+      createdAt: c.createdAt,
+    })));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = router;

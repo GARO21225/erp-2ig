@@ -4,7 +4,7 @@
  */
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { toptelsigAPI } from '../../lib/api';
+import { toptelsigAPI, employesAPI } from '../../lib/api';
 import { useAuthStore } from '../../store';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -283,9 +283,22 @@ function ModalImport({ onClose, onSave, loading }) {
           Colonnes Excel : <strong>prenom</strong>, <strong>nom</strong>, <strong>telephone</strong>, email, profession, source
         </div>
         <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display:'none' }} onChange={handleFile}/>
-        <button className="btn btn-ghost btn-sm" style={{ width:'100%', marginBottom:8 }} onClick={() => fileRef.current?.click()}>
-          <Upload size={13}/> Choisir un fichier Excel
-        </button>
+        <div style={{ display:'flex', gap:6, marginBottom:8 }}>
+          <button className="btn btn-ghost btn-sm" style={{ flex:1 }} onClick={() => fileRef.current?.click()}>
+            <Upload size={13}/> Choisir un fichier Excel/CSV
+          </button>
+          <button className="btn btn-ghost btn-sm" style={{ borderColor:'#1a3f6f20', color:'#1a3f6f' }}
+            onClick={async () => {
+              try {
+                const blob = await toptelsigAPI.crmTemplateImport();
+                const url = URL.createObjectURL(new Blob([blob]));
+                const a = document.createElement('a'); a.href=url; a.download='template_prospects_crm.csv'; a.click();
+                URL.revokeObjectURL(url);
+              } catch { alert('Erreur téléchargement template'); }
+            }}>
+            📥 Template
+          </button>
+        </div>
         {erreur && <div style={{ color:'#A32D2D', fontSize:12, marginBottom:8 }}>{erreur}</div>}
         {rows.length > 0 && (
           <div style={{ background:'#EAF3DE', borderRadius:8, padding:'8px 14px', fontSize:12, color:'#27500A', marginBottom:12 }}>
@@ -560,6 +573,12 @@ function ModalCreateProspect({ onClose, onSave, loading }) {
   const { user } = useAuthStore();
   const [form, setForm] = useState({ nom:'', prenom:'', telephone:'', email:'', adresse:'', profession:'', statut:'PROSPECT', sourceAcquisition:'', commercialId:user?.id||'', commercialNom:user?`${user.prenom} ${user.nom}`:'' });
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
+  const { data: commerciaux = [] } = useQuery({
+    queryKey: ['commerciaux-toptelsig'],
+    queryFn: () => employesAPI.list({ filiale:'TOPTELSIG', statut:'ACTIF', limit:50 }),
+    staleTime: 300000,
+  });
+  const listeCommerciaux = Array.isArray(commerciaux) ? commerciaux : (commerciaux?.data || []);
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" style={{ maxWidth:480 }} onClick={e=>e.stopPropagation()}>
@@ -573,6 +592,26 @@ function ModalCreateProspect({ onClose, onSave, loading }) {
           <div><label className="label">Téléphone *</label><input className="input" value={form.telephone} onChange={e=>set('telephone',e.target.value)}/></div>
           <div><label className="label">Email</label><input className="input" type="email" value={form.email} onChange={e=>set('email',e.target.value)}/></div>
           <div className="full"><label className="label">Profession</label><input className="input" value={form.profession} onChange={e=>set('profession',e.target.value)}/></div>
+          <div className="full">
+            <label className="label">Commercial responsable</label>
+            <div style={{ display:'flex', gap:6 }}>
+              <select className="input" style={{ flex:2 }}
+                value={form.commercialId}
+                onChange={e => {
+                  const emp = listeCommerciaux.find(x=>x.id===e.target.value);
+                  set('commercialId', e.target.value);
+                  if (emp) set('commercialNom', `${emp.prenom} ${emp.nom}`);
+                  else if (!e.target.value) set('commercialNom', '');
+                }}>
+                <option value="">— Non assigné</option>
+                {listeCommerciaux.map(e => <option key={e.id} value={e.id}>{e.prenom} {e.nom} — {e.poste||'Commercial'}</option>)}
+              </select>
+              <input className="input" style={{ flex:1 }} placeholder="Ou saisir un nom..."
+                value={form.commercialNom}
+                onChange={e => { set('commercialNom', e.target.value); set('commercialId', ''); }}/>
+            </div>
+            <div style={{ fontSize:10, color:'#888', marginTop:2 }}>Sélectionner dans la liste ou saisir directement un nom</div>
+          </div>
           <div>
             <label className="label">Source</label>
             <select className="input" value={form.sourceAcquisition} onChange={e=>set('sourceAcquisition',e.target.value)}>

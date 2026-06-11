@@ -27,6 +27,7 @@ services:
     region: frankfurt
     rootDir: frontend
     buildCommand: npm install && npm run build
+    nodeVersion: 22.12.0
     staticPublishPath: dist
     routes:
       - type: rewrite
