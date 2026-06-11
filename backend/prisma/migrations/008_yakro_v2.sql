@@ -102,3 +102,16 @@ BEGIN
     "createdAt" TIMESTAMP DEFAULT NOW()
   );
 END $$;
+
+-- Seuils stock
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='produits' AND column_name='stockMinimum') THEN
+    ALTER TABLE "produits"
+      ADD COLUMN "stockMinimum" FLOAT DEFAULT 3,
+      ADD COLUMN "stockMaximum" FLOAT;
+    -- Copier stockAlert vers stockMinimum pour les articles existants
+    UPDATE "produits" SET "stockMinimum" = "stockAlert" * 0.5 WHERE "stockMinimum" IS NULL;
+    RAISE NOTICE 'Seuils stock ajoutés';
+  END IF;
+END $$;

@@ -23,6 +23,14 @@ router.get('/produits', auth, async (req, res) => {
       ...p,
       stockTotal: p.stocks.reduce((s, st) => s + st.quantite, 0),
       enAlerte: p.stocks.some(st => st.quantite <= p.stockAlert),
+      get niveauAlerte() {
+        if (this.stockTotal <= 0) return 'RUPTURE';
+        if (this.stockTotal <= (p.stockMinimum || p.stockAlert * 0.5)) return 'CRITIQUE';
+        if (this.stockTotal <= p.stockAlert) return 'ALERTE';
+        return 'NORMAL';
+      },
+      stockMinimum: p.stockMinimum || null,
+      stockMaximum: p.stockMaximum || null,
     }));
 
     res.json(enriched);

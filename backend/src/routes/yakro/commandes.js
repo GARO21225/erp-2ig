@@ -315,7 +315,7 @@ router.get('/caisse-detail', auth, yakro, async (req, res) => {
     }
 
     const paiements = await prisma.paiementYakro.groupBy({
-      by: ['typePaiement'],
+      by: ['type'],
       _sum: { montant: true },
       where: { createdAt: { gte: auj, lt: demain } }
     });
@@ -329,7 +329,7 @@ router.get('/caisse-detail', auth, yakro, async (req, res) => {
       pctCuisine: totalBar + totalCuisine > 0 ? Math.round(totalCuisine / (totalBar + totalCuisine) * 100) : 0,
       nbCommandes,
       parCategorie: Object.entries(parCateg).sort((a,b)=>b[1]-a[1]).map(([cat, montant]) => ({ categorie: cat, montant, isBar: CATS_BAR.includes(cat) })),
-      parPaiement: paiements.map(p => ({ type: p.typePaiement, montant: p._sum.montant || 0 })),
+      parPaiement: paiements.map(p => ({ type: p.type, montant: p._sum.montant || 0 })),
       reinvestissement: { bar: Math.round(totalBar * 0.5), cuisine: Math.round(totalCuisine * 0.5), total: Math.round((totalBar + totalCuisine) * 0.5) },
     });
   } catch (e) { res.status(500).json({ error: e.message }); }

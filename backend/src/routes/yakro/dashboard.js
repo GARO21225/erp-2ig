@@ -46,7 +46,7 @@ router.get('/', auth, yakro, async (req, res) => {
       prisma.paiementYakro.aggregate({ _sum: { montant: true }, where: { createdAt: { gte: hierDebut, lte: hierFin } } }),
       prisma.commandeYakro.count({ where: wherePayee }),
       prisma.commandeYakro.count({ where: { ...where, statut: 'ANNULEE' } }),
-      prisma.paiementYakro.groupBy({ by: ['typePaiement'], _sum: { montant: true }, _count: { id: true }, where: { createdAt: { gte: debut } }, orderBy: { _sum: { montant: 'desc' } } }),
+      prisma.paiementYakro.groupBy({ by: ['type'], _sum: { montant: true }, _count: { id: true }, where: { createdAt: { gte: debut } }, orderBy: { _sum: { montant: 'desc' } } }),
       prisma.tableRestaurant.findMany({ orderBy: { numero: 'asc' } }),
       prisma.ligneCommandeYakro.findMany({
         where: { commande: { statut: 'PAYEE', ...where } },
@@ -156,7 +156,7 @@ router.get('/', auth, yakro, async (req, res) => {
         resultatEstime: caJour - (depenses._sum.total || 0),
       },
       topServeurs, topTables, topProduits,
-      paiements: paiementsParMode.map(p => ({ type:p.typePaiement, montant:p._sum.montant||0, nb:p._count.id })),
+      paiements: paiementsParMode.map(p => ({ type:p.type, montant:p._sum.montant||0, nb:p._count.id })),
       courbe,
       alertes,
     });

@@ -11,6 +11,7 @@ import AssignationsPage from './pages/yakro/AssignationsPage';
 import HistorisationPage from './pages/groupe/HistorisationPage';
 import UtilisateursPage from './pages/groupe/UtilisateursPage';
 import DashboardGroupe from './pages/groupe/DashboardGroupe';
+import ParametresEntreprisePage from './pages/groupe/ParametresEntreprisePage';
 import RHPage from './pages/groupe/RHPage';
 import FinancePage from './pages/groupe/FinancePage';
 import StocksPage from './pages/groupe/StocksPage';

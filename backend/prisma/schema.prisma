@@ -371,8 +371,10 @@ model Produit {
   filiale     Filiale
   prixAchat   Float    @default(0)
   prixVente   Float    @default(0)
-  stockAlert  Float    @default(5)
-  actif       Boolean  @default(true)
+  stockAlert    Float    @default(5)   // Seuil alerte (orange)
+  stockMinimum  Float    @default(3)   // Seuil critique (rouge)
+  stockMaximum  Float?                 // Stock maximum recommandé
+  actif         Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
