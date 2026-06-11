@@ -55,6 +55,7 @@ export default function App() {
             <Route path="stocks" element={<StocksPage />} />
             <Route path="utilisateurs" element={<UtilisateursPage />} />
             <Route path="historisation" element={<HistorisationPage />} />
+            <Route path="parametres-entreprise" element={<ParametresEntreprisePage />} />
             <Route path="yakro/dashboard" element={<DashboardYakro />} />
             <Route path="yakro/depenses" element={<DepensesYakroPage />} />
             <Route path="yakro/gestion-caisse" element={<GestionCaissePage />} />

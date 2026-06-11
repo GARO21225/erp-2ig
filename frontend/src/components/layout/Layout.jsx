@@ -24,6 +24,7 @@ const NAV = {
     { label: 'Ressources Humaines', to: '/rh', icon: Users },
     { label: 'Finance Groupe', to: '/finance', icon: Wallet },
     { label: 'Stocks & Achats', to: '/stocks', icon: Package },
+    { label: 'Paramètres Entreprise', to: '/parametres-entreprise', icon: Settings },
   ],
   YAKRO_GRILL: [
     { label: 'Dashboard', to: '/yakro/dashboard', icon: Activity },
