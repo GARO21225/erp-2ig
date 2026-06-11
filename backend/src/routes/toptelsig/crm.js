@@ -8,7 +8,13 @@ router.get('/prospects', auth, toptelsig, async (req, res) => {
   try {
     const { statut, commercial, search } = req.query;
     const where = {};
-    if (statut) where.statut = statut;
+    // CRM = prospects SANS paiement. Les CLIENT ont basculé dans Souscripteurs
+    if (statut) {
+      where.statut = statut;
+    } else {
+      // Par défaut : exclure les clients convertis (qui ont des paiements)
+      where.statut = { not: 'CLIENT' };
+    }
     if (commercial) where.commercialId = commercial;
     if (search) where.OR = [
       { nom: { contains: search, mode: 'insensitive' } },
@@ -167,6 +173,43 @@ router.get('/template-import', auth, (req, res) => {
   res.setHeader('Content-Disposition', 'attachment; filename="template_prospects_crm.csv"');
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.send('\uFEFF' + [headers, ...examples].map(r => r.join(';')).join('\r\n'));
+});
+
+// POST /crm/proposer-lot — Proposer un lot à un prospect (crée réservation)
+router.post('/proposer-lot', auth, toptelsig, async (req, res) => {
+  try {
+    const { souscripteurId, lotId, montantAvance = 0, notes } = req.body;
+    if (!souscripteurId || !lotId) return res.status(400).json({ error: 'souscripteurId et lotId requis' });
+
+    // Vérifier que le lot est disponible
+    const lot = await prisma.lot.findUnique({
+      where: { id: lotId },
+      include: { projet: true, reservations: { where: { statut: 'ACTIVE' } } }
+    });
+    if (!lot) return res.status(404).json({ error: 'Lot introuvable' });
+    if (lot.statut === 'VENDU') return res.status(400).json({ error: 'Lot déjà vendu' });
+    if (lot.reservations.length > 0) return res.status(400).json({ error: 'Lot déjà réservé' });
+
+    // Créer la réservation
+    const reservation = await prisma.$transaction(async tx => {
+      const r = await tx.reservationFoncier.create({
+        data: { lotId, souscripteurId, montantAvance: Number(montantAvance), notes, statut: 'ACTIVE' }
+      });
+      // Passer le lot en RESERVE
+      await tx.lot.update({ where: { id: lotId }, data: { statut: 'RESERVE' } });
+      // Log audit
+      await tx.auditLog.create({
+        data: {
+          utilisateurId: req.user.id, utilisateurNom: `${req.user.prenom} ${req.user.nom}`,
+          filiale: 'TOPTELSIG', action: 'CREATE', entite: 'ReservationFoncier',
+          entiteId: r.id, entiteLabel: `Lot ${lot.numero} — ${lot.projet?.nom}`,
+        }
+      });
+      return r;
+    });
+
+    res.status(201).json({ reservation, lot: { id: lot.id, numero: lot.numero, projet: lot.projet?.nom } });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 module.exports = router;

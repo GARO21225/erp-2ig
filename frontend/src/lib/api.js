@@ -185,6 +185,7 @@ export const toptelsigAPI = {
   crmProspects: (params) => api.get('/toptelsig/crm/prospects', { params }),
   crmDashboard: () => api.get('/toptelsig/crm/dashboard'),
   crmTemplateImport: () => api.get('/toptelsig/crm/template-import', { responseType: 'blob' }),
+  crmProposerLot: (data) => api.post('/toptelsig/crm/proposer-lot', data),
   crmRelances: (id) => api.get(`/toptelsig/crm/${id}/relances`),
   crmAddRelance: (id, data) => api.post(`/toptelsig/crm/${id}/relances`, data),
   crmUpdate: (id, data) => api.put(`/toptelsig/crm/${id}`, data),
