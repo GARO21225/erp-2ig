@@ -5,7 +5,7 @@ import { authAPI } from '../../lib/api';
 import {
   LayoutDashboard, Users, Wallet, Package, ChevronDown, ChevronRight, Shield, Settings, Clock, Target,
   Flame, MapPin, Truck, Search, Bell, LogOut, Menu, X,
-  ClipboardList, BookOpen, Calendar,
+  ClipboardList, BookOpen, Calendar, Activity, ArrowDownLeft,
   Building2, Map, Bike, Layers, FileText, TrendingUp
 } from 'lucide-react';
 
