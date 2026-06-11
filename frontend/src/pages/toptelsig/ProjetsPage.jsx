@@ -238,8 +238,34 @@ function OngletLots({ lots = [], projetId, onRefresh }) {
           </button>
         ))}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-          <TemplateButton url={`/toptelsig/lots/template?projetId=${projetId}`} label="Template lots" />
-          <ImportButton onData={async (rows) => { /* import lots */ }} accept=".xlsx,.csv" label="Importer" />
+          <button className="btn btn-ghost btn-sm" style={{ fontSize:11 }}
+            onClick={async () => {
+              try {
+                const token = JSON.parse(localStorage.getItem('2ig-auth')||'{}')?.state?.token||'';
+                const base = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+                const r = await fetch(`${base}/toptelsig/lots/template?projetId=${projetId}`,
+                  { headers: { Authorization: `Bearer ${token}` } });
+                const blob = await r.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href=url; a.download=`template_lots.xlsx`; a.click();
+                URL.revokeObjectURL(url);
+              } catch(e) { alert('Erreur téléchargement template: '+e.message); }
+            }}>📥 Template lots</button>
+          <label style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 12px', background:'#1a3f6f', color:'white', borderRadius:8, fontSize:11, fontWeight:500, cursor:'pointer' }}>
+            📤 Importer
+            <input type="file" accept=".xlsx,.xls,.csv" style={{ display:'none' }}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  const r = await toptelsigAPI.importLots(projetId, file);
+                  alert(`✅ Import terminé : ${r?.importes || r?.resultats?.importes || 0} lot(s) importé(s)`);
+                } catch (err) {
+                  alert('Erreur import : ' + (err?.response?.data?.error || err.message));
+                }
+                e.target.value = '';
+              }} />
+          </label>
         </div>
       </div>
 

@@ -360,6 +360,7 @@ router.get('/pilotage', auth, async (req, res) => {
     ]);
 
     // Extraire les valeurs avec fallback (Promise.allSettled)
+    const sv = r => r?.status === 'fulfilled' ? r.value : null;
     const [encTotalR, decTotalR, encPrecR, decPrecR,
       encParFilialeR, decParFilialeR, encParTypeR, decParCategR,
       caissesR, caYakroR, nbCommandesYakroR,

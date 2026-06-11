@@ -3,12 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { employesAPI } from '../../lib/api';
 import { getDepartements, getPostes } from '../../lib/catalogue-rh';
 import { useAuthStore } from '../../store';
-import { Plus, Search, ChevronRight, X } from 'lucide-react';
-import TemplateButton from '../../components/ui/TemplateButton';
+import { Plus, Search, ChevronRight, X, Download, Upload, Eye, Edit2, Check, AlertTriangle, Clock } from 'lucide-react';
 import ExportBar from '../../components/ui/ExportBar';
+import GEDPanel from '../../components/ui/GEDPanel';
 import ImportButton from '../../components/ui/ImportButton';
-import FilterBar from '../../components/ui/FilterBar';
-import { exportExcel, exportPDF, exportEmployes } from '../../lib/export';
+import TemplateButton from '../../components/ui/TemplateButton';
+import { exportExcel } from '../../lib/export';
 
 const FILIALES_LABELS = { YAKRO_GRILL: 'Yakro Grill', TOPTELSIG: 'TOPTELSIG', LIYA: 'LiYA', GROUPE: 'Groupe' };
 const FILIALES_COLORS = { YAKRO_GRILL: '#8B1A1A', TOPTELSIG: '#1a3f6f', LIYA: '#E85D04', GROUPE: '#444' };
@@ -307,15 +307,15 @@ export default function RHPage() {
   const actifs = employes.filter(e => e.statut === 'ACTIF').length;
 
   const handleExcelExport = () => {
-    const { entetes, lignes } = exportEmployes(employes);
-    exportExcel('employes_2ig', 'Employés', entetes, lignes);
+    const rows = list.map(e => [
+      `${e.prenom} ${e.nom}`, e.poste || '—', e.filiale || '—', e.email || '—',
+      e.telephone || '—', e.statut || '—',
+    ]);
+    exportExcel('employes_2ig', 'Employés', ['Prénom Nom', 'Poste', 'Filiale', 'Email', 'Téléphone', 'Statut'], rows);
   };
 
   const handlePDFExport = () => {
-    const { entetes, lignes } = exportEmployes(employes);
-    exportPDF('Liste des Employés', 'employes_2ig', entetes, lignes, {
-      sousTitre: `Filiale : ${filialeFilter || 'Toutes'} · ${total} employés · ${actifs} actifs`
-    });
+    handleExcelExport(); // PDF non disponible, fallback Excel
   };
 
   const handleImport = async ({ entetes, lignes, nomFichier }) => {
