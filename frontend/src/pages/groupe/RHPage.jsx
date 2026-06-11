@@ -307,7 +307,7 @@ export default function RHPage() {
   const actifs = employes.filter(e => e.statut === 'ACTIF').length;
 
   const handleExcelExport = () => {
-    const rows = list.map(e => [
+    const rows = employes.map(e => [
       `${e.prenom} ${e.nom}`, e.poste || '—', e.filiale || '—', e.email || '—',
       e.telephone || '—', e.statut || '—',
     ]);

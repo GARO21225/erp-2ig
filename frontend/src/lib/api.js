@@ -152,6 +152,11 @@ export const toptelsigAPI = {
   createLotsBatch: (data) => api.post('/toptelsig/lots/batch', data),
 
   souscripteurs: (params) => api.get('/toptelsig/souscripteurs', { params }),
+  souscripteursDashboard: (params) => api.get('/toptelsig/souscripteurs/dashboard', { params }),
+  souscripteur: (id) => api.get(`/toptelsig/souscripteurs/${id}`),
+  createSouscripteur: (data) => api.post('/toptelsig/souscripteurs', data),
+  updateSouscripteur: (id, data) => api.put(`/toptelsig/souscripteurs/${id}`, data),
+  addPaiement: (id, data) => api.post(`/toptelsig/souscripteurs/${id}/paiements`, data),
   souscripteursTemplate: () => `${api.defaults.baseURL}/toptelsig/souscripteurs/template`,
   importSouscripteurs: (file) => { const fd = new FormData(); fd.append('fichier', file); return api.post('/toptelsig/souscripteurs/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }); },
   getSouscripteur: (id) => api.get(`/toptelsig/souscripteurs/${id}`),
