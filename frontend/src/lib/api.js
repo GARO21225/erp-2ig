@@ -108,6 +108,30 @@ export const yakroAPI = {
   reservations: (params) => api.get('/yakro/reservations', { params }),
   createReservation: (data) => api.post('/yakro/reservations', data),
   updateReservation: (id, statut) => api.put(`/yakro/reservations/${id}/statut`, { statut }),
+  // Dashboard
+  dashboard: (periode) => api.get('/yakro/dashboard', { params: { periode } }),
+  // Tables enrichi
+  assignerServeur: (id, data) => api.put(`/yakro/tables/${id}/assigner-serveur`, data),
+  cloturerTable: (id) => api.put(`/yakro/tables/${id}/cloturer`),
+  transfererTable: (data) => api.post('/yakro/tables/transferer', data),
+  historiqueServeurs: () => api.get('/yakro/tables/historique-serveurs'),
+  // Dépenses Yakro
+  depensesYakro: (params) => api.get('/yakro/depenses', { params }),
+  createDepenseYakro: (data) => api.post('/yakro/depenses', data),
+  validerDepenseYakro: (id) => api.put(`/yakro/depenses/${id}/valider`),
+  payerDepenseYakro: (id, data) => api.put(`/yakro/depenses/${id}/payer`, data),
+  statsDepensesYakro: () => api.get('/yakro/depenses/stats'),
+  categoriesDepensesYakro: () => api.get('/yakro/depenses/categories'),
+  // Session caisse
+  sessionCaisseActive: () => api.get('/yakro/caisse-session/session-active'),
+  ouvrirCaisse: (montant) => api.post('/yakro/caisse-session/ouvrir', { montantOuverture: montant }),
+  cloturerCaisse: (data) => api.post('/yakro/caisse-session/cloturer', data),
+  historiqueCaisse: () => api.get('/yakro/caisse-session/historique'),
+  // Annulations & Remises
+  annulationsYakro: (params) => api.get('/yakro/caisse-session/annulations', { params }),
+  remisesYakro: (params) => api.get('/yakro/caisse-session/remises', { params }),
+  createAnnulation: (data) => api.post('/yakro/caisse-session/annulations', data),
+  createRemise: (data) => api.post('/yakro/caisse-session/remises', data),
 };
 
 // ── TOPTELSIG
