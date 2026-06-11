@@ -8,13 +8,58 @@ const prisma = require('../../lib/prisma');
 const { auth, requireFiliale, requireRole } = require('../../middleware/auth');
 const toptelsig = requireFiliale('TOPTELSIG');
 
-const CATEGORIES = [
-  'Coutumier & Acquisition Foncière','Topographie & Études','Administratif & Dossiers',
-  'Lotissement & Bornage','Ouverture de Voies & Viabilisation','DTC & Services Techniques',
-  'Assainissement & Environnement','Enquêtes & Commissions','Travaux de Construction',
-  'Transport & Déplacements','Personnel','Commercial & Marketing',
-  'Fournitures & Fonctionnement','Frais Financiers','Autres Dépenses'
-];
+const CATEGORIES_MAP = {
+  'Coutumier & Acquisition Foncière': [
+    'Indemnisation propriétaire','Indemnisation exploitant','Indemnisation occupant',
+    'Frais coutumiers','Frais notaire','Acte foncier','Autres coutumier'
+  ],
+  'Topographie & Études': [
+    'Levé topographique','Étude géotechnique','Plan parcellaire','Rapport topographique',
+    'Bornage','Géomètre','Autres études'
+  ],
+  'Administratif & Dossiers': [
+    'Frais dossier','Frais enregistrement','Frais timbre','Légalisation',
+    'Frais notarié','Frais DOMANIAL','Autres administratif'
+  ],
+  'Lotissement & Bornage': [
+    'Bornes','Implantation bornes','Plan de lotissement','Dossier lotissement','Autres lotissement'
+  ],
+  'Ouverture de Voies & Viabilisation': [
+    'Ouverture piste','Nivellement','Compactage','Bordures','Caniveaux','Enrobé','Autres voies'
+  ],
+  'DTC & Services Techniques': [
+    'Électricité','Eau potable','Éclairage public','Télécommunications','Autres DTC'
+  ],
+  'Assainissement & Environnement': [
+    'Drainage','Évacuation eaux','Débroussaillage','Reboisement','Autres assainissement'
+  ],
+  'Enquêtes & Commissions': [
+    'Enquête parcellaire','Commission cadastre','Commission urbanisme','Frais commission','Autres enquête'
+  ],
+  'Travaux de Construction': [
+    'Maçonnerie','Ferraillage','Béton','Finitions','Clôture','Portail','Autres construction'
+  ],
+  'Transport & Déplacements': [
+    'Carburant','Location véhicule','Transport matériaux','Per diem','Autres transport'
+  ],
+  'Personnel': [
+    'Salaires','Primes','Heures sup','Charges sociales','Formation','Autres personnel'
+  ],
+  'Commercial & Marketing': [
+    'Publicité','Impression','Événementiel','Commissions agents','Frais commercial','Autres marketing'
+  ],
+  'Fournitures & Fonctionnement': [
+    'Bureau','Informatique','Téléphone','Internet','Maintenance','Autres fournitures'
+  ],
+  'Frais Financiers': [
+    'Intérêts banque','Frais bancaires','Garanties','Assurances','Autres financiers'
+  ],
+  'Autres Dépenses': [
+    'Imprévus','Divers','Autres'
+  ],
+};
+
+const CATEGORIES = Object.keys(CATEGORIES_MAP);
 
 const TYPES_BENEFICIAIRES = [
   'Employé','Propriétaire terrien','Exploitant agricole','Occupant',
@@ -74,12 +119,7 @@ router.get('/', auth, toptelsig, async (req, res) => {
 
 // ── GET /categories — Liste des catégories ───────────────────────────────────
 router.get('/categories', auth, (req, res) => {
-  // Retourner objet { categorie: [sous-catégories] }
-  // Les catégories TOPTELSIG n'ont pas de sous-catégories formelles
-  // On retourne un objet pour compatibilité frontend (Object.keys)
-  const obj = {};
-  CATEGORIES.forEach(c => { obj[c] = []; });
-  res.json(obj);
+  res.json(CATEGORIES_MAP);
 });
 
 // ── GET /types-beneficiaires ─────────────────────────────────────────────────

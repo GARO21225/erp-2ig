@@ -252,3 +252,11 @@ export const partenairesLiyaAPI = {
   update: (id, data) => api.put(`/liya/partenaires/${id}`, data),
   delete: (id) => api.delete(`/liya/partenaires/${id}`),
 };
+
+export const facturationAPI = {
+  generer: (lotId, type, paiementId) => api.post('/toptelsig/facturation/generer', { lotId, type, paiementId }),
+  historique: (lotId) => api.get(`/toptelsig/facturation/historique/${lotId}`),
+  document: (id) => api.get(`/toptelsig/facturation/document/${id}`),
+  params: (filiale) => api.get('/toptelsig/facturation/params', { params: { filiale } }),
+  updateParams: (filiale, data) => api.put('/toptelsig/facturation/params', { filiale, ...data }),
+};

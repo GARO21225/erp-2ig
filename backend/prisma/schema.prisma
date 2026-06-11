@@ -1149,3 +1149,91 @@ model RelanceCRM {
   @@index([souscripteurId, dateRelance])
   @@map("relances_crm")
 }
+
+// ── FACTURATION & PARAMÈTRES ENTREPRISE ─────────────────────────────────────
+
+model ParametresEntreprise {
+  id                String   @id @default(cuid())
+  filiale           Filiale  @unique
+  nomLegal          String
+  sigle             String?
+  slogan            String?
+  adresse           String?
+  telephone         String?
+  email             String?
+  siteWeb           String?
+  rccm              String?
+  ifu               String?
+  logoUrl           String?  // base64 ou URL
+  logoSecondaireUrl String?
+  signatureDgUrl    String?
+  cachetUrl         String?
+  couleurPrimaire   String   @default("#1a3f6f")
+  couleurSecondaire String   @default("#E87722")
+  couleurTexte      String   @default("#1a1a1a")
+  couleurTableau    String   @default("#EEF3FB")
+  police            String   @default("DM Sans")
+  enteteHtml        String?  // HTML personnalisé en-tête
+  piedPageHtml      String?  // HTML personnalisé pied de page
+  mentions          String?  // Mentions légales
+  compteurFacture   Int      @default(0)
+  compteurRecu      Int      @default(0)
+  compteurProforma  Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("parametres_entreprise")
+}
+
+model DocumentGenere {
+  id              String   @id @default(cuid())
+  numero          String   @unique      // FAC-TOP-2026-000001
+  type            String               // FACTURE | PROFORMA | RECU | SITUATION | CONTRAT | ATTESTATION
+  filiale         Filiale
+  projetId        String?
+  lotId           String?
+  venteId         String?
+  souscripteurId  String?
+  paiementId      String?              // Pour reçus
+  titre           String
+  contenuHtml     String?              // HTML du document
+  documentId      String?              // GED référence
+  statut          String   @default("GENERE") // GENERE | ARCHIVE | ANNULE
+  creePar         String
+  creeParNom      String
+  version         Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([type, filiale])
+  @@index([lotId])
+  @@index([souscripteurId])
+  @@map("documents_generes")
+}
+
+model ModeleDocument {
+  id              String   @id @default(cuid())
+  nom             String
+  type            String               // FACTURE | PROFORMA | RECU | SITUATION | CONTRAT | ATTESTATION | AUTRE
+  filiale         Filiale?             // null = partagé toutes filiales
+  titre           String?
+  contenuHtml     String               // Template HTML avec variables {{...}}
+  variables       String?              // JSON liste des variables utilisées
+  statut          String   @default("BROUILLON") // BROUILLON | VALIDE | PUBLIE | ARCHIVE
+  orientation     String   @default("PORTRAIT")  // PORTRAIT | PAYSAGE
+  avecLogo        Boolean  @default(true)
+  avecSignature   Boolean  @default(false)
+  avecCachet      Boolean  @default(false)
+  avecQrCode      Boolean  @default(false)
+  filigrane       String?              // COPIE | ORIGINAL | PROFORMA | PAYE | SOLDE | ANNULE
+  description     String?
+  creePar         String
+  creeParNom      String
+  version         Int      @default(1)
+  publiePar       String?
+  publieLe        DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("modeles_documents")
+}

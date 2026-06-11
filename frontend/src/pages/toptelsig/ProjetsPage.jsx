@@ -17,6 +17,8 @@ import {
   RefreshCw, Search, Eye
 } from 'lucide-react';
 import TemplateButton from '../../components/ui/TemplateButton';
+import DocumentViewer from '../../components/ui/DocumentViewer';
+import { facturationAPI } from '../../lib/api';
 import GEDPanel from '../../components/ui/GEDPanel';
 import ImportButton from '../../components/ui/ImportButton';
 
@@ -293,8 +295,21 @@ function FicheLot({ lot, onClose }) {
   const vente = lot.vente;
   const totalPaye = vente?.paiements?.reduce((s, p) => s + p.montant, 0) || 0;
   const st = STATUT_LOT[lot.statut] || STATUT_LOT.DISPONIBLE;
+  const [docViewer, setDocViewer] = useState(null);
+  const [genLoading, setGenLoading] = useState('');
+
+  const genererDoc = async (type, paiementId) => {
+    setGenLoading(type);
+    try {
+      const doc = await facturationAPI.generer(lot.id, type, paiementId);
+      setDocViewer({ ...doc, client: vente?.souscripteur });
+    } catch (e) {
+      alert('Erreur génération : ' + (e?.error || e?.message || 'Erreur'));
+    } finally { setGenLoading(''); }
+  };
 
   return (
+    <>
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" style={{ maxWidth: 680, maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -349,6 +364,24 @@ TOPTELSIG — Groupe 2IG`);
             </button>
             <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
           </div>
+        </div>
+
+        {/* Boutons facturation */}
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:16, padding:'10px 14px', background:'#EEF3FB', borderRadius:8 }}>
+          <div style={{ fontSize:11, fontWeight:600, color:'#1a3f6f', width:'100%', marginBottom:4 }}>📄 Générer un document</div>
+          {[
+            { type:'FACTURE', label:'🧾 Facture', color:'#1a3f6f', enabled: !!vente },
+            { type:'PROFORMA', label:'📋 Proforma', color:'#BA7517', enabled: true },
+            { type:'RECU', label:'🧾 Reçu paiement', color:'#27500A', enabled: !!(vente?.paiements?.length > 0) },
+            { type:'SITUATION', label:'📊 Situation client', color:'#8B1A1A', enabled: !!vente },
+          ].map(btn => (
+            <button key={btn.type}
+              disabled={!btn.enabled || genLoading === btn.type}
+              onClick={() => genererDoc(btn.type)}
+              style={{ fontSize:11, padding:'6px 12px', background: btn.enabled ? btn.color : '#ddd', color:'white', border:'none', borderRadius:7, cursor: btn.enabled ? 'pointer' : 'not-allowed', opacity: btn.enabled ? 1 : 0.6 }}>
+              {genLoading === btn.type ? '⏳...' : btn.label}
+            </button>
+          ))}
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
@@ -421,6 +454,16 @@ TOPTELSIG — Groupe 2IG`);
         </div>
       </div>
     </div>
+
+    {/* Visionneuse document */}
+    {docViewer && (
+      <DocumentViewer
+        document={docViewer}
+        client={vente?.souscripteur}
+        onClose={() => setDocViewer(null)}
+      />
+    )}
+    </>
   );
 }
 
