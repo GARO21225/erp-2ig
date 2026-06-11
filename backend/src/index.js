@@ -38,6 +38,8 @@ app.use('/api/yakro/dashboard', require('./routes/yakro/dashboard'));
 app.use('/api/yakro/tables',       require('./routes/yakro/tables'));
 app.use('/api/yakro/commandes',    require('./routes/yakro/commandes'));
 app.use('/api/yakro/menu',         require('./routes/yakro/menu'));
+app.use('/api/yakro/depenses', require('./routes/yakro/depenses'));
+app.use('/api/yakro/caisse-session', require('./routes/yakro/caisse-session'));
 app.use('/api/yakro/reservations', require('./routes/yakro/reservations'));
 app.use('/api/toptelsig/facturation', require('./routes/toptelsig/facturation'));
 app.use('/api/toptelsig/projet-complet', require('./routes/toptelsig/projet-complet'));

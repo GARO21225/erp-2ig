@@ -30,6 +30,8 @@ const NAV = {
     { label: 'Plan de Salle (POS)', to: '/yakro/pos', icon: Layers },
     { label: 'Menu & Carte', to: '/yakro/menu', icon: BookOpen },
     { label: 'Caisse du jour', to: '/yakro/caisse', icon: Wallet },
+    { label: 'Gestion Caisse', to: '/yakro/gestion-caisse', icon: Shield },
+    { label: 'Dépenses', to: '/yakro/depenses', icon: ArrowDownLeft },
     { label: 'Réservations', to: '/yakro/reservations', icon: Calendar },
     { label: 'Config. Tables', to: '/yakro/tables', icon: Settings },
   ],

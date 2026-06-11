@@ -488,18 +488,36 @@ model Document {
 // ─────────────────────────────────────────────
 
 model TableRestaurant {
-  id          String   @id @default(cuid())
-  numero      Int      @unique
-  nom         String?
-  capacite    Int      @default(4)
-  zone        String   @default("Salle") // Salle, Terrasse, VIP, Bar
-  statut      String   @default("LIBRE") // LIBRE, OCCUPEE, RESERVEE, NETTOYAGE
-  createdAt   DateTime @default(now())
+  id              String   @id @default(cuid())
+  numero          Int      @unique
+  nom             String?
+  capacite        Int      @default(4)
+  zone            String   @default("Salle") // Salle, Terrasse, VIP, Bar
+  statut          String   @default("LIBRE") // LIBRE, OCCUPEE, RESERVEE, NETTOYAGE
+  serveurId       String?  // Serveur actuellement assigné
+  serveurNom      String?  // Dénormalisé
+  heureOuverture  DateTime?
+  createdAt       DateTime @default(now())
 
-  commandes   CommandeYakro[]
+  commandes    CommandeYakro[]
   reservations ReservationYakro[]
 
   @@map("tables_restaurant")
+}
+
+// Historique changements de serveur par table
+model ChangementServeurYakro {
+  id              String   @id @default(cuid())
+  tableId         String
+  ancienServeurId String?
+  ancienServeurNom String?
+  nouveauServeurId String
+  nouveauServeurNom String
+  changesParId    String
+  changesParNom   String
+  createdAt       DateTime @default(now())
+
+  @@map("changements_serveur_yakro")
 }
 
 model CommandeYakro {
@@ -1272,4 +1290,48 @@ model RemiseYakro {
   createdAt       DateTime @default(now())
 
   @@map("remises_yakro")
+}
+
+// ── YAKRO GRILL — DÉPENSES RESTAURANT ───────────────────────────────────────
+model DepenseYakro {
+  id             String   @id @default(cuid())
+  categorie      String   // Achats marchandises, Boissons, Viandes, etc.
+  description    String
+  montant        Float
+  typePaiement   TypePaiement?
+  beneficiaire   String?
+  date           DateTime @default(now())
+  statut         String   @default("BROUILLON") // BROUILLON | EN_ATTENTE | VALIDEE | PAYEE | CLOTUREE
+  validePar      String?
+  valideParNom   String?
+  payePar        String?
+  payeParNom     String?
+  reference      String?
+  notes          String?
+  creePar        String
+  creeParNom     String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("depenses_yakro")
+}
+
+// Session de caisse
+model SessionCaisseYakro {
+  id              String   @id @default(cuid())
+  ouvertPar       String
+  ouvertParNom    String
+  ouvertLe        DateTime @default(now())
+  montantOuverture Float   @default(0)
+  closPar         String?
+  closParNom      String?
+  closLe          DateTime?
+  montantTheorique Float?
+  montantReel     Float?
+  ecart           Float?
+  statut          String   @default("OUVERTE") // OUVERTE | CLOTUREE
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  @@map("sessions_caisse_yakro")
 }

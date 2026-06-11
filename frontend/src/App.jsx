@@ -19,6 +19,8 @@ import CommandesYakro from './pages/yakro/CommandesYakro';
 import MenuPage from './pages/yakro/MenuPage';
 import ReservationsYakro from './pages/yakro/ReservationsYakro';
 import DashboardYakro from './pages/yakro/DashboardYakro';
+import DepensesYakroPage from './pages/yakro/DepensesYakroPage';
+import GestionCaissePage from './pages/yakro/GestionCaissePage';
 import CaisseYakro from './pages/yakro/CaisseYakro';
 import ProjetsPage from './pages/toptelsig/ProjetsPage';
 import SouscripteursPage from './pages/toptelsig/SouscripteursPage';
@@ -53,6 +55,8 @@ export default function App() {
             <Route path="utilisateurs" element={<UtilisateursPage />} />
             <Route path="historisation" element={<HistorisationPage />} />
             <Route path="yakro/dashboard" element={<DashboardYakro />} />
+            <Route path="yakro/depenses" element={<DepensesYakroPage />} />
+            <Route path="yakro/gestion-caisse" element={<GestionCaissePage />} />
             <Route path="yakro/pos" element={<POS />} />
             <Route path="yakro/commandes" element={<CommandesYakro />} />
             <Route path="yakro/menu" element={<MenuPage />} />
