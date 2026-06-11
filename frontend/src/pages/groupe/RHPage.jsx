@@ -302,7 +302,7 @@ export default function RHPage() {
     onSuccess: () => { qc.invalidateQueries(['employes']); setSelected(null); showToast('Départ enregistré'); },
   });
 
-  const employes = data?.data || [];
+  const employes = Array.isArray(data?.data) ? data.data : [];
   const total = data?.total || 0;
   const actifs = employes.filter(e => e.statut === 'ACTIF').length;
 

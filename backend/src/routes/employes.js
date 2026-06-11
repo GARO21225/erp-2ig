@@ -18,19 +18,29 @@ router.get('/', auth, async (req, res) => {
       ];
     }
 
-    const [total, employes] = await Promise.all([
-      prisma.employe.count({ where }),
-      prisma.employe.findMany({
-        where,
-        skip: (page - 1) * limit,
-        take: Number(limit),
-        orderBy: { nom: 'asc' },
-        include: {
-          conges: { where: { statut: 'APPROUVE', dateFin: { gte: new Date() } }, take: 1 },
-          _count: { select: { conges: true, evaluations: true } }
-        }
-      })
-    ]);
+    // Essayer avec les relations, fallback sans si tables absentes
+    let employes = [], total = 0;
+    try {
+      [total, employes] = await Promise.all([
+        prisma.employe.count({ where }),
+        prisma.employe.findMany({
+          where,
+          skip: (page - 1) * limit,
+          take: Number(limit),
+          orderBy: { nom: 'asc' },
+          include: {
+            conges: { where: { statut: 'APPROUVE', dateFin: { gte: new Date() } }, take: 1 },
+            _count: { select: { conges: true, evaluations: true } }
+          }
+        })
+      ]);
+    } catch {
+      // Fallback sans relations (si tables pas encore créées)
+      [total, employes] = await Promise.all([
+        prisma.employe.count({ where }),
+        prisma.employe.findMany({ where, skip: (page-1)*limit, take: Number(limit), orderBy: { nom: 'asc' } })
+      ]);
+    }
 
     res.json({ data: employes, total, page: Number(page), pages: Math.ceil(total / limit) });
   } catch (e) {
