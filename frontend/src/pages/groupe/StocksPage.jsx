@@ -163,6 +163,20 @@ export default function StocksPage() {
         <div style={{ display:'flex', gap:8 }}>
           <button className="btn btn-ghost btn-sm" onClick={handleExport}><Download size={13}/> Exporter</button>
           <input ref={importRef} type="file" accept=".csv,.xlsx" style={{ display:'none' }} onChange={handleImport}/>
+          <button className="btn btn-ghost btn-sm" style={{ color:'#1a3f6f', borderColor:'#1a3f6f30' }}
+            onClick={async () => {
+              // Template CSV stock
+              const headers = ['reference','nom','categorie','unite','prixAchat','prixVente','stockAlert','stockMinimum'];
+              const examples = [
+                ['YG-VIAN-001','Poulet de chair (kg)','VIANDES_PROTEINES','kg',2500,3500,10,5],
+                ['YG-BOI-001','Heineken (casier 24)','BOISSONS','casier',18000,30000,5,2],
+              ];
+              const csv = '\uFEFF' + [headers, ...examples].map(r => r.join(';')).join('\r\n');
+              const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a'); a.href=url; a.download='template_stock_2ig.csv'; a.click();
+              URL.revokeObjectURL(url);
+            }}>📥 Template</button>
           <button className="btn btn-ghost btn-sm" onClick={()=>importRef.current?.click()}><Upload size={13}/> Importer</button>
           <button className="btn btn-ghost btn-sm" style={{ color:'#8B1A1A', borderColor:'#8B1A1A20', background:'#FDF2F2' }}
             disabled={seeding} onClick={seedYakro}>

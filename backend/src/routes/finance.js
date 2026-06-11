@@ -279,7 +279,7 @@ router.get('/stats', auth, async (req, res) => {
       totalEncaissements: encTotal._sum.montant || 0,
       totalDecaissements: decTotal._sum.montant || 0,
       courbe: Object.values(courbeMap),
-      parCategorie: decParCateg.map(d => ({ categorie: d.categorie || 'Autre', montant: d._sum.montant || 0 })),
+      parCategorie: decParCategR?.map(d => ({ categorie: d.categorie || 'Autre', montant: d._sum.montant || 0 })),
       parTypePaiement: encParPaiement.map(e => ({
         name: e.typePaiement?.replace('_', ' ') || 'Autre',
         value: e._sum.montant || 0
@@ -327,17 +327,7 @@ router.get('/pilotage', auth, async (req, res) => {
     const whereFiliale = filiale ? { ...where, filiale } : where;
 
     // Requêtes parallèles
-    const [
-      encTotal, decTotal, encPrec, decPrec,
-      encParFiliale, decParFiliale,
-      encParType, decParCateg,
-      caisses,
-      caYakro, nbCommandesYakro,
-      lotsVendus, caFoncier,
-      livTotal, caLiya,
-      encCourbe, decCourbe,
-      retardsPmt,
-    ] = await Promise.all([
+    const results = await Promise.allSettled([
       // CA et dépenses période actuelle
       prisma.encaissement.aggregate({ _sum:{ montant:true }, where: whereFiliale }),
       prisma.decaissement.aggregate({ _sum:{ montant:true }, where: whereFiliale }),
@@ -369,20 +359,27 @@ router.get('/pilotage', auth, async (req, res) => {
       prisma.echeancier.count({ where:{ statut:'RETARD' } }),
     ]);
 
-    const caTotal = encTotal._sum.montant || 0;
-    const depTotal = decTotal._sum.montant || 0;
-    const caPrecVal = encPrec._sum.montant || 0;
-    const depPrecVal = decPrec._sum.montant || 0;
+    // Extraire les valeurs avec fallback (Promise.allSettled)
+    const [encTotalR, decTotalR, encPrecR, decPrecR,
+      encParFilialeR, decParFilialeR, encParTypeR, decParCategR,
+      caissesR, caYakroR, nbCommandesYakroR,
+      lotsVendusR, caFoncierR, livTotalR, caLiyaR,
+      encCourbeR, decCourbeR, retardsPmtR] = results.map(sv);
+
+    const caTotal = encTotalR?._sum?.montant || 0;
+    const depTotal = decTotalR?._sum?.montant || 0;
+    const caPrecVal = encPrecR?._sum?.montant || 0;
+    const depPrecVal = decPrecR?._sum?.montant || 0;
     const variationCA = caPrecVal > 0 ? Math.round((caTotal-caPrecVal)/caPrecVal*100) : 0;
     const variationDep = depPrecVal > 0 ? Math.round((depTotal-depPrecVal)/depPrecVal*100) : 0;
     const resultatBrut = caTotal - depTotal;
     const marge = caTotal > 0 ? Math.round(resultatBrut/caTotal*100) : 0;
-    const tresorerie = caisses.reduce((s,c)=>s+c.solde,0);
+    const tresorerie = (caissesR||[]).reduce((s,c)=>s+c.solde,0);
 
     // Enrichir filiales
     const filialesMap = {};
-    encParFiliale.forEach(e => { filialesMap[e.filiale] = { filiale:e.filiale, ca:e._sum.montant||0, dep:0, pct:0 }; });
-    decParFiliale.forEach(e => { if(!filialesMap[e.filiale]) filialesMap[e.filiale]={filiale:e.filiale,ca:0,dep:0,pct:0}; filialesMap[e.filiale].dep=e._sum.montant||0; });
+    encParFilialeR?.forEach(e => { filialesMap[e.filiale] = { filiale:e.filiale, ca:e._sum.montant||0, dep:0, pct:0 }; });
+    decParFilialeR?.forEach(e => { if(!filialesMap[e.filiale]) filialesMap[e.filiale]={filiale:e.filiale,ca:0,dep:0,pct:0}; filialesMap[e.filiale].dep=e._sum.montant||0; });
     const filiales = Object.values(filialesMap).map(f=>({ ...f, resultat:f.ca-f.dep, marge:f.ca>0?Math.round((f.ca-f.dep)/f.ca*100):0, pct:caTotal>0?Math.round(f.ca/caTotal*100):0 }));
 
     // Courbe 7 jours
@@ -392,27 +389,27 @@ router.get('/pilotage', auth, async (req, res) => {
       const k = d.toLocaleDateString('fr', { day:'2-digit', month:'short' });
       courbe30[k] = { date:k, encaissements:0, decaissements:0 };
     }
-    encCourbe.forEach(e => { const k = new Date(e.createdAt).toLocaleDateString('fr',{day:'2-digit',month:'short'}); if(courbe30[k]) courbe30[k].encaissements+=e._sum.montant||0; });
-    decCourbe.forEach(e => { const k = new Date(e.createdAt).toLocaleDateString('fr',{day:'2-digit',month:'short'}); if(courbe30[k]) courbe30[k].decaissements+=e._sum.montant||0; });
+    (encCourbeR||[]).forEach(e => { const k = new Date(e.createdAt).toLocaleDateString('fr',{day:'2-digit',month:'short'}); if(courbe30[k]) courbe30[k].encaissements+=e._sum.montant||0; });
+    (decCourbeR||[]).forEach(e => { const k = new Date(e.createdAt).toLocaleDateString('fr',{day:'2-digit',month:'short'}); if(courbe30[k]) courbe30[k].decaissements+=e._sum.montant||0; });
 
     // Alertes
     const alertes = [];
     if (resultatBrut < 0) alertes.push({ type:'DEFICIT', gravite:'CRITIQUE', msg:`Résultat négatif: ${Math.abs(resultatBrut).toLocaleString('fr')} F` });
     if (variationCA < -10) alertes.push({ type:'BAISSE_CA', gravite:'ATTENTION', msg:`CA en baisse de ${Math.abs(variationCA)}% vs période précédente` });
-    caisses.filter(c=>c.solde<0).forEach(c=>alertes.push({ type:'CAISSE_NEG', gravite:'CRITIQUE', msg:`Caisse "${c.nom}" négative: ${c.solde.toLocaleString('fr')} F` }));
-    if (retardsPmt > 0) alertes.push({ type:'RETARDS', gravite:'ATTENTION', msg:`${retardsPmt} échéance(s) foncière(s) en retard` });
+    (caissesR||[]).filter(c=>c.solde<0).forEach(c=>alertes.push({ type:'CAISSE_NEG', gravite:'CRITIQUE', msg:`Caisse "${c.nom}" négative: ${c.solde.toLocaleString('fr')} F` }));
+    if ((retardsPmtR||0) > 0) alertes.push({ type:'RETARDS', gravite:'ATTENTION', msg:`${retardsPmtR||0} échéance(s) foncière(s) en retard` });
 
     res.json({
       periode: { debut: dateDebut, fin: dateFin },
-      kpi: { caTotal, depTotal, resultatBrut, resultatNet: resultatBrut, marge, tresorerie, variationCA, variationDep, retardsPmt, caPrec: caPrecVal, depPrec: depPrecVal },
+      kpi: { caTotal, depTotal, resultatBrut, resultatNet: resultatBrut, marge, tresorerie, variationCA, variationDep, retardsPmt: retardsPmtR||0, caPrec: caPrecVal, depPrec: depPrecVal },
       filiales,
-      paiements: encParType.map(e=>({ mode:e.typePaiement, montant:e._sum.montant||0, nbTransactions:e._count.id||0, ticketMoyen:e._count.id>0?Math.round((e._sum.montant||0)/e._count.id):0 })),
-      depenses: decParCateg.map(d=>({ categorie:d.categorie||'Autre', montant:d._sum.montant||0, pct:depTotal>0?Math.round((d._sum.montant||0)/depTotal*100):0 })),
-      caisses: caisses.map(c=>({ id:c.id, nom:c.nom, filiale:c.filiale, solde:c.solde })),
+      paiements: encParTypeR?.map(e=>({ mode:e.typePaiement, montant:e._sum.montant||0, nbTransactions:e._count.id||0, ticketMoyen:e._count.id>0?Math.round((e._sum.montant||0)/e._count.id):0 })),
+      depenses: decParCategR?.map(d=>({ categorie:d.categorie||'Autre', montant:d._sum.montant||0, pct:depTotal>0?Math.round((d._sum.montant||0)/depTotal*100):0 })),
+      caisses: (caissesR||[]).map(c=>({ id:c.id, nom:c.nom, filiale:c.filiale, solde:c.solde })),
       activites: {
-        yakro: { ca:caYakro._sum.montant||0, nbCommandes:nbCommandesYakro },
-        toptelsig: { ca:caFoncier._sum.montant||0, lotsVendus },
-        liya: { ca:caLiya._sum.montant||0, nbLivraisons:livTotal },
+        yakro: { ca:caYakroR?._sum?.montant||0, nbCommandes: nbCommandesYakroR||0 },
+        toptelsig: { ca:caFoncierR?._sum?.montant||0, lotsVendus: lotsVendusR||0 },
+        liya: { ca:caLiyaR?._sum?.montant||0, nbLivraisons: livTotalR||0 },
       },
       courbe: Object.values(courbe30),
       alertes,

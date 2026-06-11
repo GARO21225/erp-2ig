@@ -211,6 +211,16 @@ function OngletLots({ lots = [], projetId, onRefresh }) {
   const [search, setSearch] = useState('');
   const [statutFilter, setStatutFilter] = useState('');
   const [selectedLot, setSelectedLot] = useState(null);
+  const [lotEdit, setLotEdit] = useState(null);
+
+  const deleteLotMut = useMutation({
+    mutationFn: (id) => toptelsigAPI.deleteLot(id),
+    onSuccess: () => {
+      qc.invalidateQueries(['projet-complet', projetId]);
+      onRefresh?.();
+    },
+    onError: e => alert('Erreur: ' + (e?.response?.data?.error || e.message)),
+  });
 
   const filtered = lots.filter(l =>
     (!statutFilter || l.statut === statutFilter) &&
@@ -269,8 +279,25 @@ function OngletLots({ lots = [], projetId, onRefresh }) {
                       </div>
                     )}
                   </td>
-                  <td>
-                    <button className="btn btn-ghost btn-xs" onClick={e => { e.stopPropagation(); setSelectedLot(l); }}><Eye size={11} /></button>
+                  <td onClick={e => e.stopPropagation()}>
+                    <div style={{ display:'flex', gap:3 }}>
+                      <button className="btn btn-ghost btn-xs" title="Aperçu"
+                        onClick={e => { e.stopPropagation(); setSelectedLot(l); }}>
+                        <Eye size={11}/>
+                      </button>
+                      <button className="btn btn-ghost btn-xs" style={{ color:'#1a3f6f' }} title="Modifier"
+                        onClick={e => { e.stopPropagation(); setLotEdit(l); }}>
+                        ✏️
+                      </button>
+                      <button className="btn btn-ghost btn-xs" style={{ color:'#A32D2D' }} title="Supprimer"
+                        onClick={e => {
+                          e.stopPropagation();
+                          if (window.confirm(`Supprimer le lot ${l.numero} ? Action irréversible.`))
+                            deleteLotMut.mutate(l.id);
+                        }}>
+                        🗑️
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -286,6 +313,101 @@ function OngletLots({ lots = [], projetId, onRefresh }) {
       {selectedLot && (
         <FicheLot lot={selectedLot} onClose={() => setSelectedLot(null)} />
       )}
+      {/* Modal édition lot */}
+      {lotEdit && (
+        <ModalEditLot
+          lot={lotEdit}
+          onClose={() => setLotEdit(null)}
+          onSave={(id, data) =>
+            toptelsigAPI.updateLot(id, data)
+              .then(() => { qc.invalidateQueries(['projet-complet', projetId]); setLotEdit(null); onRefresh?.(); })
+              .catch(e => alert('Erreur: ' + (e?.response?.data?.error || e.message)))
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Modal édition lot ──────────────────────────────────────────────────────────
+function ModalEditLot({ lot, onClose, onSave }) {
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    numero: lot.numero || '',
+    ilot: lot.ilot || '',
+    superficie: lot.superficie || '',
+    prix: lot.prix || '',
+    statut: lot.statut || 'DISPONIBLE',
+    localisation: lot.localisation || '',
+    observations: lot.observations || '',
+  });
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await onSave(lot.id, {
+        ...form,
+        superficie: form.superficie !== '' ? Number(form.superficie) : undefined,
+        prix: form.prix !== '' ? Number(form.prix) : undefined,
+      });
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth:520 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18 }}>
+          <h3 style={{ margin:0, fontFamily:'Syne', fontSize:16, color:'#1a3f6f' }}>
+            ✏️ Modifier — Lot {lot.numero}
+          </h3>
+          <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', fontSize:18 }}>✕</button>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+          <div>
+            <label className="label">N° Lot *</label>
+            <input className="input" value={form.numero} onChange={e => set('numero', e.target.value)}/>
+          </div>
+          <div>
+            <label className="label">Îlot</label>
+            <input className="input" value={form.ilot} onChange={e => set('ilot', e.target.value)} placeholder="Ex: ILOT-A"/>
+          </div>
+          <div>
+            <label className="label">Superficie (m²)</label>
+            <input className="input" type="number" min={0} value={form.superficie} onChange={e => set('superficie', e.target.value)}/>
+          </div>
+          <div>
+            <label className="label">Prix catalogue (FCFA)</label>
+            <input className="input" type="number" min={0} value={form.prix} onChange={e => set('prix', e.target.value)}/>
+          </div>
+          <div>
+            <label className="label">Statut</label>
+            <select className="input" value={form.statut} onChange={e => set('statut', e.target.value)}>
+              {['DISPONIBLE','RESERVE','VENDU','INDISPONIBLE','LITIGE'].map(s =>
+                <option key={s} value={s}>{s}</option>
+              )}
+            </select>
+          </div>
+          <div>
+            <label className="label">Localisation</label>
+            <input className="input" value={form.localisation} onChange={e => set('localisation', e.target.value)} placeholder="Ex: Zone A"/>
+          </div>
+          <div style={{ gridColumn:'1/-1' }}>
+            <label className="label">Observations</label>
+            <textarea className="input" rows={2} value={form.observations}
+              onChange={e => set('observations', e.target.value)}
+              style={{ resize:'vertical' }} placeholder="Notes internes..."/>
+          </div>
+        </div>
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:20, borderTop:'0.5px solid #e8e7e1', paddingTop:14 }}>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>Annuler</button>
+          <button className="btn btn-primary btn-sm" style={{ background:'#1a3f6f', border:'none' }}
+            disabled={!form.numero || saving}
+            onClick={handleSave}>
+            {saving ? '...' : '✓ Enregistrer'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
