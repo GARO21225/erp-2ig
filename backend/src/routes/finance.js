@@ -327,45 +327,32 @@ router.get('/pilotage', auth, async (req, res) => {
     const whereFiliale = filiale ? { ...where, filiale } : where;
 
     // Requêtes parallèles
-    const results = await Promise.allSettled([
-      // CA et dépenses période actuelle
-      prisma.encaissement.aggregate({ _sum:{ montant:true }, where: whereFiliale }),
-      prisma.decaissement.aggregate({ _sum:{ montant:true }, where: whereFiliale }),
-      // Période précédente pour comparaison
-      prisma.encaissement.aggregate({ _sum:{ montant:true }, where: filiale ? { ...wherePrec, filiale } : wherePrec }),
-      prisma.decaissement.aggregate({ _sum:{ montant:true }, where: filiale ? { ...wherePrec, filiale } : wherePrec }),
-      // Répartition par filiale
-      prisma.encaissement.groupBy({ by:['filiale'], _sum:{ montant:true }, where }),
-      prisma.decaissement.groupBy({ by:['filiale'], _sum:{ montant:true }, where }),
-      // Par mode de paiement
-      prisma.encaissement.groupBy({ by:['typePaiement'], _sum:{ montant:true }, _count:{ id:true }, where: whereFiliale }),
-      // Par catégorie de dépense
-      prisma.decaissement.groupBy({ by:['categorie'], _sum:{ montant:true }, where: whereFiliale, orderBy:{ _sum:{ montant:'desc' } }, take:10 }),
-      // Caisses
-      prisma.caisse.findMany({ where:{ actif:true }, orderBy:{ filiale:'asc' } }),
-      // Yakro
-      prisma.paiementYakro.aggregate({ _sum:{ montant:true }, where:{ createdAt:{ gte:dateDebut } } }),
-      prisma.commandeYakro.count({ where:{ statut:'PAYEE', createdAt:{ gte:dateDebut } } }),
-      // TOPTELSIG
-      prisma.lot.count({ where:{ statut:'VENDU' } }),
-      prisma.paiementFoncier.aggregate({ _sum:{ montant:true }, where:{ createdAt:{ gte:dateDebut } } }),
-      // LiYA
-      prisma.livraison.count({ where:{ createdAt:{ gte:dateDebut } } }),
-      prisma.encaissement.aggregate({ _sum:{ montant:true }, where:{ filiale:'LIYA', createdAt:{ gte:dateDebut } } }),
-      // Courbes 30 jours
-      prisma.encaissement.groupBy({ by:['createdAt'], _sum:{ montant:true }, where: whereFiliale }),
-      prisma.decaissement.groupBy({ by:['createdAt'], _sum:{ montant:true }, where: whereFiliale }),
-      // Impayés / retards
-      prisma.echeancier.count({ where:{ statut:'RETARD' } }),
-    ]);
+    const safe = async (fn) => { try { return await fn(); } catch { return null; } };
 
-    // Extraire les valeurs avec fallback (Promise.allSettled)
-    const sv = r => r?.status === 'fulfilled' ? r.value : null;
     const [encTotalR, decTotalR, encPrecR, decPrecR,
       encParFilialeR, decParFilialeR, encParTypeR, decParCategR,
       caissesR, caYakroR, nbCommandesYakroR,
       lotsVendusR, caFoncierR, livTotalR, caLiyaR,
-      encCourbeR, decCourbeR, retardsPmtR] = results.map(sv);
+      encCourbeR, decCourbeR, retardsPmtR] = await Promise.all([
+      safe(() => prisma.encaissement.aggregate({ _sum:{ montant:true }, where: whereFiliale })),
+      safe(() => prisma.decaissement.aggregate({ _sum:{ montant:true }, where: whereFiliale })),
+      safe(() => prisma.encaissement.aggregate({ _sum:{ montant:true }, where: filiale ? { ...wherePrec, filiale } : wherePrec })),
+      safe(() => prisma.decaissement.aggregate({ _sum:{ montant:true }, where: filiale ? { ...wherePrec, filiale } : wherePrec })),
+      safe(() => prisma.encaissement.groupBy({ by:['filiale'], _sum:{ montant:true }, where })),
+      safe(() => prisma.decaissement.groupBy({ by:['filiale'], _sum:{ montant:true }, where })),
+      safe(() => prisma.encaissement.groupBy({ by:['typePaiement'], _sum:{ montant:true }, _count:{ id:true }, where: whereFiliale })),
+      safe(() => prisma.decaissement.groupBy({ by:['categorie'], _sum:{ montant:true }, where: whereFiliale, orderBy:{ _sum:{ montant:'desc' } }, take:10 })),
+      safe(() => prisma.caisse.findMany({ where:{ actif:true }, orderBy:{ filiale:'asc' } })),
+      safe(() => prisma.paiementYakro.aggregate({ _sum:{ montant:true }, where:{ createdAt:{ gte:dateDebut } } })),
+      safe(() => prisma.commandeYakro.count({ where:{ statut:'PAYEE', createdAt:{ gte:dateDebut } } })),
+      safe(() => prisma.lot.count({ where:{ statut:'VENDU' } })),
+      safe(() => prisma.paiementFoncier.aggregate({ _sum:{ montant:true }, where:{ createdAt:{ gte:dateDebut } } })),
+      safe(() => prisma.livraison.count({ where:{ createdAt:{ gte:dateDebut } } })),
+      safe(() => prisma.encaissement.aggregate({ _sum:{ montant:true }, where:{ filiale:'LIYA', createdAt:{ gte:dateDebut } } })),
+      safe(() => prisma.encaissement.groupBy({ by:['createdAt'], _sum:{ montant:true }, where: whereFiliale })),
+      safe(() => prisma.decaissement.groupBy({ by:['createdAt'], _sum:{ montant:true }, where: whereFiliale })),
+      safe(() => prisma.echeancier.count({ where:{ statut:'RETARD' } })),
+    ]);
 
     const caTotal = encTotalR?._sum?.montant || 0;
     const depTotal = decTotalR?._sum?.montant || 0;

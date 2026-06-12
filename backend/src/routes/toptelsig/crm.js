@@ -58,23 +58,42 @@ router.get('/prospects', auth, toptelsig, async (req, res) => {
       { email: { contains: search, mode: 'insensitive' } },
     ];
 
-    const contacts = await prisma.souscripteur.findMany({
-      where,
-      include: {
-        relances: { orderBy: { dateRelance: 'desc' }, take: 5 },
-        ventes: {
-          include: {
-            lot: { select: { numero:true, projet: { select: { nom:true, code:true } } } },
+    // Essai avec contactProjets (peut échouer si table pas encore créée)
+    let contacts;
+    try {
+      contacts = await prisma.souscripteur.findMany({
+        where,
+        include: {
+          relances: { orderBy: { dateRelance: 'desc' }, take: 5 },
+          ventes: {
+            include: {
+              lot: { select: { numero:true, projet: { select: { nom:true, code:true } } } },
+            },
+          },
+          reservations: { select: { id:true, statut:true } },
+          contactProjets: {
+            include: { projet: { select: { nom:true, code:true } } },
+            take: 5,
           },
         },
-        reservations: { select: { id:true, statut:true } },
-        contactProjets: {
-          include: { projet: { select: { nom:true, code:true } } },
-          take: 5,
+        orderBy: { createdAt: 'desc' },
+      });
+    } catch {
+      // Fallback sans contactProjets si table absente
+      contacts = await prisma.souscripteur.findMany({
+        where,
+        include: {
+          relances: { orderBy: { dateRelance: 'desc' }, take: 5 },
+          ventes: {
+            include: {
+              lot: { select: { numero:true } },
+            },
+          },
+          reservations: { select: { id:true, statut:true } },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        orderBy: { createdAt: 'desc' },
+      });
+    }
 
     res.json(contacts.map(c => enrichirContact(c, null)));
   } catch (e) { res.status(500).json({ error: e.message }); }
