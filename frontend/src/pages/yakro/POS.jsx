@@ -230,7 +230,7 @@ function ModalPaiement({ commande, loading, onClose, onPay }) {
 }
 
 // ─── Modal panneau table (détail) ───────────────────────────────────────────
-function PanneauTable({ table, listeServeurs, allTables, onClose, onCommander, onEncaisser, onChanger, qc }) {
+function PanneauTable({ table, listeServeurs, allTables, onClose, onCommander, onEncaisser, onChanger, onRetour, qc }) {
   const [showChangerServeur, setShowChangerServeur] = useState(false);
   const [showTransferer, setShowTransferer] = useState(false);
   const [nouveauServeurId, setNouveauServeurId] = useState('');

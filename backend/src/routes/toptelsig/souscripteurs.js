@@ -183,12 +183,12 @@ router.get('/:id', auth, toptelsig, async (req, res) => {
             echeanciers: { orderBy: { numero: 'asc' } },
             paiements: {
               orderBy: { createdAt: 'asc' },
-              include: { vente: { select: { lot: { select: { numero: true } } } } }
+              include: { vente: { include: { lot: { select: { numero: true } } } } }
             },
           }
         },
         documents: { orderBy: { createdAt: 'desc' } },
-        paiements: { orderBy: { createdAt: 'desc' }, take: 50, include: { vente: { select: { lot: { select: { numero:true, projet:{ select:{ nom:true } } } } } } } },
+        paiements: { orderBy: { createdAt: 'desc' }, take: 50, include: { vente: { include: { lot: { select: { numero:true, projet:{ select:{ nom:true } } } } } } } },
       }
     });
     if (!s) return res.status(404).json({ error: 'Souscripteur introuvable' });

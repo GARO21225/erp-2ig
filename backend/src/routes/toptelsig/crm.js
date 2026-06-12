@@ -30,7 +30,7 @@ router.get('/prospects', auth, toptelsig, async (req, res) => {
           souscripteur: {
             include: {
               relances: { orderBy: { dateRelance: 'desc' }, take: 5 },
-              ventes: { select: { id:true, statut:true, prixVente:true }, where: { lot: { projetId } } },
+              ventes: { where: { lot: { projetId } }, include: { lot: { select: { numero:true } } } },
               reservations: { select: { id:true, statut:true }, where: { lot: { projetId } } },
             }
           },
@@ -61,8 +61,9 @@ router.get('/prospects', auth, toptelsig, async (req, res) => {
       include: {
         relances: { orderBy: { dateRelance: 'desc' }, take: 5 },
         ventes: {
-          select: { id:true, statut:true, prixVente:true, dateVente:true },
-          include: { lot: { select: { numero:true, projet: { select: { nom:true } } } } },
+          include: {
+            lot: { select: { numero:true, projet: { select: { nom:true, code:true } } } },
+          },
         },
         reservations: { select: { id:true, statut:true } },
         contactProjets: {
