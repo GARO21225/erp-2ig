@@ -151,7 +151,7 @@ export default function FinancePage() {
   const showToast = (msg, type='success') => { setToast({msg,type}); setTimeout(()=>setToast(null),4000); };
   const [drillDown, setDrillDown] = useState(null); // { type, label, value }
 
-  const { data: d, isLoading, refetch } = useQuery({
+  const { data: d, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['finance-pilotage', periode, filialeFilter],
     queryFn: () => financeAPI.pilotage({ periode, filiale: filialeFilter||undefined }),
     staleTime: 30000,
@@ -189,6 +189,12 @@ export default function FinancePage() {
 
   return (
     <div className="page-enter">
+      {isError && (
+        <div style={{ background:'#FCEBEB', border:'1px solid #F7C1C1', borderRadius:8, padding:'12px 16px', marginBottom:16, fontSize:13, color:'#A32D2D' }}>
+          ⚠ Erreur chargement Finance : {error?.response?.data?.error || error?.message || 'Erreur serveur'}
+          <button className="btn btn-ghost btn-xs" style={{ marginLeft:12 }} onClick={()=>refetch()}>Réessayer</button>
+        </div>
+      )}
       {/* ── HEADER ── */}
       <div className="page-header">
         <div>

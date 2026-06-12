@@ -36,11 +36,28 @@ router.get('/', auth, liya, async (req, res) => {
 // POST /api/liya/stock3pl — Nouvelle entrée stock client
 router.post('/', auth, liya, async (req, res) => {
   try {
+    const { partenaireId, clientNom, clientTel, article, quantite, unite, notes } = req.body;
+    if (!article || !quantite) return res.status(400).json({ error: 'article et quantite requis' });
+    if (!clientNom && !partenaireId) return res.status(400).json({ error: 'clientNom ou partenaireId requis' });
+
     const stock = await prisma.stockClient3PL.create({
-      data: { ...req.body, quantite: Number(req.body.quantite), statut: 'EN_STOCK' }
+      data: {
+        partenaireId: partenaireId || null,
+        clientNom: clientNom || '',
+        clientTel: clientTel || null,
+        article,
+        quantite: Number(quantite),
+        unite: unite || 'unité',
+        notes: notes || null,
+        statut: 'EN_STOCK',
+      },
+      include: { partenaire: { select: { nom: true, telephone: true } } }
     });
     res.status(201).json(stock);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[Stock3PL POST]', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // PUT /api/liya/stock3pl/:id — Sortie partielle ou totale

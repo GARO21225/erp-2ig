@@ -226,6 +226,11 @@ export const liyaAPI = {
   addMaintenance: (id, data) => api.post(`/liya/motos/${id}/maintenances`, data),
   addPlein: (id, data) => api.post(`/liya/motos/${id}/pleins`, data),
   historique: (id) => api.get(`/liya/motos/${id}/historique`),
+
+  // Stock 3PL
+  stock3pl: (params) => api.get('/liya/stock3pl', { params }),
+  createStock3pl: (data) => api.post('/liya/stock3pl', data),
+  sortirStock3pl: (id, data) => api.put(`/liya/stock3pl/${id}/sortie`, data),
 };
 
 export default api;

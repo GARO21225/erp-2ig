@@ -1105,7 +1105,7 @@ model StockClient3PL {
   partenaireId String?
   partenaire   Partenaire? @relation(fields: [partenaireId], references: [id])
   clientNom    String
-  clientTel    String
+  clientTel    String?  // Optionnel si partenaire sélectionné
   article     String
   quantite    Float
   unite       String   @default("unité")
