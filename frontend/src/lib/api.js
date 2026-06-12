@@ -133,6 +133,12 @@ export const yakroAPI = {
   createAnnulation: (data) => api.post('/yakro/caisse-session/annulations', data),
   createRemise: (data) => api.post('/yakro/caisse-session/remises', data),
   historique: (params) => api.get('/yakro/commandes/historique', { params }),
+  genererFacture: (commandeId) => api.post('/yakro/factures/generer', { commandeId }),
+  getFacture: (id) => api.get(`/yakro/factures/${id}`),
+  listFactures: (params) => api.get('/yakro/factures', { params }),
+  creerRetour: (data) => api.post('/yakro/factures/retours', data),
+  validerRetour: (id) => api.put(`/yakro/factures/retours/${id}/valider`),
+  listeRetours: (params) => api.get('/yakro/factures/retours/liste', { params }),
 };
 
 // ── TOPTELSIG

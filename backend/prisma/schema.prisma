@@ -662,6 +662,7 @@ model ProjetFoncier {
   lots            Lot[]
   depenses        DepenseFoncier[]
   phases          PhaseFoncier[]
+  contactProjets  ContactProjet[]
   responsableId   String?
   responsableNom  String?
   priorite        String?   @default("NORMALE") // HAUTE, NORMALE, BASSE
@@ -1348,7 +1349,7 @@ model ContactProjet {
   souscripteurId  String
   souscripteur    Souscripteur @relation(fields: [souscripteurId], references: [id], onDelete: Cascade)
   projetId        String
-  projet          Projet   @relation(fields: [projetId], references: [id])
+  projet          ProjetFoncier @relation(fields: [projetId], references: [id])
   statut          String   @default("PROSPECT")
   // PROSPECT | CONTACTE | VISITE | NEGOCIE | PROPOSITION | RESERVE | CLIENT | PERDU
   commercialId    String?
@@ -1378,4 +1379,50 @@ model PropositionFoncier {
   updatedAt       DateTime @updatedAt
 
   @@map("propositions_foncier")
+}
+
+// ── YAKRO GRILL — FACTURES & RETOURS ─────────────────────────────────────────
+
+model FactureYakro {
+  id              String   @id @default(cuid())
+  numero          String   @unique   // FAC-YG-2026-000001
+  commandeId      String   @unique
+  tableNumero     Int?
+  serveurNom      String?
+  nbCouverts      Int      @default(1)
+  sousTotal       Float    @default(0)
+  remise          Float    @default(0)
+  total           Float    @default(0)
+  paiements       String   // JSON [{type, montant, reference}]
+  especesRecues   Float?
+  monnaieRendue   Float?
+  contenuHtml     String?  // HTML de la facture générée
+  statut          String   @default("EMISE") // EMISE | ANNULEE
+  creePar         String
+  creeParNom      String
+  createdAt       DateTime @default(now())
+
+  @@map("factures_yakro")
+}
+
+model RetourArticleYakro {
+  id              String   @id @default(cuid())
+  commandeId      String
+  ligneId         String?
+  menuNom         String
+  menuId          String?
+  quantite        Int      @default(1)
+  prixUnitaire    Float
+  montantDeduit   Float
+  motif           String
+  retourStock     Boolean  @default(false)  // Article retourné en stock ?
+  employeId       String?
+  employeNom      String
+  responsableId   String?
+  responsableNom  String?
+  valide          Boolean  @default(false)
+  valideLe        DateTime?
+  createdAt       DateTime @default(now())
+
+  @@map("retours_articles_yakro")
 }

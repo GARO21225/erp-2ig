@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { exportTicketYakro } from '../../lib/export';
 import { yakroAPI, employesAPI } from '../../lib/api';
+import DocumentViewer from '../../components/ui/DocumentViewer';
 import { Plus, X, Minus, ShoppingBag, Banknote, Smartphone, CreditCard, CheckCircle, Users, RefreshCw, ArrowRight } from 'lucide-react';
 
 const STATUT_TABLE = {
@@ -341,8 +342,106 @@ function PanneauTable({ table, listeServeurs, allTables, onClose, onCommander, o
               <button className="btn btn-ghost btn-sm" style={{ gridColumn:'span 2',fontSize:12,color:'#888' }} disabled={cloturerMut.isPending} onClick={()=>{ if(window.confirm('Clôturer et libérer la table ?')) cloturerMut.mutate(); }}>
                 🧹 {cloturerMut.isPending?'...':'Clôturer & Nettoyer'}
               </button>
+              {commande && (
+                <button className="btn btn-ghost btn-sm" style={{ gridColumn:'span 2',fontSize:12,color:'#BA7517' }}
+                  onClick={() => { onRetour(commande); }}>
+                  ↩ Retour article
+                </button>
+              )}
             </>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ── Modal Retour Article ──────────────────────────────────────────────────────
+function ModalRetourArticle({ commande, onClose, onSave }) {
+  const [ligneId, setLigneId] = useState('');
+  const [quantite, setQuantite] = useState(1);
+  const [motif, setMotif] = useState('');
+  const [retourStock, setRetourStock] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const ligneChoisie = commande.lignes?.find(l => l.id === ligneId);
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth:420 }} onClick={e=>e.stopPropagation()}>
+        <div style={{ display:'flex', justifyContent:'space-between', marginBottom:16 }}>
+          <h3 style={{ margin:0, fontFamily:'Syne', fontSize:15, color:'#BA7517' }}>↩ Retour article — {commande.numero}</h3>
+          <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer' }}>✕</button>
+        </div>
+
+        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          <div>
+            <label className="label">Article à retourner *</label>
+            <select className="input" value={ligneId} onChange={e=>{setLigneId(e.target.value);setQuantite(1);}}>
+              <option value="">— Sélectionner un article</option>
+              {(commande.lignes||[]).map(l=>(
+                <option key={l.id} value={l.id}>
+                  {l.menu?.nom||l.menuNom||'?'} × {l.quantite} — {(l.prixUnitaire||0).toLocaleString('fr')} F/u
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {ligneChoisie && (
+            <div>
+              <label className="label">Quantité retournée (max: {ligneChoisie.quantite})</label>
+              <input className="input" type="number" min={1} max={ligneChoisie.quantite}
+                value={quantite} onChange={e=>setQuantite(Math.min(Number(e.target.value), ligneChoisie.quantite))}/>
+              <div style={{ fontSize:11, color:'#8B1A1A', marginTop:4, fontWeight:600 }}>
+                Montant déduit : -{(quantite * ligneChoisie.prixUnitaire).toLocaleString('fr')} F
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="label">Motif *</label>
+            <select className="input" value={motif} onChange={e=>setMotif(e.target.value)}>
+              <option value="">— Sélectionner</option>
+              <option value="Erreur commande">Erreur commande</option>
+              <option value="Insatisfaction client">Insatisfaction client</option>
+              <option value="Article non conforme">Article non conforme</option>
+              <option value="Changement d'avis">Changement d'avis</option>
+              <option value="Doublon">Doublon</option>
+              <option value="Autre">Autre</option>
+            </select>
+          </div>
+
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <input type="checkbox" id="retourStock" checked={retourStock} onChange={e=>setRetourStock(e.target.checked)} style={{ width:14,height:14 }}/>
+            <label htmlFor="retourStock" style={{ fontSize:12, cursor:'pointer' }}>
+              Retourner en stock (article non consommé)
+            </label>
+          </div>
+
+          {ligneChoisie && (
+            <div style={{ background:'#FAEEDA', borderRadius:8, padding:'8px 12px', fontSize:11, color:'#412402' }}>
+              ⚠ Un responsable devra valider ce retour. Le montant sera déduit immédiatement.
+            </div>
+          )}
+        </div>
+
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:18 }}>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>Annuler</button>
+          <button className="btn btn-primary btn-sm" style={{ background:'#BA7517', border:'none' }}
+            disabled={!ligneId||!motif||saving||!ligneChoisie}
+            onClick={async ()=>{
+              setSaving(true);
+              await onSave({
+                ligneId, menuNom: ligneChoisie.menu?.nom||'?',
+                menuId: ligneChoisie.menuId,
+                quantite, prixUnitaire: ligneChoisie.prixUnitaire,
+                motif, retourStock,
+              });
+              setSaving(false);
+            }}>
+            {saving?'...':'↩ Enregistrer le retour'}
+          </button>
         </div>
       </div>
     </div>
@@ -356,6 +455,8 @@ export default function POS() {
   const [panneauTable, setPanneauTable] = useState(null);
   const [commandeTable, setCommandeTable] = useState(null);
   const [paiementCommande, setPaiementCommande] = useState(null);
+  const [factureDoc, setFactureDoc] = useState(null); // {numero, titre, html} après paiement
+  const [retourFor, setRetourFor] = useState(null); // commande pour retour article
 
   const { data: tables = [] } = useQuery({ queryKey:['tables'], queryFn:yakroAPI.tables, refetchInterval:15000 });
   const { data: menu } = useQuery({ queryKey:['menu'], queryFn:()=>yakroAPI.menu({ disponible:'true' }) });
@@ -367,7 +468,23 @@ export default function POS() {
 
   const createCmd = useMutation({ mutationFn:yakroAPI.createCommande, onSuccess:()=>{ qc.invalidateQueries(['tables']); setCommandeTable(null); setPanneauTable(null); showToast('Commande créée ✓'); }, onError:e=>showToast(e?.error||'Erreur','error') });
   const updateStatut = useMutation({ mutationFn:({id,statut})=>yakroAPI.updateStatut(id,statut), onSuccess:()=>{ qc.invalidateQueries(['tables']); showToast('Statut mis à jour'); } });
-  const payerCmd = useMutation({ mutationFn:({id,data})=>yakroAPI.payer(id,data), onSuccess:()=>{ qc.invalidateQueries(['tables']); setPaiementCommande(null); setPanneauTable(null); showToast('✅ Paiement OK'); }, onError:e=>showToast(e?.error||'Erreur paiement','error') });
+  const payerCmd = useMutation({
+    mutationFn: ({ id, data }) => yakroAPI.payer(id, data),
+    onSuccess: async (res, vars) => {
+      qc.invalidateQueries(['tables']);
+      setPaiementCommande(null);
+      setPanneauTable(null);
+      showToast('✅ Paiement OK');
+      // Générer la facture automatiquement
+      try {
+        const facture = await yakroAPI.genererFacture(vars.id);
+        if (facture?.contenuHtml) {
+          setFactureDoc({ numero: facture.numero, titre: `Facture ${facture.numero}`, html: facture.contenuHtml });
+        }
+      } catch (e) { console.error('Facture non générée:', e.message); }
+    },
+    onError: e => showToast(e?.error || 'Erreur paiement', 'error'),
+  });
 
   const tablesFiltrees = tables.filter(t=>t.zone===zone);
   const occupees = tables.filter(t=>t.statut==='OCCUPEE').length;
@@ -496,6 +613,7 @@ export default function POS() {
           onCommander={()=>handleCommander(panneauTable)}
           onEncaisser={()=>handleEncaisser(panneauTable)}
           onChanger={()=>{}}
+          onRetour={(cmd)=>{ setPanneauTable(null); setRetourFor(cmd); }}
         />
       )}
 
@@ -523,6 +641,30 @@ export default function POS() {
         <div style={{ position:'fixed',bottom:20,right:16,background:toast.type==='error'?'#A32D2D':'#27500A',color:'white',padding:'10px 18px',borderRadius:10,fontSize:13,zIndex:9999 }}>
           {toast.msg}
         </div>
+      )}
+
+      {/* Visionneuse facture après encaissement */}
+      {factureDoc && (
+        <DocumentViewer
+          document={factureDoc}
+          onClose={() => setFactureDoc(null)}
+        />
+      )}
+
+      {/* Modal retour article */}
+      {retourFor && (
+        <ModalRetourArticle
+          commande={retourFor}
+          onClose={() => setRetourFor(null)}
+          onSave={async (data) => {
+            try {
+              await yakroAPI.creerRetour({ commandeId: retourFor.id, ...data });
+              qc.invalidateQueries(['tables']);
+              setRetourFor(null);
+              showToast(`Retour enregistré — -${(data.quantite * data.prixUnitaire).toLocaleString('fr')} F`);
+            } catch (e) { showToast(e?.response?.data?.error || 'Erreur retour', 'error'); }
+          }}
+        />
       )}
     </div>
   );

@@ -153,3 +153,64 @@ BEGIN
 
   RAISE NOTICE 'ContactProjet + PropositionFoncier OK';
 END $$;
+
+-- Factures Yakro
+DO $$
+BEGIN
+  -- Corriger ContactProjet (table manquante)
+  CREATE TABLE IF NOT EXISTS "contact_projets" (
+    "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    "souscripteurId" TEXT NOT NULL,
+    "projetId" TEXT NOT NULL,
+    "statut" TEXT DEFAULT 'PROSPECT',
+    "commercialId" TEXT,
+    "commercialNom" TEXT,
+    "tags" TEXT,
+    "notes" TEXT,
+    "dateCreation" TIMESTAMP DEFAULT NOW(),
+    "updatedAt" TIMESTAMP DEFAULT NOW(),
+    UNIQUE("souscripteurId", "projetId")
+  );
+
+  CREATE TABLE IF NOT EXISTS "factures_yakro" (
+    "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    "numero" TEXT UNIQUE NOT NULL,
+    "commandeId" TEXT UNIQUE NOT NULL,
+    "tableNumero" INTEGER,
+    "serveurNom" TEXT,
+    "nbCouverts" INTEGER DEFAULT 1,
+    "sousTotal" FLOAT DEFAULT 0,
+    "remise" FLOAT DEFAULT 0,
+    "total" FLOAT DEFAULT 0,
+    "paiements" TEXT NOT NULL,
+    "especesRecues" FLOAT,
+    "monnaieRendue" FLOAT,
+    "contenuHtml" TEXT,
+    "statut" TEXT DEFAULT 'EMISE',
+    "creePar" TEXT NOT NULL,
+    "creeParNom" TEXT NOT NULL,
+    "createdAt" TIMESTAMP DEFAULT NOW()
+  );
+
+  CREATE TABLE IF NOT EXISTS "retours_articles_yakro" (
+    "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    "commandeId" TEXT NOT NULL,
+    "ligneId" TEXT,
+    "menuNom" TEXT NOT NULL,
+    "menuId" TEXT,
+    "quantite" INTEGER DEFAULT 1,
+    "prixUnitaire" FLOAT NOT NULL,
+    "montantDeduit" FLOAT NOT NULL,
+    "motif" TEXT NOT NULL,
+    "retourStock" BOOLEAN DEFAULT false,
+    "employeId" TEXT,
+    "employeNom" TEXT NOT NULL,
+    "responsableId" TEXT,
+    "responsableNom" TEXT,
+    "valide" BOOLEAN DEFAULT false,
+    "valideLe" TIMESTAMP,
+    "createdAt" TIMESTAMP DEFAULT NOW()
+  );
+
+  RAISE NOTICE 'Factures et retours Yakro OK';
+END $$;
