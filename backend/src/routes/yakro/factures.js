@@ -29,9 +29,10 @@ async function genNumeroFacture() {
 function genFactureHtml(params, commande, paiements, numero) {
   const coul = params.couleurPrimaire || '#8B1A1A';
   const now = new Date();
-  const totalPaiements = paiements.reduce((s, p) => s + (p.montant || 0), 0);
-  const especesRecues = paiements.find(p => p.typePaiement === 'ESPECES')?.montantRecu || 0;
-  const monnaie = especesRecues > 0 ? Math.max(0, especesRecues - commande.total) : 0;
+  // Lire espèces depuis CaisseTransaction (source de vérité)
+  const caisseTx = commande.caisseTransaction;
+  const especesRecues = caisseTx?.especesRecues || 0;
+  const monnaie = caisseTx?.monnaieRendue || 0;
 
   const modeLabel = { ESPECES:'Espèces', ORANGE_MONEY:'Orange Money', MTN_MONEY:'MTN Money', MOOV_MONEY:'Moov Money', WAVE:'Wave', BANQUE:'Banque/TPE' };
 
@@ -104,7 +105,8 @@ function genFactureHtml(params, commande, paiements, numero) {
   <div style="background:#F0F9EA;border-radius:6px;padding:8px 10px;margin-bottom:12px;font-size:11px;">
     <div style="font-weight:600;margin-bottom:4px;">Paiement</div>
     ${paiements.map(p => `<div style="display:flex;justify-content:space-between;"><span>${modeLabel[p.typePaiement] || p.typePaiement}</span><span style="font-weight:600;">${fmtF(p.montant)}</span></div>`).join('')}
-    ${especesRecues > commande.total ? `<div style="display:flex;justify-content:space-between;margin-top:4px;color:#27500A;"><span>Monnaie rendue</span><span style="font-weight:700;">${fmtF(monnaie)}</span></div>` : ''}
+    ${especesRecues > 0 ? `<div style="display:flex;justify-content:space-between;margin-top:4px;"><span>Espèces reçues</span><span>${fmtF(especesRecues)}</span></div>` : ''}
+    ${monnaie > 0 ? `<div style="display:flex;justify-content:space-between;margin-top:2px;color:#27500A;font-weight:700;"><span>Monnaie rendue</span><span>${fmtF(monnaie)}</span></div>` : ''}
   </div>
 
   <!-- Pied de page -->
@@ -131,6 +133,7 @@ router.post('/generer', auth, yakro, async (req, res) => {
         table: { select: { numero: true } },
         lignes: { include: { menu: { select: { nom: true, categorie: true } } } },
         paiements: true,
+        caisseTransaction: true,
       }
     });
     if (!commande) return res.status(404).json({ error: 'Commande introuvable' });

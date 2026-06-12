@@ -25,6 +25,12 @@ api.interceptors.response.use(
 
 // ── AUTH
 export const authAPI = {
+  creerDepuisEmploye: (data) => api.post('/auth/creer-depuis-employe', data),
+  resetPassword: (id) => api.post(`/auth/utilisateurs/${id}/reset-password`),
+  historisation: (params) => api.get('/auth/historisation', { params }),
+  getUtilisateurs: (params) => api.get('/auth/utilisateurs', { params }),
+  updateRole: (id, data) => api.put(`/auth/utilisateurs/${id}/role`, data),
+  desactiverUser: (id) => api.delete(`/auth/utilisateurs/${id}`),
   listUtilisateurs: (params) => api.get('/auth/utilisateurs', { params }),
   updateRole: (id, data) => api.put(`/auth/utilisateurs/${id}/role`, data),
   unlockAccount: (id) => api.post(`/auth/unlock/${id}`),

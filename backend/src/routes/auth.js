@@ -416,4 +416,133 @@ router.delete('/utilisateurs/:id', auth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── POST /api/auth/creer-depuis-employe — Créer accès ERP depuis fiche employé
+router.post('/creer-depuis-employe', auth, async (req, res) => {
+  try {
+    if (!['DG','DIRECTEUR','RH'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Réservé au DG/RH' });
+    }
+    const { employeId, email, role, filiale } = req.body;
+    if (!employeId || !email || !role || !filiale) {
+      return res.status(400).json({ error: 'employeId, email, role, filiale requis' });
+    }
+
+    // Récupérer l'employé
+    const employe = await prisma.employe.findUnique({ where: { id: employeId } });
+    if (!employe) return res.status(404).json({ error: 'Employé introuvable' });
+    if (employe.utilisateurId) return res.status(400).json({ error: 'Cet employé a déjà un accès ERP' });
+
+    // Générer mot de passe temporaire
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const mdpTemp = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    const hash = await bcrypt.hash(mdpTemp, SALT_ROUNDS);
+
+    const result = await prisma.$transaction(async tx => {
+      // Créer l'utilisateur
+      const user = await tx.utilisateur.create({
+        data: {
+          email: email.toLowerCase().trim(),
+          motDePasse: hash,
+          nom: employe.nom,
+          prenom: employe.prenom,
+          telephone: employe.telephone || null,
+          role, filiale,
+          actif: true,
+          loginAttempts: 0,
+        }
+      });
+      // Lier à l'employé
+      await tx.employe.update({
+        where: { id: employeId },
+        data: { utilisateurId: user.id }
+      });
+      // Audit
+      await tx.auditLog.create({ data: {
+        utilisateurId: req.user.id,
+        utilisateurNom: `${req.user.prenom} ${req.user.nom}`,
+        filiale: req.user.filiale,
+        action: 'CREATE',
+        entite: 'Utilisateur',
+        entiteId: user.id,
+        entiteLabel: `Accès ERP créé pour ${employe.prenom} ${employe.nom} — Rôle: ${role}`,
+      }});
+      return user;
+    });
+
+    const { motDePasse: _, ...userSafe } = result;
+    logger.info('[AUTH] Accès ERP créé depuis employé', { employeId, email, role });
+
+    res.status(201).json({
+      utilisateur: userSafe,
+      mdpTemporaire: mdpTemp,
+      message: `Accès créé — Identifiant: ${email} — Mot de passe temporaire: ${mdpTemp}`,
+    });
+  } catch (e) {
+    if (e.code === 'P2002') return res.status(400).json({ error: 'Email déjà utilisé' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── POST /api/auth/utilisateurs/:id/reset-password — Réinitialiser mdp
+router.post('/utilisateurs/:id/reset-password', auth, async (req, res) => {
+  try {
+    if (!['DG','DIRECTEUR','RH'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Réservé au DG/RH' });
+    }
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const mdpTemp = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    const hash = await bcrypt.hash(mdpTemp, SALT_ROUNDS);
+
+    const user = await prisma.utilisateur.update({
+      where: { id: req.params.id },
+      data: { motDePasse: hash, loginAttempts: 0, lockedUntil: null },
+      select: { id:true, email:true, nom:true, prenom:true, telephone:true }
+    });
+
+    await prisma.session.deleteMany({ where: { utilisateurId: req.params.id } });
+
+    await prisma.auditLog.create({ data: {
+      utilisateurId: req.user.id,
+      utilisateurNom: `${req.user.prenom} ${req.user.nom}`,
+      filiale: req.user.filiale,
+      action: 'PASSWORD_CHANGE',
+      entite: 'Utilisateur',
+      entiteId: req.params.id,
+      entiteLabel: `Réinitialisation mot de passe pour ${user.prenom} ${user.nom}`,
+    }});
+
+    logger.info('[AUTH] Mot de passe réinitialisé', { targetId: req.params.id });
+
+    res.json({
+      message: `Mot de passe réinitialisé`,
+      mdpTemporaire: mdpTemp,
+      utilisateur: user,
+      notification: `Votre accès ERP a été réinitialisé.\nIdentifiant: ${user.email}\nMot de passe temporaire: ${mdpTemp}`,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── GET /api/auth/historisation — Journal des actions (AuditLog)
+router.get('/historisation', auth, async (req, res) => {
+  try {
+    if (!['DG','DIRECTEUR','RH','MANAGER'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Accès réservé' });
+    }
+    const { filiale, action, entite, userId, limit = 100, offset = 0 } = req.query;
+    const where = {};
+    if (filiale) where.filiale = filiale;
+    if (action) where.action = action;
+    if (entite) where.entite = entite;
+    if (userId) where.utilisateurId = userId;
+    const [logs, total] = await Promise.all([
+      prisma.auditLog.findMany({
+        where, orderBy: { createdAt: 'desc' },
+        take: Number(limit), skip: Number(offset),
+      }),
+      prisma.auditLog.count({ where }),
+    ]);
+    res.json({ data: logs, total });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = router;

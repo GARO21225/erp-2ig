@@ -1,242 +1,552 @@
+/**
+ * Gestion des Accès, Utilisateurs et Rôles ERP
+ * CdC complet : création, rôles, permissions, reset mdp, traçabilité
+ */
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { authAPI } from '../../lib/api';
 import { useAuthStore } from '../../store';
-import { Users, Plus, Shield, Lock, Unlock, Eye } from 'lucide-react';
-import { ROLES_LABELS } from '../../lib/catalogue-rh';
+import { Plus, X, Key, Shield, Eye, Lock, Unlock, RefreshCw } from 'lucide-react';
 
-const FILIALES = ['GROUPE','YAKRO_GRILL','TOPTELSIG','LIYA'];
-const ROLES = Object.keys(ROLES_LABELS);
-
-const ROLE_COLORS = {
-  DG: '#E87722', DIRECTEUR: '#1a3f6f', RH: '#639922', COMPTABLE: '#1a3f6f',
-  RESP_FONCIER: '#1a3f6f', RESP_LIVRAISON: '#E85D04', MANAGER: '#8B1A1A',
-  COMMERCIAL: '#5F5E5A', CAISSIER: '#8B1A1A', SERVEUR: '#8B1A1A',
-  BARMAN: '#8B1A1A', LIVREUR: '#E85D04', MAGASINIER: '#5F5E5A', EMPLOYE: '#888',
+// ── Constantes ─────────────────────────────────────────────────────────────────
+const ROLES_CONFIG = {
+  DG:            { label:'Directeur Général',   color:'#1a1a1a', bg:'#F7F7F5', desc:'Accès complet à tout l\'ERP' },
+  DIRECTEUR:     { label:'Directeur',           color:'#1a3f6f', bg:'#EEF3FB', desc:'Dashboard, rapports, validation, contrôle' },
+  MANAGER:       { label:'Manager',             color:'#BA7517', bg:'#FAEEDA', desc:'Supervision opérationnelle' },
+  RH:            { label:'Responsable RH',      color:'#27500A', bg:'#EAF3DE', desc:'Gestion employés, paie, congés' },
+  COMPTABLE:     { label:'Comptable',           color:'#5F5E5A', bg:'#F7F7F5', desc:'Paiements, factures, dépenses, rapports financiers' },
+  RESP_FONCIER:  { label:'Responsable Foncier', color:'#1a3f6f', bg:'#EEF3FB', desc:'Projets, lots, suivi clients fonciers' },
+  COMMERCIAL:    { label:'Commercial Foncier',  color:'#E87722', bg:'#FEF0E6', desc:'CRM, prospects, propositions, réservations' },
+  CAISSIER:      { label:'Caissier Yakro Grill',color:'#8B1A1A', bg:'#FEF6F6', desc:'Caisse, encaissements, factures Yakro' },
+  SERVEUR:       { label:'Serveur Yakro Grill', color:'#8B1A1A', bg:'#FEF6F6', desc:'Plan de salle, tables, commandes, encaissement' },
+  MAGASINIER:    { label:'Magasinier',          color:'#639922', bg:'#F4FAE8', desc:'Stocks, entrées, sorties, inventaire' },
+  RESP_LIVRAISON:{ label:'Responsable Livraison',color:'#E85D04', bg:'#FFF5F0', desc:'Livraisons LiYA, motos, routes' },
+  LIVREUR:       { label:'Livreur',             color:'#E85D04', bg:'#FFF5F0', desc:'Livraisons assignées' },
+  EMPLOYE:       { label:'Employé',             color:'#888',   bg:'#F7F7F5', desc:'Accès de base — lecture uniquement' },
 };
 
-const FILIALES_LABELS = { GROUPE:'Groupe 2iG', YAKRO_GRILL:'Yakro Grill', TOPTELSIG:'TOPTELSIG', LIYA:'LiYA' };
+const FILIALES = ['GROUPE','YAKRO_GRILL','TOPTELSIG','LIYA'];
 
+const PERMISSIONS_PAR_ROLE = {
+  DG:            ['Tout voir','Tout créer','Tout modifier','Tout supprimer','Tout valider','Tout exporter','Configuration'],
+  DIRECTEUR:     ['Dashboard','Rapports','Validation','Contrôle activité','Export Excel'],
+  COMMERCIAL:    ['CRM','Prospects','Propositions lots','Réservations'],
+  RESP_FONCIER:  ['Projets fonciers','Lots','Suivi souscripteurs','Gestion projet'],
+  COMPTABLE:     ['Paiements','Factures','Dépenses','Rapports financiers','Export'],
+  CAISSIER:      ['Caisse Yakro','Encaissements','Factures Yakro'],
+  SERVEUR:       ['Plan de salle','Tables assignées','Commandes','Encaissement si autorisé'],
+  MAGASINIER:    ['Stocks','Entrées stock','Sorties stock','Inventaire'],
+  RH:            ['Employés','Congés','Avances','Évaluations','Paie'],
+  MANAGER:       ['Dashboard','Supervision','Validation opérationnelle'],
+  RESP_LIVRAISON:['Livraisons','Motos','Routes','Partenaires 3PL'],
+  LIVREUR:       ['Livraisons assignées'],
+  EMPLOYE:       ['Consultation profil personnel'],
+};
+
+const fmtDate = d => d ? new Date(d).toLocaleString('fr', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : 'Jamais';
+
+// ── Composant : badge rôle ──────────────────────────────────────────────────────
+function BadgeRole({ role }) {
+  const r = ROLES_CONFIG[role] || { label:role, color:'#888', bg:'#F7F7F5' };
+  return (
+    <span style={{ fontSize:10, background:r.bg, color:r.color, borderRadius:8, padding:'2px 8px', fontWeight:600, whiteSpace:'nowrap' }}>
+      {r.label}
+    </span>
+  );
+}
+
+// ── Modal : Créer accès ERP depuis employé ──────────────────────────────────────
+function ModalCreerAcces({ employe, onClose, onSave, loading }) {
+  const [form, setForm] = useState({
+    email: employe?.email || '',
+    role: 'EMPLOYE',
+    filiale: employe?.filiale || 'GROUPE',
+  });
+  const set = (k,v) => setForm(f=>({...f,[k]:v}));
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth:480 }} onClick={e=>e.stopPropagation()}>
+        <div style={{ display:'flex', justifyContent:'space-between', marginBottom:18 }}>
+          <h3 style={{ margin:0, fontFamily:'Syne', fontSize:16 }}>🔑 Créer un accès ERP</h3>
+          <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer' }}><X size={18}/></button>
+        </div>
+
+        {employe && (
+          <div style={{ background:'#EEF3FB', borderRadius:8, padding:'10px 14px', marginBottom:14, fontSize:12 }}>
+            <strong>{employe.prenom} {employe.nom}</strong> — {employe.poste}<br/>
+            <span style={{ color:'#888' }}>{employe.filiale?.replace('_',' ')} · {employe.telephone||'—'}</span>
+          </div>
+        )}
+
+        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          <div>
+            <label className="label">Email (identifiant de connexion) *</label>
+            <input className="input" type="email" value={form.email} onChange={e=>set('email',e.target.value)} placeholder="prenom.nom@2ig.ci"/>
+          </div>
+          <div>
+            <label className="label">Rôle *</label>
+            <select className="input" value={form.role} onChange={e=>set('role',e.target.value)}>
+              {Object.entries(ROLES_CONFIG).map(([k,v])=>(
+                <option key={k} value={k}>{v.label}</option>
+              ))}
+            </select>
+            {form.role && ROLES_CONFIG[form.role] && (
+              <div style={{ fontSize:10, color:'#888', marginTop:3 }}>
+                {ROLES_CONFIG[form.role].desc}
+              </div>
+            )}
+          </div>
+          <div>
+            <label className="label">Filiale</label>
+            <select className="input" value={form.filiale} onChange={e=>set('filiale',e.target.value)}>
+              {FILIALES.map(f=><option key={f} value={f}>{f.replace('_',' ')}</option>)}
+            </select>
+          </div>
+
+          {form.role && PERMISSIONS_PAR_ROLE[form.role] && (
+            <div style={{ background:'#F7F7F5', borderRadius:8, padding:'10px 14px' }}>
+              <div style={{ fontSize:11, fontWeight:600, marginBottom:6 }}>Permissions incluses :</div>
+              <div style={{ display:'flex', flexWrap:'wrap', gap:4 }}>
+                {PERMISSIONS_PAR_ROLE[form.role].map(p=>(
+                  <span key={p} style={{ fontSize:10, background:'#EAF3DE', color:'#27500A', borderRadius:6, padding:'2px 7px' }}>✓ {p}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div style={{ background:'#FAEEDA', borderRadius:8, padding:'8px 12px', fontSize:11, color:'#412402' }}>
+            ⚠ Un mot de passe temporaire sera généré automatiquement. Notez-le pour le transmettre au collaborateur.
+          </div>
+        </div>
+
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:18 }}>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>Annuler</button>
+          <button className="btn btn-primary btn-sm" style={{ background:'#1a3f6f', border:'none' }}
+            disabled={!form.email||!form.role||!form.filiale||loading}
+            onClick={()=>onSave({ ...form, employeId: employe?.id })}>
+            {loading?'Création...':'🔑 Créer l\'accès'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Modal : Résultat création accès ────────────────────────────────────────────
+function ModalResultatAcces({ result, onClose }) {
+  const [copied, setCopied] = useState(false);
+  const texte = `Votre accès ERP Groupe 2IG a été créé.\nIdentifiant : ${result.utilisateur?.email}\nMot de passe temporaire : ${result.mdpTemporaire}\nChangez votre mot de passe dès la première connexion.`;
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal" style={{ maxWidth:460 }} onClick={e=>e.stopPropagation()}>
+        <div style={{ textAlign:'center', marginBottom:20 }}>
+          <div style={{ fontSize:32, marginBottom:8 }}>🎉</div>
+          <h3 style={{ margin:0, fontFamily:'Syne', fontSize:18, color:'#27500A' }}>Accès créé avec succès</h3>
+        </div>
+
+        <div style={{ background:'#EAF3DE', borderRadius:10, padding:'16px 20px', marginBottom:16 }}>
+          <div style={{ fontSize:12, color:'#888', marginBottom:8 }}>Informations de connexion :</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            <div style={{ fontSize:13 }}><span style={{ color:'#888' }}>Email : </span><strong>{result.utilisateur?.email}</strong></div>
+            <div style={{ fontSize:13 }}>
+              <span style={{ color:'#888' }}>Mot de passe temporaire : </span>
+              <strong style={{ fontFamily:'monospace', fontSize:15, color:'#1a3f6f', background:'#EEF3FB', padding:'2px 8px', borderRadius:5 }}>
+                {result.mdpTemporaire}
+              </strong>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ background:'#F7F7F5', borderRadius:8, padding:'10px 14px', marginBottom:16, fontSize:11, color:'#555', fontFamily:'monospace', whiteSpace:'pre-line' }}>
+          {texte}
+        </div>
+
+        <div style={{ display:'flex', gap:8, justifyContent:'center', flexWrap:'wrap' }}>
+          <button className="btn btn-ghost btn-sm"
+            onClick={()=>{ navigator.clipboard.writeText(texte); setCopied(true); setTimeout(()=>setCopied(false),2000); }}>
+            {copied?'✅ Copié':'📋 Copier'}
+          </button>
+          <button className="btn btn-ghost btn-sm"
+            onClick={()=>window.open(`https://wa.me/?text=${encodeURIComponent(texte)}`, '_blank')}>
+            💬 Envoyer WhatsApp
+          </button>
+          <button className="btn btn-primary btn-sm" style={{ background:'#27500A', border:'none' }} onClick={onClose}>
+            Fermer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── PAGE PRINCIPALE ─────────────────────────────────────────────────────────────
 export default function UtilisateursPage() {
   const qc = useQueryClient();
-  const { user } = useAuthStore();
-  const [showCreate, setShowCreate] = useState(false);
-  const [editUser, setEditUser] = useState(null);
+  const { user: currentUser } = useAuthStore();
+  const [onglet, setOnglet] = useState('utilisateurs');
   const [filialeFilter, setFilialeFilter] = useState('');
-  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [actifFilter, setActifFilter] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
+  const [showCreerAcces, setShowCreerAcces] = useState(false);
+  const [resultatAcces, setResultatAcces] = useState(null);
+  const [resetResult, setResetResult] = useState(null);
   const [toast, setToast] = useState(null);
+  const showToast = (msg,t='success') => { setToast({msg,t}); setTimeout(()=>setToast(null),3500); };
 
-  const showToast = (msg, type='success') => { setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
-
-  const { data: users = [], isLoading, error, refetch } = useQuery({
-    queryKey: ['utilisateurs', filialeFilter],
-    queryFn: () => authAPI.listUtilisateurs(filialeFilter ? { filiale: filialeFilter } : {}),
-    staleTime: 0, // Toujours rafraîchir
-    retry: 2,
+  const { data: users = [], isLoading } = useQuery({
+    queryKey: ['utilisateurs', filialeFilter, roleFilter, actifFilter],
+    queryFn: () => authAPI.getUtilisateurs({
+      filiale: filialeFilter||undefined,
+      role: roleFilter||undefined,
+      actif: actifFilter||undefined,
+    }),
+    staleTime: 15000,
   });
 
-  const updateRole = useMutation({
+  const { data: logsData } = useQuery({
+    queryKey: ['historisation'],
+    queryFn: () => authAPI.historisation({ limit: 200 }),
+    enabled: onglet === 'historisation',
+    staleTime: 30000,
+  });
+
+  const creerAccesMut = useMutation({
+    mutationFn: authAPI.creerDepuisEmploye,
+    onSuccess: (res) => {
+      qc.invalidateQueries(['utilisateurs']);
+      setShowCreerAcces(false);
+      setResultatAcces(res);
+    },
+    onError: e => showToast(e?.response?.data?.error||'Erreur','error'),
+  });
+
+  const resetMut = useMutation({
+    mutationFn: (id) => authAPI.resetPassword(id),
+    onSuccess: (res) => {
+      setResetResult(res);
+      showToast('Mot de passe réinitialisé ✓');
+    },
+    onError: e => showToast(e?.response?.data?.error||'Erreur','error'),
+  });
+
+  const updateRoleMut = useMutation({
     mutationFn: ({ id, data }) => authAPI.updateRole(id, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['utilisateurs'], exact: false }); setEditUser(null); showToast('Rôle mis à jour'); },
-    onError: (e) => showToast(e?.response?.data?.error || 'Erreur', 'error'),
+    onSuccess: () => { qc.invalidateQueries(['utilisateurs']); showToast('Rôle mis à jour ✓'); },
+    onError: e => showToast(e?.response?.data?.error||'Erreur','error'),
   });
 
-  const createUser = useMutation({
+  const desactiverMut = useMutation({
+    mutationFn: authAPI.desactiverUser,
+    onSuccess: () => { qc.invalidateQueries(['utilisateurs']); showToast('Compte désactivé'); },
+    onError: e => showToast(e?.response?.data?.error||'Erreur','error'),
+  });
+
+  const createUserMut = useMutation({
     mutationFn: (data) => authAPI.register(data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['utilisateurs'], exact: false }); setShowCreate(false); showToast('Compte créé'); },
-    onError: (e) => showToast(e?.response?.data?.error || 'Erreur création', 'error'),
+    onSuccess: (res) => {
+      qc.invalidateQueries(['utilisateurs']);
+      setShowCreate(false);
+      setResultatAcces(res);
+    },
+    onError: e => showToast(e?.response?.data?.error||'Erreur','error'),
   });
 
-  const toggleActif = useMutation({
-    mutationFn: ({ id, actif }) => authAPI.updateRole(id, { actif }),
-    onSuccess: (_, { actif }) => { qc.invalidateQueries({ queryKey: ['utilisateurs'], exact: false }); showToast(actif ? 'Compte activé' : 'Compte désactivé'); },
-  });
+  const list = Array.isArray(users) ? users : [];
+  const logs = logsData?.data || [];
+  const actifs = list.filter(u=>u.actif).length;
+  const inactifs = list.filter(u=>!u.actif).length;
 
-  const unlock = useMutation({
-    mutationFn: (id) => authAPI.unlockAccount(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['utilisateurs'], exact: false }); showToast('Compte débloqué'); },
-  });
-
-  const filtered = users.filter(u =>
-    (!search || `${u.nom} ${u.prenom} ${u.email}`.toLowerCase().includes(search.toLowerCase()))
-  );
+  const ACTION_LABELS = {
+    CREATE:'Création', UPDATE:'Modification', DELETE:'Suppression',
+    VALIDATE:'Validation', EXPORT:'Export', LOGIN:'Connexion',
+    LOGOUT:'Déconnexion', PASSWORD_CHANGE:'Changement mdp',
+    LOGIN_FAILED:'Tentative échouée', PAIEMENT:'Paiement',
+  };
 
   return (
     <div className="page-enter">
       <div className="page-header">
         <div>
-          <h1 style={{ margin:0, fontFamily:'Syne', fontWeight:800, fontSize:20 }}>
-            <Shield size={18} style={{ verticalAlign:'middle', marginRight:6, color:'#1a3f6f' }} />
-            Gestion des accès & rôles
-          </h1>
+          <h1 style={{ margin:0, fontFamily:'Syne', fontWeight:800, fontSize:20 }}>🔐 Accès & Rôles ERP</h1>
           <p style={{ margin:'4px 0 0', fontSize:12, color:'#888' }}>
-            {users.length} compte(s) · {users.filter(u=>u.actif).length} actif(s)
+            {list.length} comptes · {actifs} actifs · {inactifs} inactifs
           </p>
         </div>
-  <button className="btn btn-ghost btn-sm" onClick={() => refetch()} title="Rafraîchir">
-          🔄
-        </button>
-        {user?.role === 'DG' && (
-          <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
-            <Plus size={13} /> Nouveau compte
+        <div style={{ display:'flex', gap:8 }}>
+          <button className="btn btn-ghost btn-sm" onClick={()=>setShowCreerAcces(true)}>
+            🔑 Créer accès (depuis employé)
           </button>
-        )}
-      </div>
-
-      {error && (
-        <div style={{ padding:'10px 14px', background:'#FCEBEB', borderRadius:8, fontSize:12, color:'#A32D2D', marginBottom:12 }}>
-          Erreur de chargement: {error?.response?.data?.error || error.message}
-        </div>
-      )}
-
-      {/* Filtres */}
-      <div style={{ display:'flex', gap:8, marginBottom:16, flexWrap:'wrap' }}>
-        <input className="input" style={{ width:200 }} placeholder="Rechercher..." value={search} onChange={e=>setSearch(e.target.value)} />
-        <select className="input" style={{ width:160 }} value={filialeFilter} onChange={e=>setFilialeFilter(e.target.value)}>
-          <option value="">Toutes filiales</option>
-          {FILIALES.map(f => <option key={f} value={f}>{FILIALES_LABELS[f]}</option>)}
-        </select>
-      </div>
-
-      {/* Table */}
-      <div className="card" style={{ padding:0, overflow:'hidden' }}>
-        <div className="table-container">
-          <table className="table-erp">
-            <thead>
-              <tr>
-                <th>Utilisateur</th><th>Email</th><th>Rôle</th><th>Filiale</th>
-                <th>Statut</th><th>Dernière connexion</th><th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading && <tr><td colSpan={7} style={{ textAlign:'center', padding:20, color:'#888' }}>Chargement...</td></tr>}
-              {filtered.map(u => (
-                <tr key={u.id}>
-                  <td style={{ fontWeight:500 }}>{u.prenom} {u.nom}</td>
-                  <td style={{ color:'#888', fontSize:12 }}>{u.email}</td>
-                  <td>
-                    <span className="badge" style={{ background: ROLE_COLORS[u.role]+'20', color: ROLE_COLORS[u.role] }}>
-                      {ROLES_LABELS[u.role] || u.role}
-                    </span>
-                  </td>
-                  <td><span className="badge badge-blue">{FILIALES_LABELS[u.filiale]}</span></td>
-                  <td>
-                    <span className={`badge ${u.lockedUntil && new Date(u.lockedUntil) > new Date() ? 'badge-red' : u.actif ? 'badge-green' : 'badge-gray'}`}>
-                      {u.lockedUntil && new Date(u.lockedUntil) > new Date() ? '🔒 Bloqué' : u.actif ? 'Actif' : 'Désactivé'}
-                    </span>
-                  </td>
-                  <td style={{ fontSize:11, color:'#888' }}>
-                    {u.derniereConnexion ? new Date(u.derniereConnexion).toLocaleString('fr',{dateStyle:'short',timeStyle:'short'}) : 'Jamais'}
-                  </td>
-                  <td>
-                    <div style={{ display:'flex', gap:4 }}>
-                      {user?.role === 'DG' && u.id !== user.id && (
-                        <>
-                          <button className="btn btn-ghost btn-xs" onClick={() => setEditUser(u)} title="Modifier rôle">
-                            <Shield size={11} />
-                          </button>
-                          {u.lockedUntil && new Date(u.lockedUntil) > new Date() && (
-                            <button className="btn btn-ghost btn-xs" onClick={() => unlock.mutate(u.id)} title="Débloquer">
-                              <Unlock size={11} />
-                            </button>
-                          )}
-                          <button className="btn btn-ghost btn-xs"
-                            onClick={() => toggleActif.mutate({ id: u.id, actif: !u.actif })}
-                            title={u.actif ? 'Désactiver' : 'Activer'}
-                            style={{ color: u.actif ? '#A32D2D' : '#27500A' }}>
-                            {u.actif ? <Lock size={11} /> : <Unlock size={11} />}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {!isLoading && filtered.length === 0 && (
-                <tr><td colSpan={7}><div className="empty-state"><Users size={32} /><p>Aucun utilisateur trouvé</p></div></td></tr>
-              )}
-            </tbody>
-          </table>
+          <button className="btn btn-primary btn-sm" style={{ background:'#1a3f6f', border:'none' }}
+            onClick={()=>setShowCreate(true)}>
+            <Plus size={13}/> Nouveau compte
+          </button>
         </div>
       </div>
 
-      {/* Modal modifier rôle */}
-      {editUser && (
-        <ModalEditRole user={editUser} onClose={() => setEditUser(null)}
-          onSave={(data) => updateRole.mutate({ id: editUser.id, data })}
-          loading={updateRole.isPending} />
+      {/* Onglets */}
+      <div style={{ display:'flex', gap:4, borderBottom:'1px solid #e8e7e1', marginBottom:20 }}>
+        {[
+          ['utilisateurs','👥 Utilisateurs'],
+          ['roles','🎭 Rôles & Permissions'],
+          ['historisation','📋 Historisation'],
+        ].map(([k,v])=>(
+          <button key={k} onClick={()=>setOnglet(k)}
+            style={{ padding:'8px 16px', border:'none', background:'none', cursor:'pointer', fontSize:12,
+              fontWeight:onglet===k?600:400, color:onglet===k?'#1a3f6f':'#888',
+              borderBottom:onglet===k?'2px solid #1a3f6f':'2px solid transparent' }}>
+            {v}
+          </button>
+        ))}
+      </div>
+
+      {/* Onglet Utilisateurs */}
+      {onglet === 'utilisateurs' && (
+        <>
+          {/* Filtres */}
+          <div style={{ display:'flex', gap:8, marginBottom:12, flexWrap:'wrap' }}>
+            <select className="input" style={{ width:160 }} value={filialeFilter} onChange={e=>setFilialeFilter(e.target.value)}>
+              <option value="">Toutes filiales</option>
+              {FILIALES.map(f=><option key={f} value={f}>{f.replace('_',' ')}</option>)}
+            </select>
+            <select className="input" style={{ width:200 }} value={roleFilter} onChange={e=>setRoleFilter(e.target.value)}>
+              <option value="">Tous les rôles</option>
+              {Object.entries(ROLES_CONFIG).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+            </select>
+            <select className="input" style={{ width:140 }} value={actifFilter} onChange={e=>setActifFilter(e.target.value)}>
+              <option value="">Tous statuts</option>
+              <option value="true">Actifs</option>
+              <option value="false">Inactifs</option>
+            </select>
+            <button className="btn btn-ghost btn-sm" onClick={()=>qc.invalidateQueries(['utilisateurs'])}>
+              <RefreshCw size={13}/>
+            </button>
+          </div>
+
+          {/* Tableau */}
+          <div className="card" style={{ padding:0, overflow:'hidden' }}>
+            {isLoading ? <div style={{ padding:40, textAlign:'center', color:'#888' }}>Chargement...</div> : (
+              <table className="table-erp">
+                <thead>
+                  <tr>
+                    <th>Utilisateur</th><th>Rôle</th><th>Filiale</th>
+                    <th>Statut</th><th>Dernière connexion</th>
+                    <th>Tentatives</th><th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.map(u => (
+                    <tr key={u.id} style={{ opacity:u.actif?1:0.6 }}>
+                      <td>
+                        <div style={{ fontWeight:600, fontSize:13 }}>{u.prenom} {u.nom}</div>
+                        <div style={{ fontSize:11, color:'#888' }}>{u.email}</div>
+                      </td>
+                      <td><BadgeRole role={u.role}/></td>
+                      <td style={{ fontSize:11, color:'#888' }}>{u.filiale?.replace('_',' ')}</td>
+                      <td>
+                        <span style={{ fontSize:10, background:u.actif?'#EAF3DE':'#FCEBEB', color:u.actif?'#27500A':'#A32D2D', borderRadius:8, padding:'2px 8px', fontWeight:500 }}>
+                          {u.actif?'Actif':'Inactif'}
+                          {u.lockedUntil && new Date(u.lockedUntil) > new Date() ? ' 🔒' : ''}
+                        </span>
+                      </td>
+                      <td style={{ fontSize:11, color:'#888' }}>{fmtDate(u.derniereConnexion)}</td>
+                      <td style={{ textAlign:'center', fontSize:11, color:u.loginAttempts>=3?'#A32D2D':'#888' }}>
+                        {u.loginAttempts > 0 ? `${u.loginAttempts} ⚠` : '0'}
+                      </td>
+                      <td>
+                        <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+                          {/* Changer rôle */}
+                          <select style={{ fontSize:10, padding:'2px 5px', border:'0.5px solid #e8e7e1', borderRadius:5, cursor:'pointer', maxWidth:120 }}
+                            value={u.role}
+                            onChange={e => {
+                              if (u.id === currentUser?.id) { showToast('Impossible de changer son propre rôle','error'); return; }
+                              if (window.confirm(`Changer le rôle de ${u.prenom} ${u.nom} → ${ROLES_CONFIG[e.target.value]?.label} ?`))
+                                updateRoleMut.mutate({ id:u.id, data:{ role:e.target.value } });
+                            }}>
+                            {Object.entries(ROLES_CONFIG).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+                          </select>
+                          {/* Reset mdp */}
+                          <button className="btn btn-xs" style={{ background:'#FAEEDA', color:'#BA7517', border:'none', fontSize:10 }}
+                            title="Réinitialiser mot de passe"
+                            onClick={()=>{ if(window.confirm(`Réinitialiser le mot de passe de ${u.prenom} ${u.nom} ?`)) resetMut.mutate(u.id); }}>
+                            <Key size={9}/> Reset
+                          </button>
+                          {/* Activer/désactiver */}
+                          <button className="btn btn-xs"
+                            style={{ background:u.actif?'#FCEBEB':'#EAF3DE', color:u.actif?'#A32D2D':'#27500A', border:'none', fontSize:10 }}
+                            disabled={u.id === currentUser?.id}
+                            title={u.actif?'Désactiver':'Activer'}
+                            onClick={()=>{
+                              if (u.id === currentUser?.id) return;
+                              if (u.actif) {
+                                if (window.confirm(`Désactiver ${u.prenom} ${u.nom} ? Il ne pourra plus se connecter.`))
+                                  desactiverMut.mutate(u.id);
+                              } else {
+                                updateRoleMut.mutate({ id:u.id, data:{ actif:true } });
+                              }
+                            }}>
+                            {u.actif?<><Lock size={9}/> Désactiver</>:<><Unlock size={9}/> Activer</>}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {list.length === 0 && (
+                    <tr><td colSpan={7}><div className="empty-state"><p>Aucun utilisateur</p></div></td></tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </>
       )}
 
-      {/* Modal créer compte */}
+      {/* Onglet Rôles & Permissions */}
+      {onglet === 'roles' && (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))', gap:14 }}>
+          {Object.entries(ROLES_CONFIG).map(([role, cfg])=>(
+            <div key={role} style={{ background:'white', border:`1.5px solid ${cfg.color}30`, borderRadius:10, padding:'14px 16px' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:8 }}>
+                <div>
+                  <BadgeRole role={role}/>
+                  <div style={{ fontSize:11, color:'#888', marginTop:4 }}>{cfg.desc}</div>
+                </div>
+                <span style={{ fontSize:11, color:'#888' }}>
+                  {list.filter(u=>u.role===role&&u.actif).length} actif(s)
+                </span>
+              </div>
+              <div style={{ fontSize:10, color:'#555', fontWeight:600, marginBottom:4 }}>Permissions :</div>
+              <div style={{ display:'flex', flexWrap:'wrap', gap:3 }}>
+                {(PERMISSIONS_PAR_ROLE[role]||['Accès de base']).map(p=>(
+                  <span key={p} style={{ fontSize:9, background:cfg.bg, color:cfg.color, borderRadius:5, padding:'1px 6px' }}>✓ {p}</span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Onglet Historisation */}
+      {onglet === 'historisation' && (
+        <div>
+          <div style={{ fontSize:12, color:'#888', marginBottom:12 }}>{logs.length} action(s) enregistrée(s)</div>
+          <div className="card" style={{ padding:0, overflow:'hidden' }}>
+            <table className="table-erp">
+              <thead>
+                <tr><th>Date/Heure</th><th>Utilisateur</th><th>Action</th><th>Module</th><th>Description</th><th>Filiale</th></tr>
+              </thead>
+              <tbody>
+                {logs.map(l=>(
+                  <tr key={l.id}>
+                    <td style={{ fontSize:11, whiteSpace:'nowrap', color:'#888' }}>{fmtDate(l.createdAt)}</td>
+                    <td style={{ fontSize:12, fontWeight:500 }}>{l.utilisateurNom}</td>
+                    <td>
+                      <span style={{ fontSize:10, background:{'CREATE':'#EAF3DE','DELETE':'#FCEBEB','UPDATE':'#FAEEDA','LOGIN':'#EEF3FB','PASSWORD_CHANGE':'#F7F7F5'}[l.action]||'#F7F7F5', color:{'CREATE':'#27500A','DELETE':'#A32D2D','UPDATE':'#BA7517','LOGIN':'#1a3f6f','PASSWORD_CHANGE':'#888'}[l.action]||'#888', borderRadius:6, padding:'1px 7px', fontWeight:500 }}>
+                        {ACTION_LABELS[l.action]||l.action}
+                      </span>
+                    </td>
+                    <td style={{ fontSize:11, color:'#888' }}>{l.entite}</td>
+                    <td style={{ fontSize:11, maxWidth:250, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                      {l.entiteLabel||'—'}
+                    </td>
+                    <td style={{ fontSize:10, color:'#888' }}>{l.filiale?.replace('_',' ')}</td>
+                  </tr>
+                ))}
+                {logs.length === 0 && (
+                  <tr><td colSpan={6}><div className="empty-state"><p>Aucune action enregistrée</p></div></td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Modal créer accès depuis employé */}
+      {showCreerAcces && (
+        <ModalCreerAcces
+          employe={null}
+          onClose={()=>setShowCreerAcces(false)}
+          onSave={creerAccesMut.mutate}
+          loading={creerAccesMut.isPending}
+        />
+      )}
+
+      {/* Modal créer compte directement */}
       {showCreate && (
-        <ModalCreateUser onClose={() => setShowCreate(false)}
-          onSave={(data) => createUser.mutate(data)}
-          loading={createUser.isPending} />
+        <ModalNouveauCompte
+          onClose={()=>setShowCreate(false)}
+          onSave={createUserMut.mutate}
+          loading={createUserMut.isPending}
+        />
       )}
 
-      {toast && <div style={{ position:'fixed', bottom:20, right:16, background: toast.type==='error'?'#A32D2D':'#27500A', color:'white', padding:'10px 18px', borderRadius:10, fontSize:13, zIndex:9999 }}>{toast.msg}</div>}
-    </div>
-  );
-}
+      {/* Résultat création/reset */}
+      {resultatAcces && <ModalResultatAcces result={resultatAcces} onClose={()=>setResultatAcces(null)}/>}
+      {resetResult && (
+        <ModalResultatAcces
+          result={resetResult}
+          onClose={()=>setResetResult(null)}
+        />
+      )}
 
-function ModalEditRole({ user, onClose, onSave, loading }) {
-  const [role, setRole] = useState(user.role);
-  const [filiale, setFiliale] = useState(user.filiale);
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth:400 }} onClick={e=>e.stopPropagation()}>
-        <h3 style={{ margin:'0 0 16px', fontFamily:'Syne' }}>Modifier rôle — {user.prenom} {user.nom}</h3>
-        <label className="label">Rôle</label>
-        <select className="input" value={role} onChange={e=>setRole(e.target.value)} style={{ marginBottom:12 }}>
-          {ROLES.map(r => <option key={r} value={r}>{ROLES_LABELS[r]}</option>)}
-        </select>
-        <label className="label">Filiale</label>
-        <select className="input" value={filiale} onChange={e=>setFiliale(e.target.value)} style={{ marginBottom:20 }}>
-          {FILIALES.map(f => <option key={f} value={f}>{f}</option>)}
-        </select>
-        <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
-          <button className="btn btn-ghost" onClick={onClose}>Annuler</button>
-          <button className="btn btn-primary" disabled={loading} onClick={() => onSave({ role, filiale })}>
-            {loading ? 'Enregistrement...' : 'Enregistrer'}
-          </button>
+      {toast && (
+        <div style={{ position:'fixed', bottom:20, right:16, background:toast.t==='error'?'#A32D2D':'#27500A', color:'white', padding:'10px 18px', borderRadius:10, fontSize:13, zIndex:9999 }}>
+          {toast.msg}
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
-function ModalCreateUser({ onClose, onSave, loading }) {
-  const [form, setForm] = useState({ email:'', motDePasse:'', nom:'', prenom:'', role:'EMPLOYE', filiale:'GROUPE' });
+// ── Modal nouveau compte direct ─────────────────────────────────────────────────
+function ModalNouveauCompte({ onClose, onSave, loading }) {
+  const [form, setForm] = useState({ prenom:'', nom:'', email:'', telephone:'', role:'EMPLOYE', filiale:'GROUPE', motDePasse:'' });
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
+  const mdpAuto = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    set('motDePasse', Array.from({length:10},()=>chars[Math.floor(Math.random()*chars.length)]).join(''));
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth:480 }} onClick={e=>e.stopPropagation()}>
-        <h3 style={{ margin:'0 0 16px', fontFamily:'Syne' }}>Nouveau compte utilisateur</h3>
+      <div className="modal" style={{ maxWidth:500 }} onClick={e=>e.stopPropagation()}>
+        <div style={{ display:'flex', justifyContent:'space-between', marginBottom:18 }}>
+          <h3 style={{ margin:0, fontFamily:'Syne', fontSize:16 }}>👤 Nouveau compte ERP</h3>
+          <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer' }}><X size={18}/></button>
+        </div>
         <div className="form-grid">
-          <div><label className="label">Prénom</label><input className="input" value={form.prenom} onChange={e=>set('prenom',e.target.value)} /></div>
-          <div><label className="label">Nom</label><input className="input" value={form.nom} onChange={e=>set('nom',e.target.value)} /></div>
-          <div className="full"><label className="label">Email</label><input className="input" type="email" value={form.email} onChange={e=>set('email',e.target.value)} /></div>
-          <div className="full">
-            <label className="label">Mot de passe (min 12 car. + Maj + chiffre + spécial)</label>
-            <input className="input" type="password" value={form.motDePasse} onChange={e=>set('motDePasse',e.target.value)} placeholder="Ex: MonMdp2025@!" />
-          </div>
+          <div><label className="label">Prénom *</label><input className="input" value={form.prenom} onChange={e=>set('prenom',e.target.value)}/></div>
+          <div><label className="label">Nom *</label><input className="input" value={form.nom} onChange={e=>set('nom',e.target.value)}/></div>
+          <div><label className="label">Email * (identifiant)</label><input className="input" type="email" value={form.email} onChange={e=>set('email',e.target.value)} placeholder="prenom.nom@2ig.ci"/></div>
+          <div><label className="label">Téléphone</label><input className="input" value={form.telephone} onChange={e=>set('telephone',e.target.value)}/></div>
           <div>
-            <label className="label">Rôle</label>
+            <label className="label">Rôle *</label>
             <select className="input" value={form.role} onChange={e=>set('role',e.target.value)}>
-              {ROLES.map(r => <option key={r} value={r}>{ROLES_LABELS[r]}</option>)}
+              {Object.entries(ROLES_CONFIG).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
             </select>
           </div>
           <div>
-            <label className="label">Filiale</label>
+            <label className="label">Filiale *</label>
             <select className="input" value={form.filiale} onChange={e=>set('filiale',e.target.value)}>
-              {FILIALES.map(f => <option key={f} value={f}>{f}</option>)}
+              {FILIALES.map(f=><option key={f} value={f}>{f.replace('_',' ')}</option>)}
             </select>
+          </div>
+          <div className="full">
+            <label className="label">Mot de passe temporaire *</label>
+            <div style={{ display:'flex', gap:6 }}>
+              <input className="input" style={{ flex:1, fontFamily:'monospace' }} value={form.motDePasse} onChange={e=>set('motDePasse',e.target.value)} placeholder="Min. 8 caractères"/>
+              <button className="btn btn-ghost btn-sm" onClick={mdpAuto} type="button">🎲 Auto</button>
+            </div>
           </div>
         </div>
-        <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:20 }}>
-          <button className="btn btn-ghost" onClick={onClose}>Annuler</button>
-          <button className="btn btn-primary" disabled={loading} onClick={() => onSave(form)}>
-            {loading ? 'Création...' : 'Créer le compte'}
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:18 }}>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>Annuler</button>
+          <button className="btn btn-primary btn-sm" style={{ background:'#1a3f6f', border:'none' }}
+            disabled={!form.prenom||!form.nom||!form.email||!form.motDePasse||loading}
+            onClick={()=>onSave(form)}>
+            {loading?'Création...':'Créer le compte'}
           </button>
         </div>
       </div>

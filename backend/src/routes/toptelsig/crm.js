@@ -42,12 +42,23 @@ router.get('/prospects', auth, toptelsig, async (req, res) => {
       return res.json(contactProjets.map(cp => enrichirContact(cp.souscripteur, cp)));
     }
 
-    // Sans projetId : vue globale CRM (tous les contacts non-CLIENT)
+    // Vue globale CRM :
+    // Afficher un contact si :
+    //   - son statut global n'est pas CLIENT (pas encore converti sur TOUS les projets)
+    //   - OU il a au moins un ContactProjet avec statut != CLIENT (prospect sur un autre projet)
     const where = {};
     if (statut) {
-      where.statut = statut;
+      // Filtre explicite : montrer ceux qui ont ce statut global OU ce statut sur un projet
+      where.OR = [
+        { statut },
+        { contactProjets: { some: { statut } } },
+      ];
     } else {
-      where.NOT = { statut: 'CLIENT' };
+      // Par défaut : exclure ceux qui sont CLIENT partout (aucun projet en cours)
+      where.OR = [
+        { NOT: { statut: 'CLIENT' } },
+        { contactProjets: { some: { statut: { not: 'CLIENT' } } } },
+      ];
     }
     if (search) where.OR = [
       { nom: { contains: search, mode: 'insensitive' } },

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { employesAPI } from '../../lib/api';
+import { employesAPI, authAPI } from '../../lib/api';
 import { getDepartements, getPostes } from '../../lib/catalogue-rh';
 import { useAuthStore } from '../../store';
 import { Plus, Search, ChevronRight, X } from 'lucide-react';
@@ -11,6 +11,99 @@ import { exportExcel } from '../../lib/export';
 const FILIALES_LABELS = { YAKRO_GRILL:'Yakro Grill', TOPTELSIG:'TOPTELSIG', LIYA:'LiYA', GROUPE:'Groupe' };
 const FILIALES_COLORS = { YAKRO_GRILL:'#8B1A1A', TOPTELSIG:'#1a3f6f', LIYA:'#E85D04', GROUPE:'#444' };
 const STATUT_BADGE = { ACTIF:'badge-green', CONGE:'badge-amber', SUSPENDU:'badge-red', DEMISSIONNAIRE:'badge-amber', QUITTE:'badge-gray' };
+
+
+// ── Modal créer accès ERP depuis RH ──────────────────────────────────────────
+function ModalCreerAccesRH({ employe, onClose, onSave, loading }) {
+  const ROLES = {
+    DG:'Directeur Général', DIRECTEUR:'Directeur', MANAGER:'Manager', RH:'Responsable RH',
+    COMPTABLE:'Comptable', RESP_FONCIER:'Responsable Foncier', COMMERCIAL:'Commercial Foncier',
+    CAISSIER:'Caissier Yakro Grill', SERVEUR:'Serveur Yakro Grill', MAGASINIER:'Magasinier',
+    RESP_LIVRAISON:'Responsable Livraison', LIVREUR:'Livreur', EMPLOYE:'Employé',
+  };
+  const [form, setForm] = useState({
+    email: employe?.email || '',
+    role: 'EMPLOYE',
+    filiale: employe?.filiale || 'GROUPE',
+    employeId: employe?.id,
+  });
+  const set = (k,v) => setForm(f=>({...f,[k]:v}));
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth:440 }} onClick={e=>e.stopPropagation()}>
+        <div style={{ display:'flex', justifyContent:'space-between', marginBottom:16 }}>
+          <h3 style={{ margin:0, fontFamily:'Syne', fontSize:15 }}>🔑 Créer accès ERP</h3>
+          <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer' }}>✕</button>
+        </div>
+        <div style={{ background:'#EEF3FB', borderRadius:8, padding:'8px 12px', marginBottom:14, fontSize:12 }}>
+          <strong>{employe?.prenom} {employe?.nom}</strong> — {employe?.poste}<br/>
+          <span style={{ color:'#888' }}>{employe?.filiale?.replace('_',' ')}</span>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          <div>
+            <label className="label">Email (identifiant de connexion) *</label>
+            <input className="input" type="email" value={form.email} onChange={e=>set('email',e.target.value)} placeholder="prenom.nom@2ig.ci"/>
+          </div>
+          <div>
+            <label className="label">Rôle *</label>
+            <select className="input" value={form.role} onChange={e=>set('role',e.target.value)}>
+              {Object.entries(ROLES).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label">Filiale</label>
+            <select className="input" value={form.filiale} onChange={e=>set('filiale',e.target.value)}>
+              {['GROUPE','YAKRO_GRILL','TOPTELSIG','LIYA'].map(f=><option key={f} value={f}>{f.replace('_',' ')}</option>)}
+            </select>
+          </div>
+          <div style={{ background:'#FAEEDA', borderRadius:8, padding:'8px 10px', fontSize:11, color:'#412402' }}>
+            ⚠ Un mot de passe temporaire sera généré automatiquement.
+          </div>
+        </div>
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:16 }}>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>Annuler</button>
+          <button className="btn btn-primary btn-sm" style={{ background:'#27500A', border:'none' }}
+            disabled={!form.email||!form.role||loading}
+            onClick={()=>onSave(form)}>
+            {loading?'...':'🔑 Créer l\'accès'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalResultatAccesRH({ result, onClose }) {
+  const [copied, setCopied] = useState(false);
+  const texte = `Votre accès ERP Groupe 2IG a été créé.\nIdentifiant : ${result?.utilisateur?.email}\nMot de passe temporaire : ${result?.mdpTemporaire}\nChangez votre mot de passe dès la première connexion.`;
+  return (
+    <div className="modal-overlay">
+      <div className="modal" style={{ maxWidth:420 }}>
+        <div style={{ textAlign:'center', marginBottom:16 }}>
+          <div style={{ fontSize:28 }}>🎉</div>
+          <h3 style={{ margin:'8px 0 0', fontFamily:'Syne', color:'#27500A' }}>Accès créé !</h3>
+        </div>
+        <div style={{ background:'#EAF3DE', borderRadius:8, padding:'12px 16px', marginBottom:12 }}>
+          <div style={{ fontSize:12, marginBottom:4 }}><span style={{ color:'#888' }}>Email : </span><strong>{result?.utilisateur?.email}</strong></div>
+          <div style={{ fontSize:12 }}><span style={{ color:'#888' }}>Mot de passe : </span>
+            <strong style={{ fontFamily:'monospace', fontSize:14, color:'#1a3f6f', background:'#EEF3FB', padding:'2px 8px', borderRadius:5 }}>
+              {result?.mdpTemporaire}
+            </strong>
+          </div>
+        </div>
+        <div style={{ display:'flex', gap:8, justifyContent:'center' }}>
+          <button className="btn btn-ghost btn-sm" onClick={()=>{ navigator.clipboard.writeText(texte); setCopied(true); setTimeout(()=>setCopied(false),2000); }}>
+            {copied?'✅ Copié':'📋 Copier'}
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={()=>window.open(`https://wa.me/?text=${encodeURIComponent(texte)}`, '_blank')}>
+            💬 WhatsApp
+          </button>
+          <button className="btn btn-primary btn-sm" style={{ background:'#27500A', border:'none' }} onClick={onClose}>Fermer</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── Modal création ────────────────────────────────────────────────────────────
 function ModalCreateEmploye({ onClose, onSave, loading }) {
@@ -266,6 +359,8 @@ export default function RHPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [selected, setSelected] = useState(null);
   const [showEdit, setShowEdit] = useState(null);
+  const [accesFor, setAccesFor] = useState(null); // Créer accès ERP pour cet employé
+  const [resultatAcces, setResultatAcces] = useState(null);
   const [toast, setToast] = useState(null);
 
   const showToast = (msg, type='success') => {
@@ -289,6 +384,12 @@ export default function RHPage() {
     queryFn: () => employesAPI.get(selected.id),
     enabled: !!selected?.id,
     staleTime: 30000,
+  });
+
+  const creerAccesMut = useMutation({
+    mutationFn: authAPI.creerDepuisEmploye,
+    onSuccess: (res) => { qc.invalidateQueries(['employes']); setAccesFor(null); setResultatAcces(res); },
+    onError: e => showToast(e?.response?.data?.error||'Erreur accès','error'),
   });
 
   const createMut = useMutation({
@@ -454,7 +555,19 @@ export default function RHPage() {
         />
       )}
 
-      {toast && (
+      {/* Créer accès ERP pour un employé */}
+      {accesFor && (
+        <ModalCreerAccesRH
+          employe={accesFor}
+          onClose={()=>setAccesFor(null)}
+          onSave={creerAccesMut.mutate}
+          loading={creerAccesMut.isPending}
+        />
+      )}
+      {resultatAcces && (
+        <ModalResultatAccesRH result={resultatAcces} onClose={()=>setResultatAcces(null)}/>
+      )}
+            {toast && (
         <div style={{ position:'fixed', bottom:20, right:16, background:toast.type==='error'?'#A32D2D':'#27500A', color:'white', padding:'10px 18px', borderRadius:10, fontSize:13, zIndex:9999 }}>
           {toast.msg}
         </div>
