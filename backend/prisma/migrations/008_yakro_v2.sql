@@ -214,3 +214,59 @@ BEGIN
 
   RAISE NOTICE 'Factures et retours Yakro OK';
 END $$;
+
+-- Tables Finance (créées normalement par prisma db push mais migration explicite par sécurité)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'caisses') THEN
+    CREATE TABLE "caisses" (
+      "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      "nom" TEXT NOT NULL,
+      "filiale" TEXT NOT NULL,
+      "solde" FLOAT DEFAULT 0,
+      "actif" BOOLEAN DEFAULT true,
+      "createdAt" TIMESTAMP DEFAULT NOW(),
+      "updatedAt" TIMESTAMP DEFAULT NOW()
+    );
+    INSERT INTO "caisses" ("nom","filiale","solde") VALUES
+      ('Caisse Principale','YAKRO_GRILL',0),
+      ('Caisse TOPTELSIG','TOPTELSIG',0),
+      ('Caisse LiYA','LIYA',0);
+    RAISE NOTICE 'Table caisses créée';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'encaissements') THEN
+    CREATE TABLE "encaissements" (
+      "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      "reference" TEXT UNIQUE,
+      "filiale" TEXT NOT NULL,
+      "caisseId" TEXT,
+      "montant" FLOAT NOT NULL,
+      "typePaiement" TEXT DEFAULT 'ESPECES',
+      "motif" TEXT,
+      "categorie" TEXT DEFAULT 'AUTRE',
+      "tiers" TEXT,
+      "statut" TEXT DEFAULT 'VALIDE',
+      "createdAt" TIMESTAMP DEFAULT NOW(),
+      "updatedAt" TIMESTAMP DEFAULT NOW()
+    );
+    RAISE NOTICE 'Table encaissements créée';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'decaissements') THEN
+    CREATE TABLE "decaissements" (
+      "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      "reference" TEXT UNIQUE,
+      "filiale" TEXT NOT NULL,
+      "caisseId" TEXT,
+      "montant" FLOAT NOT NULL,
+      "categorie" TEXT DEFAULT 'AUTRE',
+      "motif" TEXT NOT NULL,
+      "beneficiaire" TEXT,
+      "statut" TEXT DEFAULT 'VALIDE',
+      "createdAt" TIMESTAMP DEFAULT NOW(),
+      "updatedAt" TIMESTAMP DEFAULT NOW()
+    );
+    RAISE NOTICE 'Table decaissements créée';
+  END IF;
+END $$;

@@ -658,9 +658,16 @@ export default function POS() {
           onClose={() => setRetourFor(null)}
           onSave={async (data) => {
             try {
+              const tableId = retourFor.tableId;
               await yakroAPI.creerRetour({ commandeId: retourFor.id, ...data });
-              qc.invalidateQueries(['tables']);
+              await qc.invalidateQueries(['tables']);
               setRetourFor(null);
+              // Ré-ouvrir le panneau de la table avec les données fraîches
+              const tablesUpdated = qc.getQueryData(['tables']);
+              if (tableId && Array.isArray(tablesUpdated)) {
+                const tableActuelle = tablesUpdated.find(t => t.id === tableId);
+                if (tableActuelle) setPanneauTable(tableActuelle);
+              }
               showToast(`Retour enregistré — -${(data.quantite * data.prixUnitaire).toLocaleString('fr')} F`);
             } catch (e) { showToast(e?.response?.data?.error || 'Erreur retour', 'error'); }
           }}

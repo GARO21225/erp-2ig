@@ -44,12 +44,13 @@ router.get('/prospects', auth, toptelsig, async (req, res) => {
 
     // Vue globale CRM : tous les contacts non-CLIENT
     // Utilise contactProjets si disponible, sinon fallback sur statut global
+    // CRM : afficher tous les contacts sauf ceux explicitement filtrés
     const where = {};
     if (statut) {
       where.statut = statut;
-    } else {
-      where.NOT = { statut: 'CLIENT' };
     }
+    // IMPORTANT : ne pas filtrer par défaut — un contact CLIENT sur KOKO
+    // peut être PROSPECT sur BISSAP. On laisse le filtre à l'utilisateur.
     if (search) where.OR = [
       { nom: { contains: search, mode: 'insensitive' } },
       { prenom: { contains: search, mode: 'insensitive' } },

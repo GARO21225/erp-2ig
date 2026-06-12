@@ -6,10 +6,15 @@ const liya = requireFiliale('LIYA');
 // GET /api/liya/stock3pl
 router.get('/', auth, liya, async (req, res) => {
   try {
-    const { statut, clientNom, page = 1, limit = 30 } = req.query;
+    const { statut, clientNom, partenaireId, search, page = 1, limit = 100 } = req.query;
     const where = {};
     if (statut) where.statut = statut;
+    if (partenaireId) where.partenaireId = partenaireId;
     if (clientNom) where.clientNom = { contains: clientNom, mode: 'insensitive' };
+    if (search) where.OR = [
+      { clientNom: { contains: search, mode: 'insensitive' } },
+      { article: { contains: search, mode: 'insensitive' } },
+    ];
 
     const [total, data] = await Promise.all([
       prisma.stockClient3PL.count({ where }),
@@ -18,6 +23,11 @@ router.get('/', auth, liya, async (req, res) => {
         skip: (page - 1) * limit,
         take: Number(limit),
         orderBy: { dateEntree: 'desc' },
+        include: {
+          partenaire: {
+            select: { id:true, nom:true, raisonSociale:true, telephone:true, typeActivite:true }
+          }
+        }
       })
     ]);
 
