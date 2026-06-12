@@ -115,3 +115,41 @@ BEGIN
     RAISE NOTICE 'Seuils stock ajoutés';
   END IF;
 END $$;
+
+-- ContactProjet : statut d'un contact PAR projet
+DO $$
+BEGIN
+  CREATE TABLE IF NOT EXISTS "contact_projets" (
+    "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    "souscripteurId" TEXT NOT NULL,
+    "projetId" TEXT NOT NULL,
+    "statut" TEXT DEFAULT 'PROSPECT',
+    "commercialId" TEXT,
+    "commercialNom" TEXT,
+    "tags" TEXT,
+    "notes" TEXT,
+    "dateCreation" TIMESTAMP DEFAULT NOW(),
+    "updatedAt" TIMESTAMP DEFAULT NOW(),
+    UNIQUE("souscripteurId", "projetId")
+  );
+
+  CREATE TABLE IF NOT EXISTS "propositions_foncier" (
+    "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    "souscripteurId" TEXT NOT NULL,
+    "commercialId" TEXT,
+    "commercialNom" TEXT,
+    "projetsEnvoyes" TEXT NOT NULL,
+    "message" TEXT,
+    "statut" TEXT DEFAULT 'BROUILLON',
+    "dateEnvoi" TIMESTAMP,
+    "createdAt" TIMESTAMP DEFAULT NOW(),
+    "updatedAt" TIMESTAMP DEFAULT NOW()
+  );
+
+  -- Tags sur souscripteur
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='souscripteurs' AND column_name='tags') THEN
+    ALTER TABLE "souscripteurs" ADD COLUMN "tags" TEXT;
+  END IF;
+
+  RAISE NOTICE 'ContactProjet + PropositionFoncier OK';
+END $$;

@@ -720,6 +720,8 @@ model Souscripteur {
   ventes          VenteFoncier[]
   paiements       PaiementFoncier[]
   documents       DocumentFoncier[]
+  contactProjets  ContactProjet[]
+  propositions    PropositionFoncier[]
 
   @@map("souscripteurs")
 }
@@ -1336,4 +1338,44 @@ model SessionCaisseYakro {
   createdAt       DateTime @default(now())
 
   @@map("sessions_caisse_yakro")
+}
+
+// ── CRM FONCIER : Contact + Projet = Opportunité ─────────────────────────────
+// Un contact peut être PROSPECT sur KOKO et CLIENT sur BISSAP en même temps
+
+model ContactProjet {
+  id              String   @id @default(cuid())
+  souscripteurId  String
+  souscripteur    Souscripteur @relation(fields: [souscripteurId], references: [id], onDelete: Cascade)
+  projetId        String
+  projet          Projet   @relation(fields: [projetId], references: [id])
+  statut          String   @default("PROSPECT")
+  // PROSPECT | CONTACTE | VISITE | NEGOCIE | PROPOSITION | RESERVE | CLIENT | PERDU
+  commercialId    String?
+  commercialNom   String?
+  tags            String?  // JSON array: ["chaud","vip","investisseur"]
+  notes           String?
+  dateCreation    DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([souscripteurId, projetId])
+  @@index([projetId, statut])
+  @@map("contact_projets")
+}
+
+model PropositionFoncier {
+  id              String   @id @default(cuid())
+  souscripteurId  String
+  souscripteur    Souscripteur @relation(fields: [souscripteurId], references: [id])
+  commercialId    String?
+  commercialNom   String?
+  projetsEnvoyes  String   // JSON: [{projetId, nom, lotsProposés:[]}]
+  message         String?
+  statut          String   @default("BROUILLON")
+  // BROUILLON | ENVOYEE | CONSULTEE | INTERESSE | NEGOCIE | ACCEPTEE | REFUSEE | EXPIREE
+  dateEnvoi       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("propositions_foncier")
 }
