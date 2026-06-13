@@ -4,7 +4,7 @@
  */
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { authAPI } from '../../lib/api';
+import { authAPI, employesAPI } from '../../lib/api';
 import { useAuthStore } from '../../store';
 import { Plus, X, Key, Shield, Eye, Lock, Unlock, RefreshCw } from 'lucide-react';
 
@@ -185,8 +185,9 @@ function ModalResultatAcces({ result, onClose }) {
 export default function UtilisateursPage() {
   const qc = useQueryClient();
   const { user: currentUser } = useAuthStore();
-  const [onglet, setOnglet] = useState('utilisateurs');
+  const [onglet, setOnglet] = useState('employes'); // Montrer employes en premier
   const [filialeFilter, setFilialeFilter] = useState('');
+  const [creerAccesDirect, setCreerAccesDirect] = useState(null); // employé pour créer accès
   const [roleFilter, setRoleFilter] = useState('');
   const [actifFilter, setActifFilter] = useState('');
   const [showCreate, setShowCreate] = useState(false);
@@ -195,6 +196,14 @@ export default function UtilisateursPage() {
   const [resetResult, setResetResult] = useState(null);
   const [toast, setToast] = useState(null);
   const showToast = (msg,t='success') => { setToast({msg,t}); setTimeout(()=>setToast(null),3500); };
+
+  const { data: allEmployes = [] } = useQuery({
+    queryKey: ['tous-employes-acces'],
+    queryFn: () => employesAPI.list({ limit: 200 }),
+    staleTime: 30000,
+    enabled: onglet === 'employes',
+  });
+  const listeEmployes = Array.isArray(allEmployes) ? allEmployes : (allEmployes?.data || []);
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ['utilisateurs', filialeFilter, roleFilter, actifFilter],
@@ -289,7 +298,8 @@ export default function UtilisateursPage() {
       {/* Onglets */}
       <div style={{ display:'flex', gap:4, borderBottom:'1px solid #e8e7e1', marginBottom:20 }}>
         {[
-          ['utilisateurs','👥 Utilisateurs'],
+          ['employes','👤 Tous les employés'],
+          ['utilisateurs','🔑 Comptes ERP'],
           ['roles','🎭 Rôles & Permissions'],
           ['historisation','📋 Historisation'],
         ].map(([k,v])=>(
@@ -301,6 +311,64 @@ export default function UtilisateursPage() {
           </button>
         ))}
       </div>
+
+      {/* Onglet Tous les employés */}
+      {onglet === 'employes' && (
+        <>
+          <div style={{ fontSize:12, color:'#888', marginBottom:12 }}>
+            {listeEmployes.length} employés · <span style={{ color:'#27500A' }}>{listeEmployes.filter(e=>e.utilisateurId).length} ont un compte ERP</span> · <span style={{ color:'#A32D2D' }}>{listeEmployes.filter(e=>!e.utilisateurId).length} sans accès</span>
+          </div>
+          <div className="card" style={{ padding:0, overflow:'hidden' }}>
+            <table className="table-erp">
+              <thead>
+                <tr><th>Employé</th><th>Poste</th><th>Filiale</th><th>Contact</th><th>Accès ERP</th><th>Action</th></tr>
+              </thead>
+              <tbody>
+                {listeEmployes.map(e => (
+                  <tr key={e.id} style={{ background: e.utilisateurId ? undefined : '#FFFBF0' }}>
+                    <td>
+                      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                        <div style={{ width:30, height:30, borderRadius:'50%', background:(FILIALES_COLORS[e.filiale]||'#888')+'20', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, color:FILIALES_COLORS[e.filiale]||'#888' }}>
+                          {e.prenom?.[0]}{e.nom?.[0]}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight:600, fontSize:13 }}>{e.prenom} {e.nom}</div>
+                          <div style={{ fontSize:11, color:'#888' }}>{e.matricule}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ fontSize:13 }}>{e.poste}</td>
+                    <td><BadgeRole role={e.filiale}/></td>
+                    <td style={{ fontSize:12 }}>{e.telephone}</td>
+                    <td>
+                      {e.utilisateurId ? (
+                        <span style={{ fontSize:10, background:'#EAF3DE', color:'#27500A', borderRadius:8, padding:'2px 8px', fontWeight:600 }}>
+                          ✅ Accès actif
+                        </span>
+                      ) : (
+                        <span style={{ fontSize:10, background:'#FAEEDA', color:'#BA7517', borderRadius:8, padding:'2px 8px', fontWeight:500 }}>
+                          ⚠ Sans accès
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      {!e.utilisateurId && (
+                        <button className="btn btn-xs" style={{ background:'#1a3f6f', color:'white', border:'none', fontSize:10 }}
+                          onClick={() => setCreerAccesDirect(e)}>
+                          🔑 Créer accès
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {listeEmployes.length === 0 && (
+                  <tr><td colSpan={6}><div className="empty-state"><p>Aucun employé</p></div></td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       {/* Onglet Utilisateurs */}
       {onglet === 'utilisateurs' && (
@@ -491,6 +559,14 @@ export default function UtilisateursPage() {
         />
       )}
 
+      {creerAccesDirect && (
+        <ModalCreerAcces
+          employe={creerAccesDirect}
+          onClose={() => setCreerAccesDirect(null)}
+          onSave={creerAccesMut.mutate}
+          loading={creerAccesMut.isPending}
+        />
+      )}
       {toast && (
         <div style={{ position:'fixed', bottom:20, right:16, background:toast.t==='error'?'#A32D2D':'#27500A', color:'white', padding:'10px 18px', borderRadius:10, fontSize:13, zIndex:9999 }}>
           {toast.msg}

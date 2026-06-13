@@ -476,8 +476,8 @@ router.post('/convertir-en-souscripteur', auth, toptelsig, async (req, res) => {
 // ── GET /crm/:id — Fiche complète d'un prospect ──────────────────────────────
 router.get('/:id', auth, toptelsig, async (req, res) => {
   try {
-    const prospect = await prisma.souscripteur.findUnique({
-      where: { id: req.params.id },
+    const prospect = await prisma.souscripteur.findFirst({
+      where: { OR: [{ id: req.params.id }, { code: req.params.id }] },
       include: {
         relances: { orderBy: { dateRelance: 'desc' } },
         reservations: {
