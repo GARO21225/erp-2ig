@@ -9,6 +9,10 @@ import { useAuthStore } from '../../store';
 import { Plus, X, Key, Shield, Eye, Lock, Unlock, RefreshCw } from 'lucide-react';
 
 // ── Constantes ─────────────────────────────────────────────────────────────────
+const FILIALES_COLORS = {
+  GROUPE: '#1a3f6f', YAKRO_GRILL: '#8B1A1A', TOPTELSIG: '#27500A', LIYA: '#E85D04',
+};
+
 const ROLES_CONFIG = {
   DG:            { label:'Directeur Général',   color:'#1a1a1a', bg:'#F7F7F5', desc:'Accès complet à tout l\'ERP' },
   DIRECTEUR:     { label:'Directeur',           color:'#1a3f6f', bg:'#EEF3FB', desc:'Dashboard, rapports, validation, contrôle' },

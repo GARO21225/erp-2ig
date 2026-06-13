@@ -96,8 +96,21 @@ router.post('/', auth, liya, async (req, res) => {
     }
 
     const numero = `LY-${Date.now()}`;
+    // Extraire uniquement les champs du modèle Livraison
+    const { clientNom, clientTel, adressePrise, adresseLivraison, montant, typePaiement, notes } = req.body;
     const livraison = await prisma.livraison.create({
-      data: { ...req.body, numero, montant: Number(req.body.montant || 0) },
+      data: {
+        numero,
+        motoId: motoId || null,
+        chauffeurId: chauffeurId || null,
+        clientNom: clientNom || '',
+        clientTel: clientTel || '',
+        adressePrise: adressePrise || '',
+        adresseLivraison: adresseLivraison || '',
+        montant: Number(montant || 0),
+        typePaiement: typePaiement || null,
+        notes: notes || null,
+      },
       include: { moto: true, chauffeur: true }
     });
 

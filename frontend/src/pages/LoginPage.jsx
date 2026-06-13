@@ -18,7 +18,7 @@ export default function LoginPage() {
     try {
       const res = await authAPI.login({ email, motDePasse: password });
       setAuth(res.user, res.token);
-      navigate('/dashboard');
+      navigate('/portail');
     } catch (err) {
       setError(err.error || 'Identifiants invalides');
     } finally {

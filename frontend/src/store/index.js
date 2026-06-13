@@ -6,14 +6,23 @@ export const useAuthStore = create(
     (set, get) => ({
       user: null,
       token: null,
-      filiale: 'GROUPE', // Vue active
+      filiale: 'GROUPE',
+      dernierEspace: null, // Mémoriser le dernier espace visité
 
       setAuth: (user, token) => set({ user, token }),
-      logout: () => set({ user: null, token: null }),
+      logout: () => set({ user: null, token: null, dernierEspace: null }),
       setFiliale: (filiale) => set({ filiale }),
+      setDernierEspace: (espace) => set({ dernierEspace: espace }),
       isAuth: () => !!get().token,
     }),
-    { name: '2ig-auth', partialize: (s) => ({ user: s.user, token: s.token }) }
+    {
+      name: '2ig-auth',
+      partialize: (s) => ({
+        user: s.user,
+        token: s.token,
+        dernierEspace: s.dernierEspace,
+      })
+    }
   )
 );
 
@@ -28,7 +37,6 @@ export const useUIStore = create((set) => ({
   addNotif: (notif) => set(s => ({ notifications: [notif, ...s.notifications].slice(0, 20) })),
 }));
 
-// Exposer le store auth pour la déconnexion automatique après inactivité
 if (typeof window !== 'undefined') {
   setTimeout(() => {
     const { useAuthStore } = require('./index');

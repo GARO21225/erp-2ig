@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from './store';
 import Layout from './components/layout/Layout';
 import LoginPage from './pages/LoginPage';
+import PortailPage from './pages/PortailPage';
 import GestionProjetPage from './pages/toptelsig/GestionProjetPage';
 import CRMPage from './pages/toptelsig/CRMPage';
 import DashboardToptelsig from './pages/toptelsig/DashboardToptelsig';
@@ -50,6 +51,7 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
             <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="portail" element={<PortailPage />} />
             <Route path="dashboard" element={<DashboardGroupe />} />
             <Route path="rh" element={<RHPage />} />
             <Route path="finance" element={<FinancePage />} />
