@@ -584,8 +584,8 @@ export default function CRMPage() {
                 const nbResas = p._crm?.nbReservations||0;
                 return (
                   <tr key={p.id} style={{ background:enRetard?'#FDF2F2':undefined }}>
-                    <td>
-                      <div style={{ fontWeight:600, fontSize:13 }}>{p.prenom} {p.nom}</div>
+                    <td style={{ cursor:'pointer' }} onClick={()=>navigate(`/toptelsig/prospects/${p.id}`)}>
+                      <div style={{ fontWeight:600, fontSize:13, color:'#1a3f6f', textDecoration:'underline' }}>{p.prenom} {p.nom}</div>
                       <div style={{ fontSize:10, color:'#888' }}>{p.profession||p.sourceAcquisition||''}</div>
                       {/* Multi-projets */}
                       {p._crm?.projets?.length > 1 && (

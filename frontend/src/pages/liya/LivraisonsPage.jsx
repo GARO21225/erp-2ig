@@ -26,7 +26,7 @@ function ModalCreateLivraison({ motos, onClose, onSave }) {
     queryFn: () => liyaAPI.stock3pl({ statut: 'EN_STOCK', limit: 100 }),
     staleTime: 30000,
   });
-  const listeStocks = Array.isArray(stocks3pl) ? stocks3pl : [];
+  const listeStocks = Array.isArray(stocks3pl) ? stocks3pl : (stocks3pl?.data || []);
 
   const { data: partenaires = [] } = useQuery({
     queryKey: ['partenaires-liya'],

@@ -473,4 +473,30 @@ router.post('/convertir-en-souscripteur', auth, toptelsig, async (req, res) => {
   }
 });
 
+// ── GET /crm/:id — Fiche complète d'un prospect ──────────────────────────────
+router.get('/:id', auth, toptelsig, async (req, res) => {
+  try {
+    const prospect = await prisma.souscripteur.findUnique({
+      where: { id: req.params.id },
+      include: {
+        relances: { orderBy: { dateRelance: 'desc' } },
+        reservations: {
+          include: {
+            lot: { include: { projet: { select: { id:true, nom:true, code:true, ville:true } } } }
+          }
+        },
+        ventes: {
+          include: {
+            lot: { include: { projet: { select: { id:true, nom:true, code:true } } } },
+            echeanciers: { orderBy: { dateEcheance: 'asc' } },
+            paiements: { orderBy: { createdAt: 'desc' } },
+          }
+        },
+      }
+    });
+    if (!prospect) return res.status(404).json({ error: 'Contact introuvable' });
+    res.json(prospect);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = router;

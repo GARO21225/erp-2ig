@@ -1009,6 +1009,8 @@ model Moto {
   modele                    String?
   annee                     Int?
   statut                    String   @default("DISPONIBLE") // DISPONIBLE, EN_LIVRAISON, MAINTENANCE, HORS_SERVICE
+  livreurId                 String?  // Employé livreur assigné
+  livreurNom                String?  // Nom dénormalisé
   kilometrage               Float    @default(0)
   dernierePlein             DateTime?
   // Assurance

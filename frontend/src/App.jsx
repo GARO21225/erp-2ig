@@ -25,6 +25,7 @@ import GestionCaissePage from './pages/yakro/GestionCaissePage';
 import CaisseYakro from './pages/yakro/CaisseYakro';
 import ProjetsPage from './pages/toptelsig/ProjetsPage';
 import SouscripteursPage from './pages/toptelsig/SouscripteursPage';
+import ProspectDetailPage from './pages/toptelsig/ProspectDetailPage';
 import SouscripteurDetail from './pages/toptelsig/SouscripteurDetail';
 import VentesPage from './pages/toptelsig/VentesPage';
 import DepensesPage from './pages/toptelsig/DepensesPage';
@@ -71,6 +72,7 @@ export default function App() {
             <Route path="toptelsig/dashboard" element={<DashboardToptelsig />} />
             <Route path="toptelsig/projets" element={<ProjetsPage />} />
             <Route path="toptelsig/souscripteurs" element={<SouscripteursPage />} />
+            <Route path="toptelsig/prospects/:id" element={<ProspectDetailPage />} />
             <Route path="toptelsig/souscripteurs/:id" element={<SouscripteurDetail />} />
             <Route path="toptelsig/ventes" element={<VentesPage />} />
             <Route path="toptelsig/depenses" element={<DepensesPage />} />

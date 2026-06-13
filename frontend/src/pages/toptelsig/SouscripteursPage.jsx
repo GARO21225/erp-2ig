@@ -20,7 +20,6 @@ const fmtF = n => n >= 1000000 ? `${(n/1000000).toFixed(2)}M F` : n >= 1000 ? `$
 const fmtD = d => d ? new Date(d).toLocaleDateString('fr', { day:'2-digit', month:'short', year:'numeric' }) : '—';
 
 const STATUT_CONFIG = {
-  NOUVEAU:    { label:'Nouveau souscripteur', color:'#1a3f6f', bg:'#EEF3FB' },
   ACTIF:      { label:'Paiement en cours',    color:'#27500A', bg:'#EAF3DE' },
   EN_RETARD:  { label:'En retard',            color:'#A32D2D', bg:'#FCEBEB' },
   SUSPENDU:   { label:'Suspendu',             color:'#888',    bg:'#F7F7F5' },
@@ -34,12 +33,6 @@ function getStatutDisplay(s) {
   const sc = s.statutCalc || s.statut;
   if (sc === 'SOLDE') return STATUT_CONFIG.SOLDE;
   if (sc === 'EN_RETARD') return STATUT_CONFIG.EN_RETARD;
-  if (sc === 'ACTIF') {
-    // Nouveau si premier paiement < 30 jours
-    const pm = s.premierPaiement;
-    if (pm && (Date.now() - new Date(pm)) < 30 * 86400000) return STATUT_CONFIG.NOUVEAU;
-    return STATUT_CONFIG.ACTIF;
-  }
   return STATUT_CONFIG[sc] || STATUT_CONFIG.ACTIF;
 }
 

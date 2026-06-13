@@ -18,6 +18,9 @@ export default function MotosPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [affecterFor, setAffecterFor] = useState(null); // moto à affecter
+  const [toast, setToast] = useState(null);
+  const showToast = (msg,t='success') => { setToast({msg,t}); setTimeout(()=>setToast(null),3000); };
 
   const handleImportMotos = async ({ lignes, entetes }) => {
     setImporting(true);
@@ -35,6 +38,20 @@ export default function MotosPage() {
       setImportResult({ error: e?.response?.data?.error || e.message });
     } finally { setImporting(false); }
   };
+
+  // Livreurs disponibles (employés LIYA avec rôle LIVREUR ou RESP_LIVRAISON)
+  const { data: livreursRaw = [] } = useQuery({
+    queryKey: ['livreurs-liya'],
+    queryFn: () => import('../../lib/api').then(m => m.employesAPI.list({ filiale: 'LIYA', statut: 'ACTIF', limit: 50 })),
+    staleTime: 60000,
+  });
+  const livreurs = Array.isArray(livreursRaw) ? livreursRaw : (livreursRaw?.data || []);
+
+  const affecterMut = useMutation ? useMutation({
+    mutationFn: ({ motoId, livreurId, livreurNom }) => liyaAPI.affecterLivreur(motoId, { livreurId, livreurNom }),
+    onSuccess: () => { qc.invalidateQueries(['motos']); setAffecterFor(null); showToast('Livreur affecté ✓'); },
+    onError: e => showToast(e?.response?.data?.error||'Erreur','error'),
+  }) : null;
 
   const handleDownloadTemplate = () => { window.open(liyaAPI.motosTemplate(), '_blank'); };
   const handleExportMotos = () => { window.open(liyaAPI.exportMotos(), '_blank'); };
@@ -261,6 +278,55 @@ export default function MotosPage() {
               {(!histo?.pleins?.length && !histo?.maintenances?.length) && <div style={{ textAlign: 'center', color: '#ccc', padding: 30, fontSize: 13 }}>Aucun historique</div>}
             </div>
           </div>
+        </div>
+      )}
+      {/* Modal affecter livreur */}
+      {affecterFor && (
+        <div className="modal-overlay" onClick={()=>setAffecterFor(null)}>
+          <div className="modal" style={{maxWidth:400}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:16}}>
+              <h3 style={{margin:0,fontFamily:'Syne',fontSize:15,color:'#E85D04'}}>
+                👤 Affecter un livreur — {affecterFor.immatriculation}
+              </h3>
+              <button onClick={()=>setAffecterFor(null)} style={{background:'none',border:'none',cursor:'pointer'}}>✕</button>
+            </div>
+            {affecterFor.livreurNom && (
+              <div style={{background:'#EAF3DE',borderRadius:8,padding:'8px 12px',marginBottom:12,fontSize:12,color:'#27500A'}}>
+                Actuellement affecté à : <strong>{affecterFor.livreurNom}</strong>
+              </div>
+            )}
+            <div style={{marginBottom:14}}>
+              <label className="label">Livreur</label>
+              <select className="input" id="livreur-select">
+                <option value="">— Aucun (désaffecter)</option>
+                {livreurs.map(l=>(
+                  <option key={l.id} value={l.id} data-nom={`${l.prenom} ${l.nom}`}>
+                    {l.prenom} {l.nom} — {l.poste||'Livreur'}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+              <button className="btn btn-ghost btn-sm" onClick={()=>setAffecterFor(null)}>Annuler</button>
+              <button className="btn btn-primary btn-sm" style={{background:'#E85D04',border:'none'}}
+                onClick={()=>{
+                  const sel = document.getElementById('livreur-select');
+                  const opt = sel.options[sel.selectedIndex];
+                  affecterMut.mutate({
+                    motoId: affecterFor.id,
+                    livreurId: sel.value || null,
+                    livreurNom: sel.value ? opt.dataset.nom : null,
+                  });
+                }}>
+                Affecter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {toast && (
+        <div style={{position:'fixed',bottom:20,right:16,background:toast.t==='error'?'#A32D2D':'#27500A',color:'white',padding:'10px 18px',borderRadius:10,fontSize:13,zIndex:9999}}>
+          {toast.msg}
         </div>
       )}
     </div>

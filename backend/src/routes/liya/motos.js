@@ -176,4 +176,28 @@ router.get('/export', auth, liya, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// PUT /:id/affecter-livreur — Affecter ou désaffecter un livreur
+router.put('/:id/affecter-livreur', auth, liya, async (req, res) => {
+  try {
+    const { livreurId, livreurNom } = req.body;
+    const moto = await prisma.moto.update({
+      where: { id: req.params.id },
+      data: {
+        livreurId: livreurId || null,
+        livreurNom: livreurNom || null,
+      }
+    });
+    await prisma.auditLog.create({ data: {
+      utilisateurId: req.user.id,
+      utilisateurNom: `${req.user.prenom} ${req.user.nom}`,
+      filiale: 'LIYA',
+      action: 'UPDATE',
+      entite: 'Moto',
+      entiteId: moto.id,
+      entiteLabel: livreurId ? `${moto.immatriculation} → ${livreurNom}` : `${moto.immatriculation} désaffectée`,
+    }}).catch(() => {});
+    res.json(moto);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = router;

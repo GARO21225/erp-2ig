@@ -310,3 +310,12 @@ BEGIN
     RAISE NOTICE 'Table stocks_clients_3pl créée';
   END IF;
 END $$;
+
+-- Affectation livreur sur moto
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='motos' AND column_name='livreurId') THEN
+    ALTER TABLE "motos" ADD COLUMN "livreurId" TEXT, ADD COLUMN "livreurNom" TEXT;
+    RAISE NOTICE 'Colonnes livreurId + livreurNom ajoutées dans motos';
+  END IF;
+END $$;
