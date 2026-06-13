@@ -493,7 +493,15 @@ export default function POS() {
 
   const handleCommander = (table) => {
     setPanneauTable(null);
-    setCommandeTable(table);
+    // Si la table a déjà une commande ouverte → mode ajout (pas de serveur requis)
+    const commandeOuverte = table.commandes?.find(
+      cmd => cmd.statut === 'EN_COURS' || cmd.statut === 'CUISINE' || cmd.statut === 'PRETE'
+    );
+    if (commandeOuverte) {
+      setCommandeTable({ ...table, commandeExistante: commandeOuverte });
+    } else {
+      setCommandeTable(table);
+    }
   };
 
   const handleEncaisser = (table) => {

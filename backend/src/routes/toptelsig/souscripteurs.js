@@ -48,10 +48,11 @@ router.get('/', auth, toptelsig, async (req, res) => {
 
     const where = {};
 
-    // Par défaut : uniquement les souscripteurs (ont au moins un paiement)
-    // inclureCRM=true → tous les contacts (pour la page CRM)
+    // Par défaut : contacts ayant au moins une vente (lot signé/réservé/converti)
+    // OU au moins un paiement
+    // inclureCRM=true → tous les contacts
     if (inclureCRM !== 'true') {
-      where.paiements = { some: {} };
+      where.ventes = { some: {} };
     }
 
     if (search) {
