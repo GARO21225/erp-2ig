@@ -451,7 +451,7 @@ function ModalRetourArticle({ commande, onClose, onSave }) {
 // ─── POS Principal ──────────────────────────────────────────────────────────
 export default function POS() {
   const qc = useQueryClient();
-  const [zone, setZone] = useState('Salle');
+  const [zone, setZone] = useState('TOUTES');
   const [panneauTable, setPanneauTable] = useState(null);
   const [commandeTable, setCommandeTable] = useState(null);
   const [paiementCommande, setPaiementCommande] = useState(null);
@@ -486,7 +486,18 @@ export default function POS() {
     onError: e => showToast(e?.error || 'Erreur paiement', 'error'),
   });
 
-  const tablesFiltrees = tables.filter(t=>t.zone===zone);
+  // Afficher toutes les tables groupées par zone, avec filtre optionnel
+  const zonesDisponibles = [...new Set(tables.map(t=>t.zone).filter(Boolean))].sort();
+  const [searchTable, setSearchTable] = useState('');
+  const tablesFiltrees = tables.filter(t => {
+    const matchZone = zone === 'TOUTES' ? true : t.zone === zone;
+    const matchSearch = !searchTable || String(t.numero).includes(searchTable);
+    return matchZone && matchSearch;
+  });
+  const tablesParZone = zonesDisponibles.reduce((acc, z) => {
+    acc[z] = tablesFiltrees.filter(t => t.zone === z);
+    return acc;
+  }, {});
   const occupees = tables.filter(t=>t.statut==='OCCUPEE').length;
 
   const handleClickTable = (table) => setPanneauTable(table);

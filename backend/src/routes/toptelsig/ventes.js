@@ -147,4 +147,48 @@ router.get('/retards', auth, toptelsig, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// POST /api/toptelsig/ventes/:id/echeanciers — Planifier des échéances sur une vente existante
+router.post('/:id/echeanciers', auth, toptelsig, async (req, res) => {
+  try {
+    const { nombreEcheances, montantTotal, dateDebut, periodeJours = 30 } = req.body;
+    if (!nombreEcheances || !montantTotal) {
+      return res.status(400).json({ error: 'nombreEcheances et montantTotal requis' });
+    }
+
+    const vente = await prisma.venteFoncier.findUnique({ where: { id: req.params.id } });
+    if (!vente) return res.status(404).json({ error: 'Vente introuvable' });
+
+    // Supprimer les anciens échéanciers non payés
+    await prisma.echeancier.deleteMany({
+      where: { venteId: req.params.id, statut: { not: 'PAYE' } }
+    });
+
+    const montantEch = Number(montantTotal) / Number(nombreEcheances);
+    const start = dateDebut ? new Date(dateDebut) : new Date();
+    const echeances = Array.from({ length: Number(nombreEcheances) }, (_, i) => {
+      const dateEcheance = new Date(start);
+      dateEcheance.setDate(dateEcheance.getDate() + (i + 1) * Number(periodeJours));
+      return {
+        venteId: req.params.id,
+        souscripteurId: vente.souscripteurId,
+        numero: i + 1,
+        montant: Math.round(montantEch),
+        dateEcheance,
+        statut: 'EN_ATTENTE',
+        montantPaye: 0,
+      };
+    });
+
+    await prisma.echeancier.createMany({ data: echeances });
+    const created = await prisma.echeancier.findMany({
+      where: { venteId: req.params.id },
+      orderBy: { numero: 'asc' }
+    });
+
+    res.status(201).json({ count: created.length, echeanciers: created });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;

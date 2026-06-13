@@ -42,7 +42,7 @@ export default function MotosPage() {
   // Livreurs disponibles (employés LIYA avec rôle LIVREUR ou RESP_LIVRAISON)
   const { data: livreursRaw = [] } = useQuery({
     queryKey: ['livreurs-liya'],
-    queryFn: () => import('../../lib/api').then(m => m.employesAPI.list({ filiale: 'LIYA', statut: 'ACTIF', limit: 50 })),
+    queryFn: () => employesAPI.list({ filiale: 'LIYA', statut: 'ACTIF', limit: 50 }),
     staleTime: 60000,
   });
   const livreurs = Array.isArray(livreursRaw) ? livreursRaw : (livreursRaw?.data || []);

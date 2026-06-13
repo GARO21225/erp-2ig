@@ -44,17 +44,20 @@ router.get('/encaissements', auth, async (req, res) => {
       if (dateFin) where.createdAt.lte = new Date(dateFin);
     }
 
-    const [total, data, totalMontant] = await Promise.all([
-      prisma.encaissement.count({ where }),
-      prisma.encaissement.findMany({
-        where, skip: (page - 1) * limit, take: Number(limit),
-        orderBy: { createdAt: 'desc' },
-        include: { caisse: { select: { nom: true } } }
-      }),
-      prisma.encaissement.aggregate({ _sum: { montant: true }, where })
-    ]);
-
-    res.json({ data, total, totalMontant: totalMontant._sum.montant || 0 });
+    try {
+      const [total, data, totalMontant] = await Promise.all([
+        prisma.encaissement.count({ where }),
+        prisma.encaissement.findMany({
+          where, skip: (page - 1) * limit, take: Number(limit),
+          orderBy: { createdAt: 'desc' },
+          include: { caisse: { select: { nom: true } } }
+        }),
+        prisma.encaissement.aggregate({ _sum: { montant: true }, where })
+      ]);
+      res.json({ data, total, totalMontant: totalMontant._sum.montant || 0 });
+    } catch {
+      res.json({ data: [], total: 0, totalMontant: 0 });
+    }
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

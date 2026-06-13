@@ -59,12 +59,98 @@ function ModalPaiement({ vente, echeance, souscripteurId, onClose, onSave }) {
   );
 }
 
+
+// ── Modal Planifier Échéancier ────────────────────────────────────────────────
+function ModalPlanifierEcheancier({ vente, onClose, onSave, loading }) {
+  const fmtF = n => n >= 1000000 ? `${(n/1000000).toFixed(2)}M F` : `${Math.round(n||0).toLocaleString('fr')} F`;
+  const dejaPaye = (vente.paiements || []).reduce((s, p) => s + p.montant, 0);
+  const restant = vente.prixVente - dejaPaye;
+  const [form, setForm] = useState({
+    nombreEcheances: '12',
+    montantTotal: String(Math.round(restant)),
+    dateDebut: new Date().toISOString().split('T')[0],
+    periodeJours: '30',
+  });
+  const s = (k,v) => setForm(f => ({...f, [k]: v}));
+  const montantEch = form.nombreEcheances > 0 ? Math.round(Number(form.montantTotal) / Number(form.nombreEcheances)) : 0;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display:'flex', justifyContent:'space-between', marginBottom:18 }}>
+          <h3 style={{ margin:0, fontFamily:'Syne', fontSize:16 }}>📅 Planifier l'échéancier</h3>
+          <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer' }}>✕</button>
+        </div>
+
+        <div style={{ background:'#EEF3FB', borderRadius:8, padding:'10px 14px', marginBottom:14, fontSize:12 }}>
+          <strong>Lot {vente.lot?.numero} — {vente.lot?.projet?.nom}</strong><br/>
+          <span style={{ color:'#888' }}>Prix : {fmtF(vente.prixVente)} · Déjà payé : {fmtF(dejaPaye)} · Restant : </span>
+          <strong style={{ color:'#A32D2D' }}>{fmtF(restant)}</strong>
+        </div>
+
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+          <div>
+            <label className="label">Montant total à échelonner *</label>
+            <input className="input" type="number" value={form.montantTotal} onChange={e=>s('montantTotal',e.target.value)}/>
+            <div style={{ fontSize:10, color:'#888', marginTop:2 }}>Restant à payer : {fmtF(restant)}</div>
+          </div>
+          <div>
+            <label className="label">Nombre d'échéances *</label>
+            <input className="input" type="number" min={1} max={120} value={form.nombreEcheances} onChange={e=>s('nombreEcheances',e.target.value)}/>
+          </div>
+          <div>
+            <label className="label">Date de début</label>
+            <input className="input" type="date" value={form.dateDebut} onChange={e=>s('dateDebut',e.target.value)}/>
+          </div>
+          <div>
+            <label className="label">Fréquence</label>
+            <select className="input" value={form.periodeJours} onChange={e=>s('periodeJours',e.target.value)}>
+              <option value="30">Mensuelle (30j)</option>
+              <option value="15">Bi-mensuelle (15j)</option>
+              <option value="90">Trimestrielle (90j)</option>
+              <option value="180">Semestrielle (180j)</option>
+              <option value="365">Annuelle</option>
+            </select>
+          </div>
+        </div>
+
+        {form.montantTotal && form.nombreEcheances && (
+          <div style={{ background:'#EAF3DE', borderRadius:8, padding:'10px 14px', marginTop:14, fontSize:12 }}>
+            <div style={{ fontWeight:700, marginBottom:4, color:'#27500A' }}>Aperçu</div>
+            <div>{form.nombreEcheances} échéance(s) de <strong>{fmtF(montantEch)}</strong> chacune</div>
+            {vente.echeanciers?.length > 0 && (
+              <div style={{ color:'#A32D2D', marginTop:4, fontSize:11 }}>
+                ⚠ Les {vente.echeanciers.length} échéance(s) non payées seront remplacées
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:18 }}>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>Annuler</button>
+          <button className="btn btn-primary btn-sm" disabled={!form.montantTotal||!form.nombreEcheances||loading}
+            style={{ background:'#27500A', border:'none' }}
+            onClick={() => onSave({
+              nombreEcheances: Number(form.nombreEcheances),
+              montantTotal: Number(form.montantTotal),
+              dateDebut: form.dateDebut,
+              periodeJours: Number(form.periodeJours),
+            })}>
+            {loading ? '...' : "📅 Créer l'échéancier"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SouscripteurDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [tab, setTab] = useState('ventes');
-  const [paiementFor, setPaiementFor] = useState(null); // { vente, echeance? }
+  const [paiementFor, setPaiementFor] = useState(null);
+  const [planifierFor, setPlanifierFor] = useState(null); // vente pour créer échéancier // { vente, echeance? }
 
   const { data: s, isLoading } = useQuery({
     queryKey: ['souscripteur', id],
@@ -209,11 +295,23 @@ export default function SouscripteurDetail() {
                         ))}
                       </tbody>
                     </table>
-                    <div style={{ marginTop: 10 }}>
+                    <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
                       <button onClick={() => setPaiementFor({ vente: v, echeance: null })}
                         className="btn btn-sm" style={{ background: '#1a3f6f', color: 'white', border: 'none', fontSize: 12 }}>
                         <Plus size={12} /> Paiement libre
                       </button>
+                      {(!v.echeanciers || v.echeanciers.length === 0) && (
+                        <button onClick={() => setPlanifierFor(v)}
+                          className="btn btn-sm" style={{ background: '#27500A', color: 'white', border: 'none', fontSize: 12 }}>
+                          📅 Planifier échéancier
+                        </button>
+                      )}
+                      {v.echeanciers?.length > 0 && (
+                        <button onClick={() => setPlanifierFor(v)}
+                          className="btn btn-sm btn-ghost" style={{ fontSize: 11 }}>
+                          ✏ Modifier le plan
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -263,6 +361,14 @@ export default function SouscripteurDetail() {
         </div>
       </div>
 
+      {planifierFor && (
+        <ModalPlanifierEcheancier
+          vente={planifierFor}
+          onClose={() => setPlanifierFor(null)}
+          onSave={data => planifierMut.mutate({ venteId: planifierFor.id, data })}
+          loading={planifierMut.isPending}
+        />
+      )}
       {paiementFor && (
         <ModalPaiement
           vente={paiementFor.vente}
