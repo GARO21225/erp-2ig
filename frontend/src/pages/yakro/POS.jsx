@@ -452,6 +452,8 @@ function ModalRetourArticle({ commande, onClose, onSave }) {
 export default function POS() {
   const qc = useQueryClient();
   const [zone, setZone] = useState('TOUTES');
+  const [filtreServeur, setFiltreServeur] = useState('');
+  const [filtreStatut, setFiltreStatut] = useState('');
   const [panneauTable, setPanneauTable] = useState(null);
   const [commandeTable, setCommandeTable] = useState(null);
   const [paiementCommande, setPaiementCommande] = useState(null);
@@ -492,7 +494,13 @@ export default function POS() {
   const tablesFiltrees = tables.filter(t => {
     const matchZone = zone === 'TOUTES' ? true : t.zone === zone;
     const matchSearch = !searchTable || String(t.numero).includes(searchTable);
-    return matchZone && matchSearch;
+    const commande = t.commandes?.[0];
+    const matchServeur = !filtreServeur || commande?.serveurNom === filtreServeur;
+    const matchStatut = !filtreStatut ? true :
+      filtreStatut === 'LIBRE' ? !commande || commande.statut === 'PAYEE' :
+      filtreStatut === 'OCCUPEE' ? commande && commande.statut !== 'PAYEE' :
+      commande?.statut === filtreStatut;
+    return matchZone && matchSearch && matchServeur && matchStatut;
   });
   const tablesParZone = zonesDisponibles.reduce((acc, z) => {
     acc[z] = tablesFiltrees.filter(t => t.zone === z);

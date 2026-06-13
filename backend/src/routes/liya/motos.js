@@ -21,9 +21,26 @@ router.get('/', auth, liya, async (req, res) => {
 
 router.post('/', auth, liya, async (req, res) => {
   try {
-    const moto = await prisma.moto.create({ data: req.body });
+    const { immatriculation, marque, modele, annee, kilometrage,
+      numeroAssurance, dateExpirationAssurance, dateVisiteTechnique,
+      consommationMoyenne } = req.body;
+    if (!immatriculation || !marque) return res.status(400).json({ error: 'Immatriculation et marque requis' });
+    const moto = await prisma.moto.create({
+      data: {
+        immatriculation: String(immatriculation).toUpperCase().trim(),
+        marque: String(marque).trim(),
+        modele: modele || null,
+        annee: annee ? Number(annee) : null,
+        kilometrage: kilometrage ? Number(kilometrage) : 0,
+        numeroAssurance: numeroAssurance || null,
+        dateExpirationAssurance: dateExpirationAssurance ? new Date(dateExpirationAssurance) : null,
+        dateVisiteTechnique: dateVisiteTechnique ? new Date(dateVisiteTechnique) : null,
+        consommationMoyenne: consommationMoyenne ? Number(consommationMoyenne) : null,
+      }
+    });
     res.status(201).json(moto);
   } catch (e) {
+    if (e.code === 'P2002') return res.status(400).json({ error: `Immatriculation déjà existante` });
     res.status(500).json({ error: e.message });
   }
 });

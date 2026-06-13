@@ -366,9 +366,16 @@ function FicheSouscripteur360({ s, onClose, onAddPaiement }) {
                 {[
                   { label:'➕ Ajouter un paiement', color:'#1a3f6f', bg:'#EEF3FB', action:() => onAddPaiement(s) },
                   { label:'🔍 Voir la fiche complète', color:'#27500A', bg:'#EAF3DE', action:() => { onClose(); navigate(`/toptelsig/souscripteurs/${s.id}`); } },
-                  { label:'🧾 Générer une facture', color:'#8B1A1A', bg:'#FDF2F2', action:() => genererDoc('FACTURE', s.ventes?.[0]?.id), disabled: !s.ventes?.length },
-                  { label:'📊 Situation client', color:'#BA7517', bg:'#FAEEDA', action:() => genererDoc('SITUATION', s.ventes?.[0]?.id), disabled: !s.ventes?.length },
-                  { label:'🧾 Générer un reçu', color:'#5F5E5A', bg:'#F7F7F5', action:() => genererDoc('RECU', s.ventes?.[0]?.id), disabled: !(s.ventes?.flatMap(v=>v.paiements||[]).length > 0) },
+                  { label:'🧾 Générer une facture', color:'#8B1A1A', bg:'#FDF2F2', action:() => {
+                      if ((s.ventes||[]).length > 1) {
+                        const choices = (s.ventes||[]).map(v=>`${v.lot?.numero} — ${v.lot?.projet?.nom}`);
+                        const idx = window.confirm(`Plusieurs lots :\n${choices.join('\n')}\nCliquez OK pour le premier lot, Annuler pour la vue globale`)
+                          ? 0 : -1;
+                        genererDoc('FACTURE', idx >= 0 ? s.ventes[idx].id : null);
+                      } else { genererDoc('FACTURE', s.ventes?.[0]?.id); }
+                    }, disabled: !s.ventes?.length },
+                  { label:'📊 Situation client', color:'#BA7517', bg:'#FAEEDA', action:() => genererDoc('SITUATION', null), disabled: !s.ventes?.length },
+                  { label:'🧾 Générer un reçu', color:'#5F5E5A', bg:'#F7F7F5', action:() => genererDoc('RECU', s.paiements?.[0]?.venteId||s.ventes?.[0]?.id), disabled: !(s.ventes?.flatMap(v=>v.paiements||[]).length > 0) },
                   { label:'💬 WhatsApp', color:'#25D366', bg:'#E8F9EF', action:() => window.open(`https://wa.me/${tel}`, '_blank') },
                   { label:'📞 Appeler', color:'#27500A', bg:'#EAF3DE', action:() => window.open(`tel:${s.telephone}`) },
                   { label:'📧 Email', color:'#1a3f6f', bg:'#EEF3FB', action:() => window.open(`mailto:${s.email||''}`) },

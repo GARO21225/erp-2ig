@@ -18,6 +18,7 @@ const STATUT_MAP = {
 function ModalCreateLivraison({ motos, onClose, onSave }) {
   const [clientType, setClientType] = useState('ordinaire'); // 'ordinaire' | 'stock3pl'
   const [stock3plId, setStock3plId] = useState('');
+  const [partenaireSelId, setPartenaireSelId] = useState('');
   const [form, setForm] = useState({ clientNom: '', clientTel: '', adressePrise: '', adresseLivraison: '', montant: '', typePaiement: 'ORANGE_MONEY', motoId: '', notes: '' });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -62,33 +63,51 @@ function ModalCreateLivraison({ motos, onClose, onSave }) {
           ))}
         </div>
 
-        {/* Article 3PL si applicable */}
+        {/* Parcours Stock 3PL : Partenaire → Articles → Formulaire */}
         {clientType === 'stock3pl' && (
           <div style={{ marginBottom:12 }}>
-            <label className="label">Article en stock (3PL)</label>
-            {listePartenaires.length > 0 && (
-              <div style={{ marginBottom:8 }}>
-                <label className="label">Partenaire (optionnel)</label>
-                <select className="input" style={{ fontSize:11 }} onChange={e => {
-                  const p = listePartenaires.find(x=>x.id===e.target.value);
-                  if(p) { set('clientNom', p.nom); set('clientTel', p.telephone); }
-                }}>
-                  <option value="">— Choisir un partenaire enregistré —</option>
-                  {listePartenaires.map(p => <option key={p.id} value={p.id}>{p.nom} · {p.typeActivite||''}</option>)}
-                </select>
+            {/* Étape 1 : Choisir le partenaire */}
+            <div style={{ marginBottom:10 }}>
+              <label className="label">1. Partenaire</label>
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:6 }}>
+                <button type="button" onClick={()=>{ setPartenaireSelId(''); setStock3plId(''); set('clientNom',''); set('clientTel',''); }}
+                  style={{ padding:'5px 12px', borderRadius:16, border:`1.5px solid ${!partenaireSelId?'#E85D04':'#e8e7e1'}`, background:!partenaireSelId?'#FFF0EB':'white', color:!partenaireSelId?'#E85D04':'#888', fontSize:11, cursor:'pointer' }}>
+                  Client ponctuel
+                </button>
+                {listePartenaires.map(p => (
+                  <button key={p.id} type="button" onClick={()=>{ setPartenaireSelId(p.id); setStock3plId(''); set('clientNom',p.nom); set('clientTel',p.telephone||''); }}
+                    style={{ padding:'5px 12px', borderRadius:16, border:`1.5px solid ${partenaireSelId===p.id?'#E85D04':'#e8e7e1'}`, background:partenaireSelId===p.id?'#FFF0EB':'white', color:partenaireSelId===p.id?'#E85D04':'#555', fontSize:11, cursor:'pointer', fontWeight:partenaireSelId===p.id?600:400 }}>
+                    🏢 {p.nom}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Étape 2 : Choisir l'article si partenaire sélectionné */}
+            {partenaireSelId && (
+              <div style={{ marginBottom:10 }}>
+                <label className="label">2. Article du partenaire</label>
+                {listeStocks.filter(s=>s.partenaireId===partenaireSelId).length === 0 ? (
+                  <div style={{ background:'#FAEEDA', borderRadius:8, padding:'8px 12px', fontSize:12, color:'#BA7517' }}>
+                    ⚠ Aucun article en stock pour ce partenaire
+                  </div>
+                ) : (
+                  <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                    {listeStocks.filter(s=>s.partenaireId===partenaireSelId).map(s => (
+                      <button key={s.id} type="button" onClick={()=>handleStock3plChange(s.id)}
+                        style={{ padding:'6px 12px', borderRadius:8, border:`1.5px solid ${stock3plId===s.id?'#E85D04':'#e8e7e1'}`, background:stock3plId===s.id?'#FFF0EB':'white', color:stock3plId===s.id?'#E85D04':'#555', fontSize:11, cursor:'pointer', textAlign:'left' }}>
+                        <div style={{ fontWeight:600 }}>{s.article}</div>
+                        <div style={{ fontSize:10, color:'#888' }}>{s.quantite} {s.unite} en stock</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
-            <select className="input" value={stock3plId} onChange={e => handleStock3plChange(e.target.value)}>
-              <option value="">— Sélectionner un article en stock —</option>
-              {listeStocks.map(s => (
-                <option key={s.id} value={s.id}>
-                  {s.clientNom} · {s.article} ({s.quantite} {s.unite})
-                </option>
-              ))}
-            </select>
+
             {stock3plId && (
-              <div style={{ fontSize:11, color:'#E85D04', marginTop:4, background:'#FFF0EB', borderRadius:6, padding:'4px 8px' }}>
-                Client pré-rempli depuis le stock 3PL
+              <div style={{ background:'#EAF3DE', borderRadius:6, padding:'6px 10px', fontSize:11, color:'#27500A', marginBottom:8 }}>
+                ✓ Client et article pré-remplis depuis le stock 3PL
               </div>
             )}
           </div>
