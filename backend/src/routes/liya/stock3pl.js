@@ -16,20 +16,34 @@ router.get('/', auth, liya, async (req, res) => {
       { article: { contains: search, mode: 'insensitive' } },
     ];
 
-    const [total, data] = await Promise.all([
-      prisma.stockClient3PL.count({ where }),
-      prisma.stockClient3PL.findMany({
-        where,
-        skip: (page - 1) * limit,
-        take: Number(limit),
-        orderBy: { dateEntree: 'desc' },
-        include: {
-          partenaire: {
-            select: { id:true, nom:true, raisonSociale:true, telephone:true, typeActivite:true }
+    let total = 0, data = [];
+    try {
+      [total, data] = await Promise.all([
+        prisma.stockClient3PL.count({ where }),
+        prisma.stockClient3PL.findMany({
+          where,
+          skip: (page - 1) * limit,
+          take: Number(limit),
+          orderBy: { dateEntree: 'desc' },
+          include: {
+            partenaire: {
+              select: { id:true, nom:true, raisonSociale:true, telephone:true, typeActivite:true }
+            }
           }
-        }
-      })
-    ]);
+        })
+      ]);
+    } catch {
+      // Fallback sans include partenaire si relation absente
+      try {
+        [total, data] = await Promise.all([
+          prisma.stockClient3PL.count({ where }),
+          prisma.stockClient3PL.findMany({
+            where, skip: (page - 1) * limit, take: Number(limit),
+            orderBy: { dateEntree: 'desc' },
+          })
+        ]);
+      } catch(e2) { return res.status(500).json({ error: e2.message }); }
+    }
 
     // Stats par client
     const statsClient = await prisma.stockClient3PL.groupBy({

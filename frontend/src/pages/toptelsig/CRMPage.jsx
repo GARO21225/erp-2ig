@@ -390,6 +390,7 @@ export default function CRMPage() {
   const [relanceFor, setRelanceFor] = useState(null);
   const [proposerFor, setProposerFor] = useState(null);
   const [tagsFor, setTagsFor] = useState(null);
+  const [convertirFor, setConvertirFor] = useState(null);
   const [toast, setToast] = useState(null);
   const showToast = (msg,t='success') => { setToast({msg,t}); setTimeout(()=>setToast(null),3500); };
 
@@ -441,6 +442,18 @@ export default function CRMPage() {
       showToast(`✓ Lot ${r.lot?.numero} réservé — projet ${r.lot?.projet}`);
     },
     onError: e => showToast(e?.response?.data?.error||'Erreur','error'),
+  });
+
+  const convertirMut = useMutation({
+    mutationFn: toptelsigAPI.crmConvertir,
+    onSuccess: (res) => {
+      qc.invalidateQueries(['crm-prospects']);
+      qc.invalidateQueries(['souscripteurs']);
+      setConvertirFor(null);
+      showToast(res.message || '🎉 Converti en souscripteur !');
+      setTimeout(() => navigate('/toptelsig/souscripteurs'), 1500);
+    },
+    onError: e => showToast(e?.response?.data?.error || 'Erreur conversion', 'error'),
   });
 
   const updateTags = useMutation({
@@ -641,6 +654,13 @@ export default function CRMPage() {
                           onClick={()=>setTagsFor(p)} title="Tags">
                           <Tag size={9}/>
                         </button>
+                        {(p.statutProjet||p.statutGlobal)==='RESERVE' && p._crm?.nbReservations > 0 && (
+                          <button className="btn btn-xs" style={{ background:'#EAF3DE', color:'#27500A', border:'none', fontSize:10 }}
+                            title="Convertir en souscripteur"
+                            onClick={()=>setConvertirFor(p)}>
+                            🎉 Convertir
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -675,6 +695,14 @@ export default function CRMPage() {
       {showCreate && (
         <ModalCreateProspect onClose={()=>setShowCreate(false)} onSave={createProspect.mutate}
           loading={createProspect.isPending} listeCommerciaux={listeCommerciaux}/>
+      )}
+      {convertirFor && (
+        <ModalConvertirSouscripteur
+          prospect={convertirFor}
+          onClose={() => setConvertirFor(null)}
+          onSave={convertirMut.mutate}
+          loading={convertirMut.isPending}
+        />
       )}
       {showImport && (
         <ModalImport onClose={()=>setShowImport(false)} onSave={importProspects.mutate}

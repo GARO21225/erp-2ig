@@ -387,4 +387,88 @@ router.get('/template-import', auth, (req, res) => {
   res.send('\uFEFF' + [headers, ...examples].map(r => r.join(';')).join('\r\n'));
 });
 
+// ── POST /crm/convertir-en-souscripteur ──────────────────────────────────────
+// Convertit un prospect en souscripteur : crée la VenteFoncier depuis la réservation
+// Optionnel : premier paiement pour déclencher le basculement dans Souscripteurs
+router.post('/convertir-en-souscripteur', auth, toptelsig, async (req, res) => {
+  try {
+    const { souscripteurId, reservationId, prixVente, premierPaiement, typePaiement, reference } = req.body;
+    if (!souscripteurId || !reservationId || !prixVente) {
+      return res.status(400).json({ error: 'souscripteurId, reservationId, prixVente requis' });
+    }
+
+    const reservation = await prisma.reservationFoncier.findUnique({
+      where: { id: reservationId },
+      include: { lot: { include: { projet: true } } }
+    });
+    if (!reservation) return res.status(404).json({ error: 'Réservation introuvable' });
+    if (reservation.statut !== 'ACTIVE') return res.status(400).json({ error: 'Réservation non active' });
+
+    const result = await prisma.$transaction(async tx => {
+      // 1. Créer la VenteFoncier
+      const vente = await tx.venteFoncier.create({
+        data: {
+          lotId: reservation.lotId,
+          souscripteurId,
+          reservationId,
+          prixVente: Number(prixVente),
+          statut: 'EN_COURS',
+        }
+      });
+
+      // 2. Passer le lot en VENDU
+      await tx.lot.update({ where: { id: reservation.lotId }, data: { statut: 'VENDU' } });
+
+      // 3. Passer la réservation en CONVERTIE
+      await tx.reservationFoncier.update({ where: { id: reservationId }, data: { statut: 'CONVERTIE' } });
+
+      // 4. Passer le contact en CLIENT
+      await tx.souscripteur.update({ where: { id: souscripteurId }, data: { statut: 'CLIENT' } });
+
+      // 5. Mettre à jour ContactProjet → CLIENT
+      await tx.contactProjet.upsert({
+        where: { souscripteurId_projetId: { souscripteurId, projetId: reservation.lot.projetId } },
+        update: { statut: 'CLIENT' },
+        create: { souscripteurId, projetId: reservation.lot.projetId, statut: 'CLIENT', commercialId: req.user.id, commercialNom: `${req.user.prenom} ${req.user.nom}` },
+      }).catch(() => {}); // Silencieux si table absente
+
+      // 6. Si premier paiement fourni → créer PaiementFoncier
+      let paiement = null;
+      if (premierPaiement && Number(premierPaiement) > 0) {
+        paiement = await tx.paiementFoncier.create({
+          data: {
+            venteId: vente.id,
+            souscripteurId,
+            montant: Number(premierPaiement),
+            typePaiement: typePaiement || 'ESPECES',
+            reference: reference || null,
+            statut: 'VALIDE',
+          }
+        });
+      }
+
+      // 7. Audit
+      await tx.auditLog.create({ data: {
+        utilisateurId: req.user.id,
+        utilisateurNom: `${req.user.prenom} ${req.user.nom}`,
+        filiale: 'TOPTELSIG',
+        action: 'CREATE',
+        entite: 'VenteFoncier',
+        entiteId: vente.id,
+        entiteLabel: `Conversion lot ${reservation.lot.numero} — ${reservation.lot.projet?.nom}`,
+      }});
+
+      return { vente, paiement };
+    });
+
+    res.status(201).json({
+      ...result,
+      message: `Contact converti en souscripteur${result.paiement ? ` — Premier paiement de ${Number(premierPaiement).toLocaleString('fr')} F enregistré` : ''}`,
+    });
+  } catch (e) {
+    console.error('[CRM Conversion]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;

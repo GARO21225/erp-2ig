@@ -270,3 +270,43 @@ BEGIN
     RAISE NOTICE 'Table decaissements créée';
   END IF;
 END $$;
+
+-- Table partenaires LiYA
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'partenaires') THEN
+    CREATE TABLE "partenaires" (
+      "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      "nom" TEXT NOT NULL,
+      "raisonSociale" TEXT,
+      "telephone" TEXT NOT NULL,
+      "email" TEXT,
+      "adresse" TEXT,
+      "typeActivite" TEXT,
+      "notes" TEXT,
+      "actif" BOOLEAN DEFAULT true,
+      "createdAt" TIMESTAMP DEFAULT NOW(),
+      "updatedAt" TIMESTAMP DEFAULT NOW()
+    );
+    RAISE NOTICE 'Table partenaires créée';
+  END IF;
+  
+  -- Table stocks_clients_3pl
+  IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'stocks_clients_3pl') THEN
+    CREATE TABLE "stocks_clients_3pl" (
+      "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      "partenaireId" TEXT,
+      "clientNom" TEXT NOT NULL DEFAULT '',
+      "clientTel" TEXT,
+      "article" TEXT NOT NULL,
+      "quantite" FLOAT NOT NULL DEFAULT 1,
+      "unite" TEXT DEFAULT 'unité',
+      "dateEntree" TIMESTAMP DEFAULT NOW(),
+      "dateSortie" TIMESTAMP,
+      "statut" TEXT DEFAULT 'EN_STOCK',
+      "notes" TEXT,
+      "createdAt" TIMESTAMP DEFAULT NOW()
+    );
+    RAISE NOTICE 'Table stocks_clients_3pl créée';
+  END IF;
+END $$;

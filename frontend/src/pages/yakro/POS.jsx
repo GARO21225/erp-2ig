@@ -660,7 +660,8 @@ export default function POS() {
             try {
               const tableId = retourFor.tableId;
               await yakroAPI.creerRetour({ commandeId: retourFor.id, ...data });
-              await qc.invalidateQueries(['tables']);
+              // Forcer le rechargement complet des tables
+              await qc.refetchQueries({ queryKey: ['tables'] });
               setRetourFor(null);
               // Ré-ouvrir le panneau de la table avec les données fraîches
               const tablesUpdated = qc.getQueryData(['tables']);
