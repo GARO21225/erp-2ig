@@ -654,7 +654,9 @@ export default function CRMPage() {
                           onClick={()=>setTagsFor(p)} title="Tags">
                           <Tag size={9}/>
                         </button>
-                        {(p.statutProjet||p.statutGlobal)==='RESERVE' && p._crm?.nbReservations > 0 && (
+                        {/* Bouton Convertir si : statut RESERVE OU a des réservations actives */}
+                        {(p._crm?.nbReservations > 0 ||
+                          (p.statutProjet||p.statutGlobal)==='RESERVE') && (
                           <button className="btn btn-xs" style={{ background:'#EAF3DE', color:'#27500A', border:'none', fontSize:10 }}
                             title="Convertir en souscripteur"
                             onClick={()=>setConvertirFor(p)}>

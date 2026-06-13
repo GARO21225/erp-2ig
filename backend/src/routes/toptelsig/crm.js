@@ -340,12 +340,14 @@ router.post('/proposer-lot', auth, toptelsig, async (req, res) => {
         data: { lotId, souscripteurId, notes: notes||null, statut: 'ACTIVE' }
       });
       await tx.lot.update({ where: { id: lotId }, data: { statut: 'RESERVE' } });
-      // Mettre à jour ContactProjet → RESERVE
+      // Mettre à jour le statut GLOBAL du Souscripteur → RESERVE
+      await tx.souscripteur.update({ where: { id: souscripteurId }, data: { statut: 'RESERVE' } });
+      // Mettre à jour ContactProjet → RESERVE (si table existe)
       await tx.contactProjet.upsert({
         where: { souscripteurId_projetId: { souscripteurId, projetId: lot.projetId } },
         update: { statut: 'RESERVE' },
         create: { souscripteurId, projetId: lot.projetId, statut: 'RESERVE', commercialId: req.user.id, commercialNom: `${req.user.prenom} ${req.user.nom}` },
-      });
+      }).catch(() => {});
       await tx.auditLog.create({ data: { utilisateurId: req.user.id, utilisateurNom: `${req.user.prenom} ${req.user.nom}`, filiale: 'TOPTELSIG', action: 'CREATE', entite: 'ReservationFoncier', entiteId: r.id, entiteLabel: `Lot ${lot.numero} — ${lot.projet?.nom}` } });
       return r;
     });

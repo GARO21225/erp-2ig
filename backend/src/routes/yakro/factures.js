@@ -26,7 +26,7 @@ async function genNumeroFacture() {
 }
 
 // Générer le HTML de la facture
-function genFactureHtml(params, commande, paiements, numero) {
+function genFactureHtml(params, commande, paiements, numero, retours = []) {
   const coul = params.couleurPrimaire || '#8B1A1A';
   const now = new Date();
   // Lire espèces depuis CaisseTransaction (source de vérité)
@@ -80,13 +80,26 @@ function genFactureHtml(params, commande, paiements, numero) {
       </tr>
     </thead>
     <tbody>
-      ${(commande.lignes || []).map((l, i) => `
+      ${(commande.lignes || []).map((l, i) => {
+        // Déduire les retours sur cette ligne
+        const retourQte = retours
+          .filter(r => r.ligneId === l.id || r.menuId === (l.menuId || l.menu?.id))
+          .reduce((s, r) => s + (r.quantite || 0), 0);
+        const qteNette = Math.max(0, l.quantite - retourQte);
+        if (qteNette === 0) return ''; // Ligne entièrement retournée → ne pas afficher
+        return `
       <tr style="${i % 2 === 0 ? 'background:#FAFAF8' : ''}">
-        <td style="padding:5px 8px;">${l.menu?.nom || l.menuNom || '—'}</td>
-        <td style="padding:5px 8px;text-align:center;">${l.quantite}</td>
+        <td style="padding:5px 8px;">${l.menu?.nom || l.menuNom || '—'}${retourQte > 0 ? ` <span style="font-size:9px;color:#BA7517;">(−${retourQte} retour)</span>` : ''}</td>
+        <td style="padding:5px 8px;text-align:center;">${qteNette}</td>
         <td style="padding:5px 8px;text-align:right;">${Math.round(l.prixUnitaire).toLocaleString('fr')}</td>
-        <td style="padding:5px 8px;text-align:right;font-weight:600;">${Math.round(l.prixUnitaire * l.quantite).toLocaleString('fr')}</td>
-      </tr>`).join('')}
+        <td style="padding:5px 8px;text-align:right;font-weight:600;">${Math.round(l.prixUnitaire * qteNette).toLocaleString('fr')}</td>
+      </tr>`;
+      }).join('')}
+      ${retours.length > 0 ? `
+      <tr style="background:#FFF8F0;">
+        <td colspan="3" style="padding:5px 8px;font-style:italic;color:#BA7517;">Retours articles</td>
+        <td style="padding:5px 8px;text-align:right;color:#BA7517;font-weight:600;">-${fmtF(retours.reduce((s,r)=>s+(r.montantDeduit||0),0))}</td>
+      </tr>` : ''}
     </tbody>
   </table>
 
@@ -136,12 +149,19 @@ router.post('/generer', auth, yakro, async (req, res) => {
         caisseTransaction: true,
       }
     });
+    // Charger les retours validés pour cette commande
+    let retours = [];
+    try {
+      retours = await prisma.retourArticleYakro.findMany({
+        where: { commandeId }
+      });
+    } catch {}
     if (!commande) return res.status(404).json({ error: 'Commande introuvable' });
 
     const params = await getParams();
     const numero = await genNumeroFacture();
     const paiementsData = commande.paiements.map(p => ({ typePaiement: p.type, montant: p.montant, reference: p.reference }));
-    const html = genFactureHtml(params, commande, paiementsData, numero);
+    const html = genFactureHtml(params, commande, paiementsData, numero, retours);
 
     const facture = await prisma.factureYakro.create({
       data: {
