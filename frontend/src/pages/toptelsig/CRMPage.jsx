@@ -635,10 +635,20 @@ export default function CRMPage() {
                           </span>
                         : '—'}
                     </td>
-                    <td style={{ textAlign:'center' }}>
-                      {(nbVentes>0||nbResas>0) ? (
-                        <span style={{ fontSize:10, background:'#EAF3DE', color:'#27500A', borderRadius:8, padding:'2px 8px' }}>
-                          {nbResas>0?`${nbResas} rés.`:`${nbVentes} vente(s)`}
+                    <td>
+                      {/* Lots réservés — afficher les détails */}
+                      {p.reservations?.length > 0 ? (
+                        <div style={{ fontSize:10 }}>
+                          {p.reservations.map(r=>(
+                            <div key={r.id} style={{ background:'#EAF3DE', color:'#27500A', borderRadius:6, padding:'2px 6px', marginBottom:2, whiteSpace:'nowrap' }}>
+                              🏘 {r.lot?.numero ? `Lot ${r.lot.numero}` : '—'}
+                              {r.lot?.projet?.nom ? ` · ${r.lot.projet.nom}` : ''}
+                            </div>
+                          ))}
+                        </div>
+                      ) : nbVentes > 0 ? (
+                        <span style={{ fontSize:10, background:'#EEF3FB', color:'#1a3f6f', borderRadius:6, padding:'2px 6px' }}>
+                          {nbVentes} vente(s)
                         </span>
                       ) : <span style={{ color:'#ccc', fontSize:10 }}>—</span>}
                     </td>

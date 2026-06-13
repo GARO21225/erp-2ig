@@ -231,6 +231,8 @@ export const liyaAPI = {
   stock3pl: (params) => api.get('/liya/stock3pl', { params }),
   createStock3pl: (data) => api.post('/liya/stock3pl', data),
   sortirStock3pl: (id, data) => api.put(`/liya/stock3pl/${id}/sortie`, data),
+  updateStock3pl: (id, data) => api.put(`/liya/stock3pl/${id}`, data),
+  deleteStock3pl: (id) => api.delete(`/liya/stock3pl/${id}`),
 };
 
 export default api;

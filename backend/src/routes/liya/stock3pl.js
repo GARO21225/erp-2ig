@@ -146,4 +146,35 @@ router.put('/:id/sortir', auth, liya, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// PUT /:id — Modifier un article en stock
+router.put('/:id', auth, liya, async (req, res) => {
+  try {
+    const { partenaireId, clientNom, clientTel, article, quantite, unite, statut, notes } = req.body;
+    const data = {};
+    if (partenaireId !== undefined) data.partenaireId = partenaireId || null;
+    if (clientNom !== undefined) data.clientNom = clientNom;
+    if (clientTel !== undefined) data.clientTel = clientTel;
+    if (article !== undefined) data.article = article;
+    if (quantite !== undefined) data.quantite = Number(quantite);
+    if (unite !== undefined) data.unite = unite;
+    if (statut !== undefined) data.statut = statut;
+    if (notes !== undefined) data.notes = notes;
+
+    const stock = await prisma.stockClient3PL.update({
+      where: { id: req.params.id },
+      data,
+      include: { partenaire: { select: { id:true, nom:true, telephone:true, typeActivite:true } } }
+    });
+    res.json(stock);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /:id — Supprimer un article
+router.delete('/:id', auth, liya, async (req, res) => {
+  try {
+    await prisma.stockClient3PL.delete({ where: { id: req.params.id } });
+    res.json({ message: 'Article supprimé' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = router;
