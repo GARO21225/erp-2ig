@@ -332,46 +332,70 @@ router.get('/pilotage', auth, async (req, res) => {
     // Requêtes parallèles
     const safe = async (fn) => { try { return await fn(); } catch { return null; } };
 
-    const [encTotalR, decTotalR, encPrecR, decPrecR,
-      encParFilialeR, decParFilialeR, encParTypeR, decParCategR,
-      caissesR, caYakroR, nbCommandesYakroR,
-      lotsVendusR, caFoncierR, livTotalR, caLiyaR,
-      encCourbeR, decCourbeR, retardsPmtR] = await Promise.all([
-      safe(() => prisma.encaissement.aggregate({ _sum:{ montant:true }, where: whereFiliale })),
-      safe(() => prisma.decaissement.aggregate({ _sum:{ montant:true }, where: whereFiliale })),
-      safe(() => prisma.encaissement.aggregate({ _sum:{ montant:true }, where: filiale ? { ...wherePrec, filiale } : wherePrec })),
-      safe(() => prisma.decaissement.aggregate({ _sum:{ montant:true }, where: filiale ? { ...wherePrec, filiale } : wherePrec })),
-      safe(() => prisma.encaissement.groupBy({ by:['filiale'], _sum:{ montant:true }, where })),
-      safe(() => prisma.decaissement.groupBy({ by:['filiale'], _sum:{ montant:true }, where })),
-      safe(() => prisma.encaissement.groupBy({ by:['typePaiement'], _sum:{ montant:true }, _count:{ id:true }, where: whereFiliale })),
-      safe(() => prisma.decaissement.groupBy({ by:['categorie'], _sum:{ montant:true }, where: whereFiliale, orderBy:{ _sum:{ montant:'desc' } }, take:10 })),
-      safe(() => prisma.caisse.findMany({ where:{ actif:true }, orderBy:{ filiale:'asc' } })),
-      safe(() => prisma.paiementYakro.aggregate({ _sum:{ montant:true }, where:{ createdAt:{ gte:dateDebut } } })),
+    // Sources réelles de revenus (multi-tables)
+    const [
+      // TOPTELSIG : paiements fonciers
+      caFoncierR, caFoncierPrecR, depFoncierR,
+      // YAKRO GRILL : paiements restaurant
+      caYakroR, caYakroPrecR, depYakroR, nbCommandesYakroR,
+      // Finance générique (encaissements/decaissements manuels)
+      encGeneriquesR, decGeneriquesR,
+      // Caisses et méta
+      caissesR, lotsVendusR, livTotalR, retardsPmtR,
+    ] = await Promise.all([
+      // TOPTELSIG CA
+      safe(() => prisma.paiementFoncier.aggregate({ _sum:{ montant:true }, where:{ createdAt:{ gte:dateDebut, lte:dateFin } } })),
+      safe(() => prisma.paiementFoncier.aggregate({ _sum:{ montant:true }, where:{ createdAt:{ gte:dateDebutPrec, lte:dateFinPrec } } })),
+      // TOPTELSIG Dépenses
+      safe(() => prisma.depenseFoncier.aggregate({ _sum:{ montant:true }, where:{ statut:{ in:['PAYEE','JUSTIFIEE','CLOTUREE'] }, createdAt:{ gte:dateDebut, lte:dateFin } } })),
+      // YAKRO CA
+      safe(() => prisma.paiementYakro.aggregate({ _sum:{ montant:true }, where:{ createdAt:{ gte:dateDebut, lte:dateFin } } })),
+      safe(() => prisma.paiementYakro.aggregate({ _sum:{ montant:true }, where:{ createdAt:{ gte:dateDebutPrec, lte:dateFinPrec } } })),
+      // YAKRO Dépenses
+      safe(() => prisma.depenseYakro.aggregate({ _sum:{ total:true }, where:{ statut:'VALIDEE', createdAt:{ gte:dateDebut, lte:dateFin } } })),
       safe(() => prisma.commandeYakro.count({ where:{ statut:'PAYEE', createdAt:{ gte:dateDebut } } })),
+      // Finance générique
+      safe(() => prisma.encaissement.aggregate({ _sum:{ montant:true }, where:{ createdAt:{ gte:dateDebut, lte:dateFin } } })),
+      safe(() => prisma.decaissement.aggregate({ _sum:{ montant:true }, where:{ statut:{ in:['VALIDE','JUSTIFIE'] }, createdAt:{ gte:dateDebut, lte:dateFin } } })),
+      // Meta
+      safe(() => prisma.caisse.findMany({ where:{ actif:true }, orderBy:{ filiale:'asc' } })),
       safe(() => prisma.lot.count({ where:{ statut:'VENDU' } })),
-      safe(() => prisma.paiementFoncier.aggregate({ _sum:{ montant:true }, where:{ createdAt:{ gte:dateDebut } } })),
       safe(() => prisma.livraison.count({ where:{ createdAt:{ gte:dateDebut } } })),
-      safe(() => prisma.encaissement.aggregate({ _sum:{ montant:true }, where:{ filiale:'LIYA', createdAt:{ gte:dateDebut } } })),
-      safe(() => prisma.encaissement.groupBy({ by:['createdAt'], _sum:{ montant:true }, where: whereFiliale })),
-      safe(() => prisma.decaissement.groupBy({ by:['createdAt'], _sum:{ montant:true }, where: whereFiliale })),
       safe(() => prisma.echeancier.count({ where:{ statut:'RETARD' } })),
     ]);
 
-    const caTotal = encTotalR?._sum?.montant || 0;
-    const depTotal = decTotalR?._sum?.montant || 0;
-    const caPrecVal = encPrecR?._sum?.montant || 0;
-    const depPrecVal = decPrecR?._sum?.montant || 0;
+    // Agréger les CA et dépenses par filiale
+    const caFoncier = caFoncierR?._sum?.montant || 0;
+    const caYakro = caYakroR?._sum?.montant || 0;
+    const caGenerique = encGeneriquesR?._sum?.montant || 0;
+    const caTotal = caFoncier + caYakro + caGenerique;
+
+    const depFoncier = depFoncierR?._sum?.montant || 0;
+    const depYakro = depYakroR?._sum?.total || 0;
+    const depGenerique = decGeneriquesR?._sum?.montant || 0;
+    const depTotal = depFoncier + depYakro + depGenerique;
+
+    const caFoncierPrec = caFoncierPrecR?._sum?.montant || 0;
+    const caYakroPrec = caYakroPrecR?._sum?.montant || 0;
+    const caPrecVal = caFoncierPrec + caYakroPrec;
+    const depPrecVal = 0; // simplifié
+
+    const filiales = [
+      { filiale:'TOPTELSIG', ca:caFoncier, dep:depFoncier, resultat:caFoncier-depFoncier, marge:caFoncier>0?Math.round((caFoncier-depFoncier)/caFoncier*100):0, pct:caTotal>0?Math.round(caFoncier/caTotal*100):0 },
+      { filiale:'YAKRO_GRILL', ca:caYakro, dep:depYakro, resultat:caYakro-depYakro, marge:caYakro>0?Math.round((caYakro-depYakro)/caYakro*100):0, pct:caTotal>0?Math.round(caYakro/caTotal*100):0 },
+    ].filter(f => f.ca > 0 || f.dep > 0);
+
+    const encParTypeR = null;
+    const decParCategR = null;
+    const encCourbeR = null;
+    const decCourbeR = null;
     const variationCA = caPrecVal > 0 ? Math.round((caTotal-caPrecVal)/caPrecVal*100) : 0;
     const variationDep = depPrecVal > 0 ? Math.round((depTotal-depPrecVal)/depPrecVal*100) : 0;
     const resultatBrut = caTotal - depTotal;
     const marge = caTotal > 0 ? Math.round(resultatBrut/caTotal*100) : 0;
     const tresorerie = (caissesR||[]).reduce((s,c)=>s+c.solde,0);
 
-    // Enrichir filiales
-    const filialesMap = {};
-    encParFilialeR?.forEach(e => { filialesMap[e.filiale] = { filiale:e.filiale, ca:e._sum.montant||0, dep:0, pct:0 }; });
-    decParFilialeR?.forEach(e => { if(!filialesMap[e.filiale]) filialesMap[e.filiale]={filiale:e.filiale,ca:0,dep:0,pct:0}; filialesMap[e.filiale].dep=e._sum.montant||0; });
-    const filiales = Object.values(filialesMap).map(f=>({ ...f, resultat:f.ca-f.dep, marge:f.ca>0?Math.round((f.ca-f.dep)/f.ca*100):0, pct:caTotal>0?Math.round(f.ca/caTotal*100):0 }));
+    // filiales déjà calculées ci-dessus
 
     // Courbe 7 jours
     const courbe30 = {};

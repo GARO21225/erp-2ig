@@ -172,7 +172,7 @@ function ModalPlanifierEcheancierVentes({ vente, onClose, onSave, loading }) {
 }
 
 // Panel détail vente avec échéancier ligne par ligne
-function PanelVente({ vente, onClose, onEncaisser }) {
+function PanelVente({ vente, onClose, onEncaisser, onPlanifier }) {
   const total = vente.echeanciers?.length || 0;
   const payees = vente.echeanciers?.filter(e => e.statut === 'PAYE').length || 0;
   // Vrai total payé : depuis PaiementFoncier (pas seulement les echéanciers)
@@ -210,7 +210,7 @@ function PanelVente({ vente, onClose, onEncaisser }) {
         <div style={{ padding: '10px 20px 4px', fontSize: 11, fontWeight: 700, color: '#888', letterSpacing: 1, textTransform: 'uppercase' }}>Échéancier détaillé</div>
         {/* Bouton planifier si pas d'échéancier OU modifier */}
         <div style={{ display:'flex', gap:8, marginBottom:12 }}>
-          <button onClick={() => setPlanifierFor(vente)}
+          <button onClick={() => onPlanifier(vente)}
             style={{ padding:'6px 14px', borderRadius:8, background:vente.echeanciers?.length>0?'#F7F7F5':'#27500A', color:vente.echeanciers?.length>0?'#888':'white', border:vente.echeanciers?.length>0?'1px solid #e8e7e1':'none', fontSize:12, cursor:'pointer', fontWeight:600 }}>
             📅 {vente.echeanciers?.length > 0 ? 'Modifier le plan' : 'Planifier échéancier'}
           </button>
@@ -461,6 +461,7 @@ export default function VentesPage() {
           vente={selectedVente}
           onClose={() => setSelectedVente(null)}
           onEncaisser={(vente, ech) => setEncaisserTarget({ vente, echeance: ech })}
+          onPlanifier={(vente) => setPlanifierFor(vente)}
         />
       )}
 
