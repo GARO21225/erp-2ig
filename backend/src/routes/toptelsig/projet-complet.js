@@ -136,8 +136,8 @@ router.get('/:id', auth, toptelsig, async (req, res) => {
     const lotsReserves = lots.filter(l => l.statut === 'RESERVE').length;
     const caPrevu      = lots.filter(l => l.vente).reduce((s, l) => s + l.vente.prixVente, 0);
     const caEnc        = paiementsAgg._sum.montant || 0;
-    const depPayees    = depenses.filter(d => d.statut === 'PAYEE').reduce((s, d) => s + d.montant, 0);
-    const depEngagees  = depenses.filter(d => ['EN_ATTENTE','VALIDEE_N1','VALIDEE_FINALE'].includes(d.statut)).reduce((s, d) => s + d.montant, 0);
+    const depPayees    = depenses.filter(d => ['PAYEE','JUSTIFIEE','CLOTUREE'].includes(d.statut)).reduce((s, d) => s + d.montant, 0);
+    const depEngagees  = depenses.filter(d => ['EN_ATTENTE','DEMANDEE','VALIDATION_RP','VALIDATION_DIR','VALIDEE_N1','VALIDEE_FINALE','AUTORISATION_PAIEMENT'].includes(d.statut)).reduce((s, d) => s + d.montant, 0);
     const resultatBrut = caEnc - depPayees;
     const marge        = caEnc > 0 ? Math.round(resultatBrut / caEnc * 100) : 0;
     const roi          = depPayees > 0 ? Math.round(resultatBrut / depPayees * 100) : 0;

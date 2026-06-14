@@ -88,6 +88,85 @@ function ModalEncaisserEcheance({ vente, echeance, onClose, onSave }) {
           </button>
         </div>
       </div>
+      {/* Modal planifier échéancier */}
+      {planifierFor && (
+        <ModalPlanifierEcheancierVentes
+          vente={planifierFor}
+          onClose={() => setPlanifierFor(null)}
+          onSave={data => planifierMut.mutate({ venteId: planifierFor.id, data })}
+          loading={planifierMut.isPending}
+        />
+      )}
+      {toastMsg && (
+        <div style={{ position:'fixed', bottom:20, right:16, background:toastMsg.t==='error'?'#A32D2D':'#27500A', color:'white', padding:'10px 18px', borderRadius:10, fontSize:13, zIndex:9999 }}>
+          {toastMsg.msg}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Modal Planifier Échéancier (VentesPage) ──────────────────────────────────
+function ModalPlanifierEcheancierVentes({ vente, onClose, onSave, loading }) {
+  const fmtF = n => n >= 1000000 ? `${(n/1000000).toFixed(2)}M F` : `${Math.round(n||0).toLocaleString('fr')} F`;
+  const totalPaye = vente.paiements?.reduce((s,p)=>s+p.montant,0)||0;
+  const restant = Math.max(0, (vente.prixVente||0) - totalPaye);
+  const [form, setForm] = useState({
+    nombreEcheances: '12',
+    montantTotal: String(Math.round(restant)),
+    dateDebut: new Date().toISOString().split('T')[0],
+    periodeJours: '30',
+  });
+  const s = (k,v) => setForm(f=>({...f,[k]:v}));
+  const montantEch = form.nombreEcheances > 0 ? Math.round(Number(form.montantTotal)/Number(form.nombreEcheances)) : 0;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{maxWidth:480}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:'flex',justifyContent:'space-between',marginBottom:18}}>
+          <h3 style={{margin:0,fontFamily:'Syne',fontSize:16}}>📅 Planifier l'échéancier</h3>
+          <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer'}}>✕</button>
+        </div>
+        <div style={{background:'#EEF3FB',borderRadius:8,padding:'10px 14px',marginBottom:14,fontSize:12}}>
+          <strong>Lot {vente.lot?.numero} — {vente.lot?.projet?.nom}</strong><br/>
+          <span style={{color:'#888'}}>Prix : {fmtF(vente.prixVente)} · Déjà payé : {fmtF(totalPaye)} · Restant : </span>
+          <strong style={{color:'#A32D2D'}}>{fmtF(restant)}</strong>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+          <div><label className="label">Montant à échelonner *</label>
+            <input className="input" type="number" value={form.montantTotal} onChange={e=>s('montantTotal',e.target.value)}/>
+          </div>
+          <div><label className="label">Nombre d'échéances *</label>
+            <input className="input" type="number" min={1} max={120} value={form.nombreEcheances} onChange={e=>s('nombreEcheances',e.target.value)}/>
+          </div>
+          <div><label className="label">Date de début</label>
+            <input className="input" type="date" value={form.dateDebut} onChange={e=>s('dateDebut',e.target.value)}/>
+          </div>
+          <div><label className="label">Fréquence</label>
+            <select className="input" value={form.periodeJours} onChange={e=>s('periodeJours',e.target.value)}>
+              <option value="30">Mensuelle (30j)</option>
+              <option value="15">Bi-mensuelle (15j)</option>
+              <option value="90">Trimestrielle (90j)</option>
+              <option value="180">Semestrielle (180j)</option>
+              <option value="365">Annuelle</option>
+            </select>
+          </div>
+        </div>
+        {form.montantTotal && form.nombreEcheances && (
+          <div style={{background:'#EAF3DE',borderRadius:8,padding:'10px 14px',marginTop:12,fontSize:12}}>
+            {form.nombreEcheances} échéance(s) de <strong>{fmtF(montantEch)}</strong> chacune
+            {vente.echeanciers?.length > 0 && <div style={{color:'#A32D2D',marginTop:4,fontSize:11}}>⚠ Les échéances non payées existantes seront remplacées</div>}
+          </div>
+        )}
+        <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:18}}>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>Annuler</button>
+          <button className="btn btn-primary btn-sm" disabled={!form.montantTotal||!form.nombreEcheances||loading}
+            style={{background:'#27500A',border:'none'}}
+            onClick={()=>onSave({nombreEcheances:Number(form.nombreEcheances),montantTotal:Number(form.montantTotal),dateDebut:form.dateDebut,periodeJours:Number(form.periodeJours)})}>
+            {loading?'...':'📅 Créer'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -96,7 +175,8 @@ function ModalEncaisserEcheance({ vente, echeance, onClose, onSave }) {
 function PanelVente({ vente, onClose, onEncaisser }) {
   const total = vente.echeanciers?.length || 0;
   const payees = vente.echeanciers?.filter(e => e.statut === 'PAYE').length || 0;
-  const totalPaye = vente.echeanciers?.reduce((s, e) => s + e.montantPaye, 0) || 0;
+  // Vrai total payé : depuis PaiementFoncier (pas seulement les echéanciers)
+  const totalPaye = vente.paiements?.reduce((s, p) => s + p.montant, 0) || 0;
   const progression = total > 0 ? Math.round((payees / total) * 100) : 0;
 
   return (
@@ -128,6 +208,14 @@ function PanelVente({ vente, onClose, onEncaisser }) {
       {/* Tableau échéancier */}
       <div style={{ flex: 1 }}>
         <div style={{ padding: '10px 20px 4px', fontSize: 11, fontWeight: 700, color: '#888', letterSpacing: 1, textTransform: 'uppercase' }}>Échéancier détaillé</div>
+        {/* Bouton planifier si pas d'échéancier OU modifier */}
+        <div style={{ display:'flex', gap:8, marginBottom:12 }}>
+          <button onClick={() => setPlanifierFor(vente)}
+            style={{ padding:'6px 14px', borderRadius:8, background:vente.echeanciers?.length>0?'#F7F7F5':'#27500A', color:vente.echeanciers?.length>0?'#888':'white', border:vente.echeanciers?.length>0?'1px solid #e8e7e1':'none', fontSize:12, cursor:'pointer', fontWeight:600 }}>
+            📅 {vente.echeanciers?.length > 0 ? 'Modifier le plan' : 'Planifier échéancier'}
+          </button>
+        </div>
+
         {(vente.echeanciers || []).sort((a, b) => a.numero - b.numero).map(ech => {
           const cfg = STATUT_ECH[ech.statut] || STATUT_ECH.EN_ATTENTE;
           const isActionnable = ['EN_ATTENTE', 'PARTIEL', 'RETARD'].includes(ech.statut);
@@ -170,9 +258,25 @@ function PanelVente({ vente, onClose, onEncaisser }) {
             style={{ padding: '5px 12px', background: '#FFF0EB', color: '#E85D04', borderRadius: 7, textDecoration: 'none', fontSize: 12, fontWeight: 500 }}>📱 WhatsApp</a>
         </div>
       </div>
+      {/* Modal planifier échéancier */}
+      {planifierFor && (
+        <ModalPlanifierEcheancierVentes
+          vente={planifierFor}
+          onClose={() => setPlanifierFor(null)}
+          onSave={data => planifierMut.mutate({ venteId: planifierFor.id, data })}
+          loading={planifierMut.isPending}
+        />
+      )}
+      {toastMsg && (
+        <div style={{ position:'fixed', bottom:20, right:16, background:toastMsg.t==='error'?'#A32D2D':'#27500A', color:'white', padding:'10px 18px', borderRadius:10, fontSize:13, zIndex:9999 }}>
+          {toastMsg.msg}
+        </div>
+      )}
     </div>
   );
 }
+
+// ── Modal Planifier Échéancier (VentesPage) ──────────────────────────────────
 
 export default function VentesPage() {
   const qc = useQueryClient();
@@ -224,7 +328,7 @@ export default function VentesPage() {
   const ventes = data?.data || [];
   const nbRetards = Array.isArray(retards) ? retards.length : 0;
   const totalCA = ventes.reduce((s, v) => s + v.prixVente, 0);
-  const totalPercu = ventes.reduce((s, v) => s + (v.echeanciers?.reduce((ss, e) => ss + e.montantPaye, 0) || 0), 0);
+  const totalPercu = ventes.reduce((s, v) => s + (v.paiements?.reduce((ss, p) => ss + p.montant, 0) || 0), 0);
 
   const exportData = () => {
     const entetes = ['Souscripteur', 'Téléphone', 'Lot', 'Projet', 'Prix vente', 'Statut', 'Échéances payées', 'Date vente'];
@@ -446,6 +550,22 @@ export default function VentesPage() {
           </div>
         </div>
       )}
+      {/* Modal planifier échéancier */}
+      {planifierFor && (
+        <ModalPlanifierEcheancierVentes
+          vente={planifierFor}
+          onClose={() => setPlanifierFor(null)}
+          onSave={data => planifierMut.mutate({ venteId: planifierFor.id, data })}
+          loading={planifierMut.isPending}
+        />
+      )}
+      {toastMsg && (
+        <div style={{ position:'fixed', bottom:20, right:16, background:toastMsg.t==='error'?'#A32D2D':'#27500A', color:'white', padding:'10px 18px', borderRadius:10, fontSize:13, zIndex:9999 }}>
+          {toastMsg.msg}
+        </div>
+      )}
     </div>
   );
 }
+
+// ── Modal Planifier Échéancier (VentesPage) ──────────────────────────────────

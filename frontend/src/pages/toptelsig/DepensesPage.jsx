@@ -486,7 +486,9 @@ export default function DepensesPage() {
   const totalGlobal     = stats?.total || 0;
   const nbGlobal        = stats?.nbDepenses || 0;
   const parStatutStats  = stats?.parStatut || [];
-  const totalPayee      = parStatutStats.find(s => s.statut === 'PAYEE')?.montant || 0;
+  const totalPayee = parStatutStats
+    .filter(s => ['PAYEE','JUSTIFIEE','CLOTUREE'].includes(s.statut))
+    .reduce((acc, s) => acc + (s.montant || 0), 0);
   const totalEnAttente  = parStatutStats
     .filter(s => ['DEMANDEE','VALIDATION_DIR','AUTORISATION_PAIEMENT'].includes(s.statut))
     .reduce((s,x) => s + x.montant, 0);
