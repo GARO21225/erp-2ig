@@ -356,7 +356,7 @@ router.get('/pilotage', auth, async (req, res) => {
       safe(() => prisma.commandeYakro.count({ where:{ statut:'PAYEE', createdAt:{ gte:dateDebut } } })),
       // Finance générique
       safe(() => prisma.encaissement.aggregate({ _sum:{ montant:true }, where:{ createdAt:{ gte:dateDebut, lte:dateFin } } })),
-      safe(() => prisma.decaissement.aggregate({ _sum:{ montant:true }, where:{ statut:{ in:['VALIDE','JUSTIFIE'] }, createdAt:{ gte:dateDebut, lte:dateFin } } })),
+      safe(() => prisma.decaissement.aggregate({ _sum:{ montant:true }, where:{ createdAt:{ gte:dateDebut, lte:dateFin } } })),
       // Meta
       safe(() => prisma.caisse.findMany({ where:{ actif:true }, orderBy:{ filiale:'asc' } })),
       safe(() => prisma.lot.count({ where:{ statut:'VENDU' } })),
@@ -371,7 +371,7 @@ router.get('/pilotage', auth, async (req, res) => {
     const caTotal = caFoncier + caYakro + caGenerique;
 
     const depFoncier = depFoncierR?._sum?.montant || 0;
-    const depYakro = depYakroR?._sum?.total || 0;
+    const depYakro = depYakroR?._sum?.montant || 0;
     const depGenerique = decGeneriquesR?._sum?.montant || 0;
     const depTotal = depFoncier + depYakro + depGenerique;
 

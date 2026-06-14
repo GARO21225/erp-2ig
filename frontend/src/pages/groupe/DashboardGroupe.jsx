@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store';
 import { dashboardAPI, alertesAPI } from '../../lib/api';
+import AssistantERP from '../../components/ui/AssistantERP';
+import CentreActions from '../../components/ui/CentreActions';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, RadialBarChart, RadialBar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
@@ -178,7 +180,7 @@ function DashboardLiya() {
 }
 
 // ── Dashboard GROUPE (DG) enrichi ─────────────────────────────────────────
-function DashboardGroupe({ data, alertes, nbCritiques, scores }) {
+export default function DashboardGroupe({ data, alertes, nbCritiques, scores }) {
   const navigate = useNavigate();
   const [now, setNow] = useState(new Date());
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
@@ -393,41 +395,7 @@ function DashboardGroupe({ data, alertes, nbCritiques, scores }) {
           </div>
         </div>
       </div>
+      <AssistantERP filiale="GROUPE" contexteData={kpiContexte}/>
     </div>
   );
-}
-
-// Import useState/useEffect ici pour éviter les problèmes d'hoisting
-import { useState, useEffect } from 'react';
-
-// ── Composant racine ──────────────────────────────────────────────────────
-export default function Dashboard() {
-  const filiale = useAuthStore(s => s.filiale);
-
-  const { data } = useQuery({
-    queryKey: ['dashboard-groupe'],
-    queryFn: dashboardAPI.groupe,
-    staleTime: 30000,
-    retry: 1,
-    refetchInterval: 60000,
-  });
-  const { data: alertesData } = useQuery({
-    queryKey: ['alertes'],
-    queryFn: alertesAPI.critiques,
-    staleTime: 60000,
-    retry: 1,
-    refetchInterval: 120000,
-  });
-  const { data: scores } = useQuery({
-    queryKey: ['scores-sante'],
-    queryFn: dashboardAPI.scoreSante,
-    staleTime: 60000,
-    retry: 1,
-  });
-
-  if (filiale === 'YAKRO_GRILL') return <DashboardYakro />;
-  if (filiale === 'TOPTELSIG')   return <DashboardToptelsig />;
-  if (filiale === 'LIYA')        return <DashboardLiya />;
-
-  return <DashboardGroupe data={data} alertes={alertesData?.alertes || []} nbCritiques={alertesData?.critiques || 0} scores={scores} />;
 }

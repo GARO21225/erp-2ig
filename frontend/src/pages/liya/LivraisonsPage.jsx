@@ -137,11 +137,6 @@ function ModalCreateLivraison({ motos, onClose, onSave }) {
           <button className="btn btn-sm" style={{ background: '#E85D04', color: 'white', border: 'none' }} onClick={() => onSave({ ...form, montant: Number(form.montant) })}>Créer</button>
         </div>
       </div>
-      {toast && (
-        <div style={{position:'fixed',bottom:20,right:16,background:toast.t==='error'?'#A32D2D':'#27500A',color:'white',padding:'10px 18px',borderRadius:10,fontSize:13,zIndex:9999}}>
-          {toast.msg}
-        </div>
-      )}
     </div>
   );
 }

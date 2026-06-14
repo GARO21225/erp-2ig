@@ -1,3 +1,5 @@
+import NotifCentre from '../ui/NotifCentre';
+import AssistantERP from '../ui/AssistantERP';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '../../store';
@@ -313,6 +315,7 @@ export default function Layout() {
           )}
         </div>
 
+        <NotifCentre color={color}/>
         {/* User + infos + logout */}
         <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
           <div style={{ width:32, height:32, borderRadius:'50%', background:`${color}15`, border:`1.5px solid ${color}40`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:800, color, flexShrink:0 }}>

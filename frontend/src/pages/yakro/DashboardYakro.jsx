@@ -1,3 +1,5 @@
+import AssistantERP from '../../components/ui/AssistantERP';
+import CentreActions from '../../components/ui/CentreActions';
 /**
  * YAKRO GRILL — Dashboard Exécutif
  * CA, Serveurs, Tables, Produits, Modes paiement, Alertes
@@ -223,6 +225,7 @@ export default function DashboardYakro() {
           </table>
         </div>
       </div>
+      <AssistantERP filiale="YAKRO_GRILL"/>
     </div>
   );
 }

@@ -1,3 +1,5 @@
+import AssistantERP from '../../components/ui/AssistantERP';
+import CentreActions from '../../components/ui/CentreActions';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { toptelsigAPI } from '../../lib/api';
@@ -304,6 +306,7 @@ export default function DashboardToptelsig() {
           </table>
         </div>
       </div>
+      <AssistantERP filiale="TOPTELSIG"/>
     </div>
   );
 }
