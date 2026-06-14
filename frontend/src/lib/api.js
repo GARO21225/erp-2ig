@@ -172,6 +172,7 @@ export const toptelsigAPI = {
   souscripteursTemplate: () => `${api.defaults.baseURL}/toptelsig/souscripteurs/template`,
   importSouscripteurs: (file) => { const fd = new FormData(); fd.append('fichier', file); return api.post('/toptelsig/souscripteurs/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }); },
   getSouscripteur: (id) => api.get(`/toptelsig/souscripteurs/${id}`),
+  planifierEcheancier: (venteId, data) => api.post(`/toptelsig/ventes/${venteId}/echeanciers`, data),
   createSouscripteur: (data) => api.post('/toptelsig/souscripteurs', data),
   updateSouscripteur: (id, data) => api.put(`/toptelsig/souscripteurs/${id}`, data),
   addPaiement: (id, data) => api.post(`/toptelsig/souscripteurs/${id}/paiements`, data),

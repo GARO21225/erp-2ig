@@ -446,10 +446,16 @@ export function SouscripteursPage() {
 
   const paiementMut = useMutation({
     mutationFn: ({ id, data }) => toptelsigAPI.addPaiement(id, data),
-    onSuccess: () => {
-      qc.invalidateQueries(['souscripteurs']);
+    onSuccess: async (res, vars) => {
+      await qc.refetchQueries({ queryKey: ['souscripteurs'] });
       qc.invalidateQueries(['souscripteurs-dashboard']);
       setPaiementFor(null);
+      // Mettre à jour view360 avec les données fraîches si ouvert
+      if (view360 && view360.id === vars.id) {
+        const freshData = qc.getQueryData(['souscripteurs']);
+        const fresh = (freshData?.data || []).find(s => s.id === vars.id);
+        if (fresh) setView360(fresh);
+      }
       showToast('Paiement enregistré ✓');
     },
     onError: e => showToast(e?.response?.data?.error||'Erreur paiement','error'),

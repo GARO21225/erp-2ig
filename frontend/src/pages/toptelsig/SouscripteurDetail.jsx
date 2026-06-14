@@ -158,9 +158,27 @@ export default function SouscripteurDetail() {
     enabled: !!id,
   });
 
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, t='success') => { setToast({msg,t}); setTimeout(()=>setToast(null),3000); };
+
   const paiementMut = useMutation({
     mutationFn: (data) => toptelsigAPI.addPaiement(id, data),
-    onSuccess: () => { qc.invalidateQueries(['souscripteur', id]); setPaiementFor(null); }
+    onSuccess: () => {
+      qc.invalidateQueries(['souscripteur', id]);
+      setPaiementFor(null);
+      showToast('Paiement enregistré ✓');
+    },
+    onError: e => showToast(e?.response?.data?.error || 'Erreur paiement', 'error'),
+  });
+
+  const planifierMut = useMutation({
+    mutationFn: ({ venteId, data }) => toptelsigAPI.planifierEcheancier(venteId, data),
+    onSuccess: () => {
+      qc.invalidateQueries(['souscripteur', id]);
+      setPlanifierFor(null);
+      showToast('Échéancier planifié ✓');
+    },
+    onError: e => showToast(e?.response?.data?.error || 'Erreur planification', 'error'),
   });
 
   const exportFichePDF = () => {
@@ -409,6 +427,11 @@ export default function SouscripteurDetail() {
           onClose={() => setPaiementFor(null)}
           onSave={data => paiementMut.mutate(data)}
         />
+      )}
+      {toast && (
+        <div style={{ position:'fixed', bottom:20, right:16, background:toast.t==='error'?'#A32D2D':'#27500A', color:'white', padding:'10px 18px', borderRadius:10, fontSize:13, zIndex:9999 }}>
+          {toast.msg}
+        </div>
       )}
     </div>
   );
