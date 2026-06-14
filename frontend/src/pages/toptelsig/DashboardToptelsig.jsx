@@ -49,7 +49,7 @@ export default function DashboardToptelsig() {
     return s + paiements;
   }, 0);
   const nbRetards = Array.isArray(retards) ? retards.length : 0;
-  const totalDepenses = listeDepenses.filter(d=>d.statut==='PAYE').reduce((s,d)=>s+d.montant,0);
+  const totalDepenses = listeDepenses.filter(d=>['PAYEE','JUSTIFIEE','CLOTUREE'].includes(d.statut)).reduce((s,d)=>s+d.montant,0);
   const nbSouscripteurs = souscripteurs?.total || souscripteurs?.length || 0;
   const tauxEncaissement = caTotal > 0 ? Math.round(caPercu/caTotal*100) : 0;
 

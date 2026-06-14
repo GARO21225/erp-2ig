@@ -480,11 +480,25 @@ export default function DepensesPage() {
   };
 
   const depenses = data?.data || [];
-  const totalMontant = depenses.reduce((s,d) => s + (d.montant||0), 0);
   const listeProjets = Array.isArray(projets) ? projets : [];
-  const statsData = (Array.isArray(stats) ? stats : []).slice(0,6).map((s,i) => ({
-    name: (s.categorie||'').slice(0,18),
-    value: s._sum?.montant || 0,
+
+  // Stats globales depuis l'API (pas limitées aux 100 premiers)
+  const totalGlobal     = stats?.total || 0;
+  const nbGlobal        = stats?.nbDepenses || 0;
+  const parStatutStats  = stats?.parStatut || [];
+  const totalPayee      = parStatutStats.find(s => s.statut === 'PAYEE')?.montant || 0;
+  const totalEnAttente  = parStatutStats
+    .filter(s => ['DEMANDEE','VALIDATION_DIR','AUTORISATION_PAIEMENT'].includes(s.statut))
+    .reduce((s,x) => s + x.montant, 0);
+  const totalRejete     = parStatutStats.find(s => s.statut === 'REJETEE')?.montant || 0;
+
+  // Total liste locale (filtrée)
+  const totalMontant = depenses.reduce((s,d) => s + (d.montant||0), 0);
+
+  // Graphiques : utiliser stats.parCategorie
+  const statsData = (stats?.parCategorie || []).slice(0,8).map((s,i) => ({
+    name: (s.categorie||'Autre').slice(0,20),
+    value: s.montant || 0,
     color: COULEURS[i % COULEURS.length]
   }));
 
@@ -515,6 +529,22 @@ export default function DepensesPage() {
             <Plus size={13}/> Nouvelle dépense
           </button>
         </div>
+      </div>
+
+      {/* KPI Stats globales */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:16 }}>
+        {[
+          { label:'Total dépenses',    value:fmtF(totalGlobal),    color:'#1a3f6f', sub:`${nbGlobal} dépense(s)` },
+          { label:'Montant payé',      value:fmtF(totalPayee),     color:'#27500A', sub:'Décaissé' },
+          { label:'En attente',        value:fmtF(totalEnAttente), color:'#BA7517', sub:'À valider/payer' },
+          { label:'Rejeté',            value:fmtF(totalRejete),    color:'#A32D2D', sub:'Dépenses rejetées' },
+        ].map((k,i) => (
+          <div key={i} className="kpi" style={{ borderTop:`3px solid ${k.color}` }}>
+            <div className="kpi-label">{k.label}</div>
+            <div style={{ fontFamily:'Syne', fontWeight:800, fontSize:18, color:k.color }}>{k.value}</div>
+            <div style={{ fontSize:10, color:'#888', marginTop:2 }}>{k.sub}</div>
+          </div>
+        ))}
       </div>
 
       {/* KPI + Graphiques */}
