@@ -137,6 +137,11 @@ function ModalCreateLivraison({ motos, onClose, onSave }) {
           <button className="btn btn-sm" style={{ background: '#E85D04', color: 'white', border: 'none' }} onClick={() => onSave({ ...form, montant: Number(form.montant) })}>Créer</button>
         </div>
       </div>
+      {toast && (
+        <div style={{position:'fixed',bottom:20,right:16,background:toast.t==='error'?'#A32D2D':'#27500A',color:'white',padding:'10px 18px',borderRadius:10,fontSize:13,zIndex:9999}}>
+          {toast.msg}
+        </div>
+      )}
     </div>
   );
 }
@@ -159,7 +164,14 @@ export default function LivraisonsPage() {
   const { data: stats } = useQuery({ queryKey: ['stats-liya'], queryFn: liyaAPI.stats, refetchInterval: 15000 });
   const { data: motos } = useQuery({ queryKey: ['motos'], queryFn: liyaAPI.motos });
 
-  const createMut = useMutation({ mutationFn: liyaAPI.createLivraison, onSuccess: () => { qc.invalidateQueries(['livraisons']); setShowCreate(false); } });
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, t='success') => { setToast({msg,t}); setTimeout(()=>setToast(null),3500); };
+
+  const createMut = useMutation({
+    mutationFn: liyaAPI.createLivraison,
+    onSuccess: () => { qc.invalidateQueries(['livraisons']); qc.invalidateQueries(['stats-liya']); setShowCreate(false); showToast('Livraison créée ✓'); },
+    onError: e => showToast(e?.response?.data?.error || 'Erreur création livraison', 'error'),
+  });
   const updateStatut = useMutation({ mutationFn: ({ id, statut }) => liyaAPI.updateStatut(id, statut), onSuccess: () => { qc.invalidateQueries(['livraisons']); qc.invalidateQueries(['stats-liya']); } });
 
   const livraisons = data?.data || [];
