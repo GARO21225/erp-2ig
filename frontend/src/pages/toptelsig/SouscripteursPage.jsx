@@ -460,18 +460,34 @@ export function SouscripteursPage() {
   const listeProjets = Array.isArray(projets) ? projets : [];
 
   const exportCSV = () => {
-    const rows = list.map(s => [
-      `${s.prenom} ${s.nom}`, s.telephone, s.email||'—',
-      s.ventes?.[0]?.lot?.projet?.nom||'—',
-      s.ventes?.[0]?.lot?.numero||'—',
-      s.commercialNom||'—',
-      fmtD(s.premierPaiement),
-      s.totalDu||0, s.totalPaye||0, s.restant||0,
-      `${s.tauxPaiement||0}%`,
-      getStatutDisplay(s).label,
-    ]);
+    // Une ligne par vente (un souscripteur avec 2 lots = 2 lignes)
+    const rows = [];
+    list.forEach(s => {
+      const ventes = s.ventes || [];
+      if (ventes.length === 0) {
+        rows.push([`${s.prenom} ${s.nom}`, s.telephone, s.email||'—', '—','—', s.commercialNom||'—', fmtD(s.premierPaiement), 0, 0, 0, '0%', getStatutDisplay(s).label]);
+      } else {
+        ventes.forEach(v => {
+          const pmts = v.paiements || [];
+          const paye = pmts.reduce((acc,p) => acc + p.montant, 0);
+          const du = v.prixVente || 0;
+          const restant = du - paye;
+          const pct = du > 0 ? Math.round(paye/du*100) : 0;
+          const premierPmt = pmts.sort((a,b) => new Date(a.createdAt)-new Date(b.createdAt))[0];
+          rows.push([
+            `${s.prenom} ${s.nom}`, s.telephone, s.email||'—',
+            v.lot?.projet?.nom||'—',
+            `Lot ${v.lot?.numero||'—'}`,
+            s.commercialNom||'—',
+            fmtD(premierPmt?.createdAt),
+            du, paye, restant, `${pct}%`,
+            v.statut === 'SOLDE' ? 'Soldé' : pct >= 100 ? 'Soldé' : 'En cours',
+          ]);
+        });
+      }
+    });
     exportExcel('souscripteurs_toptelsig', 'Souscripteurs',
-      ['Nom','Téléphone','Email','Projet','Lot','Commercial','1er paiement','Total dû','Payé','Restant','%','Statut'],
+      ['Nom','Téléphone','Email','Projet','Lot','Commercial','1er paiement','Total dû','Payé','Restant','%','Statut lot'],
       rows
     );
   };

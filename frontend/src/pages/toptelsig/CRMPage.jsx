@@ -391,6 +391,8 @@ export default function CRMPage() {
   const [proposerFor, setProposerFor] = useState(null);
   const [tagsFor, setTagsFor] = useState(null);
   const [convertirFor, setConvertirFor] = useState(null);
+  const [editFor, setEditFor] = useState(null);   // prospect à modifier
+  const [deleteFor, setDeleteFor] = useState(null); // prospect à supprimer
   const [toast, setToast] = useState(null);
   const showToast = (msg,t='success') => { setToast({msg,t}); setTimeout(()=>setToast(null),3500); };
 
@@ -442,6 +444,18 @@ export default function CRMPage() {
       showToast(`✓ Lot ${r.lot?.numero} réservé — projet ${r.lot?.projet}`);
     },
     onError: e => showToast(e?.response?.data?.error||'Erreur','error'),
+  });
+
+  const editMut = useMutation({
+    mutationFn: ({ id, data }) => toptelsigAPI.crmUpdate(id, data),
+    onSuccess: () => { qc.invalidateQueries(['crm-prospects']); setEditFor(null); showToast('Prospect modifié ✓'); },
+    onError: e => showToast(e?.response?.data?.error || 'Erreur', 'error'),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id) => toptelsigAPI.crmUpdate(id, { statut: 'ARCHIVE' }),
+    onSuccess: () => { qc.invalidateQueries(['crm-prospects']); setDeleteFor(null); showToast('Prospect archivé'); },
+    onError: e => showToast(e?.response?.data?.error || 'Erreur', 'error'),
   });
 
   const convertirMut = useMutation({
@@ -664,6 +678,14 @@ export default function CRMPage() {
                           onClick={()=>setTagsFor(p)} title="Tags">
                           <Tag size={9}/>
                         </button>
+                        <button className="btn btn-xs" style={{ background:'#FAEEDA', color:'#BA7517', border:'none', fontSize:10 }}
+                          onClick={()=>setEditFor(p)} title="Modifier le prospect">
+                          ✏
+                        </button>
+                        <button className="btn btn-xs" style={{ background:'#FCEBEB', color:'#A32D2D', border:'none', fontSize:10 }}
+                          onClick={()=>setDeleteFor(p)} title="Archiver le prospect">
+                          🗑
+                        </button>
                         {/* Bouton Convertir si : statut RESERVE OU a des réservations actives */}
                         {(p._crm?.nbReservations > 0 ||
                           (p.statutProjet||p.statutGlobal)==='RESERVE') && (
@@ -715,6 +737,37 @@ export default function CRMPage() {
           onSave={convertirMut.mutate}
           loading={convertirMut.isPending}
         />
+      )}
+      {/* Modal modifier prospect */}
+      {editFor && (
+        <ModalEditProspect
+          prospect={editFor}
+          onClose={() => setEditFor(null)}
+          onSave={data => editMut.mutate({ id: editFor.id, data })}
+          loading={editMut.isPending}
+        />
+      )}
+      {/* Confirmation archivage */}
+      {deleteFor && (
+        <div className="modal-overlay" onClick={() => setDeleteFor(null)}>
+          <div className="modal" style={{ maxWidth:380 }} onClick={e=>e.stopPropagation()}>
+            <h3 style={{ margin:'0 0 12px', fontFamily:'Syne', fontSize:16 }}>Archiver ce prospect ?</h3>
+            <p style={{ fontSize:13, color:'#555', margin:'0 0 8px' }}>
+              <strong>{deleteFor.prenom} {deleteFor.nom}</strong> sera archivé et n'apparaîtra plus dans le CRM.
+            </p>
+            <p style={{ fontSize:12, color:'#888', margin:'0 0 20px' }}>
+              L'historique des relances et réservations sera conservé.
+            </p>
+            <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setDeleteFor(null)}>Annuler</button>
+              <button className="btn btn-sm" style={{ background:'#A32D2D', color:'white', border:'none' }}
+                onClick={() => deleteMut.mutate(deleteFor.id)}
+                disabled={deleteMut.isPending}>
+                {deleteMut.isPending ? '...' : 'Archiver'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {showImport && (
         <ModalImport onClose={()=>setShowImport(false)} onSave={importProspects.mutate}

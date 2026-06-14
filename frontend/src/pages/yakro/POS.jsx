@@ -30,6 +30,7 @@ function PanelCommande({ table, menu, onClose, onSave, loading, listeServeurs })
   const [notes, setNotes] = useState('');
   const [nbCouverts, setNbCouverts] = useState(table?.capacite || 2);
   const [cat, setCat] = useState(Object.keys(menu?.grouped || {})[0] || '');
+  const [searchMenu, setSearchMenu] = useState('');
   const [serveurId, setServeurId] = useState(table?.serveurId || '');
 
   const addArticle = (item) => setLignes(prev => {
@@ -81,19 +82,37 @@ function PanelCommande({ table, menu, onClose, onSave, loading, listeServeurs })
           <button onClick={()=>setNbCouverts(v=>v+1)} style={{ width:24,height:24,borderRadius:6,border:'1px solid #ddd',background:'white',cursor:'pointer',fontSize:14 }}>+</button>
         </div>
 
-        {/* Catégories */}
-        <div style={{ display:'flex',gap:4,padding:'8px 12px',overflowX:'auto',borderBottom:'1px solid #e8e7e1',flexShrink:0 }}>
-          {cats.map(c=>(
-            <button key={c} onClick={()=>setCat(c)}
-              style={{ padding:'4px 12px',borderRadius:20,border:'none',cursor:'pointer',fontSize:11,fontWeight:500,whiteSpace:'nowrap',background:cat===c?'#8B1A1A':'#F1EFE8',color:cat===c?'white':'#666' }}>
-              {c}
-            </button>
-          ))}
+        {/* Recherche + Catégories */}
+        <div style={{ borderBottom:'1px solid #e8e7e1', flexShrink:0 }}>
+          <div style={{ padding:'8px 12px', display:'flex', gap:6, alignItems:'center' }}>
+            <div style={{ flex:1, display:'flex', alignItems:'center', gap:6, background:'white', border:'0.5px solid #e8e7e1', borderRadius:16, padding:'5px 10px' }}>
+              <span style={{ fontSize:12, color:'#888' }}>🔍</span>
+              <input
+                value={searchMenu} onChange={e=>setSearchMenu(e.target.value)}
+                placeholder="Chercher un article..."
+                style={{ border:'none', outline:'none', fontSize:12, flex:1, background:'transparent' }}
+              />
+              {searchMenu && <button onClick={()=>setSearchMenu('')} style={{ background:'none', border:'none', cursor:'pointer', color:'#888', padding:0, fontSize:11 }}>✕</button>}
+            </div>
+          </div>
+          {!searchMenu && (
+            <div style={{ display:'flex',gap:4,padding:'0 12px 8px',overflowX:'auto' }}>
+              {cats.map(c=>(
+                <button key={c} onClick={()=>setCat(c)}
+                  style={{ padding:'4px 12px',borderRadius:20,border:'none',cursor:'pointer',fontSize:11,fontWeight:500,whiteSpace:'nowrap',background:cat===c?'#8B1A1A':'#F1EFE8',color:cat===c?'white':'#666' }}>
+                  {c}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Articles */}
         <div style={{ flex:1,overflowY:'auto',padding:'10px 12px',display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))',gap:8,alignContent:'start' }}>
-          {(grouped[cat]||[]).filter(item=>item.disponible).map(item=>{
+          {(searchMenu
+            ? Object.values(grouped).flat().filter(item=>item.disponible && item.nom.toLowerCase().includes(searchMenu.toLowerCase()))
+            : (grouped[cat]||[]).filter(item=>item.disponible)
+          ).map(item=>{
             const inLignes = lignes.find(l=>l.menuId===item.id);
             return (
               <div key={item.id} onClick={()=>addArticle(item)}
@@ -622,9 +641,9 @@ export default function POS() {
                       <button onClick={e=>{e.stopPropagation();setCommandeTable({...t,commandeExistante:commande});}}
                         style={{ flex:1,minWidth:40,padding:'3px 2px',fontSize:9,fontWeight:600,border:'none',borderRadius:5,background:'#EEF3FB',color:'#1a3f6f',cursor:'pointer' }}>➕</button>
                     )}
-                    {commande.statut==='EN_COURS' && (
-                      <button onClick={e=>{e.stopPropagation();updateStatut.mutate({id:commande.id,statut:'CUISINE'});}}
-                        style={{ flex:1,minWidth:40,padding:'3px 2px',fontSize:9,fontWeight:600,border:'none',borderRadius:5,background:'#FAEEDA',color:'#412402',cursor:'pointer' }}>🍳</button>
+                    {(commande.statut==='EN_COURS'||commande.statut==='CUISINE') && (
+                      <button onClick={e=>{e.stopPropagation();updateStatut.mutate({id:commande.id,statut:'PRETE'});}}
+                        style={{ flex:1,minWidth:40,padding:'3px 2px',fontSize:9,fontWeight:600,border:'none',borderRadius:5,background:'#EAF3DE',color:'#27500A',cursor:'pointer' }}>✅ Prêt</button>
                     )}
                     <button onClick={e=>{e.stopPropagation();setPaiementCommande(commande);}}
                       style={{ flex:1,minWidth:40,padding:'3px 2px',fontSize:9,fontWeight:700,border:'none',borderRadius:5,background:'#8B1A1A',color:'white',cursor:'pointer' }}>💳</button>

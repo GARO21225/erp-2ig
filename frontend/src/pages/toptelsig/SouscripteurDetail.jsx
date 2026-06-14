@@ -253,65 +253,97 @@ export default function SouscripteurDetail() {
           {/* Ventes & Échéanciers */}
           {tab === 'ventes' && (
             <div>
-              {s.ventes?.length === 0 && <div style={{ color: '#888', fontSize: 13, padding: 20, textAlign: 'center' }}>Aucune vente enregistrée</div>}
-              {s.ventes?.map(v => {
-                const paidPct = v.prixVente > 0 ? Math.round((v.paiements?.reduce((s, p) => s + p.montant, 0) || 0) / v.prixVente * 100) : 0;
+              {(!s.ventes || s.ventes.length === 0) && (
+                <div style={{ color:'#888', fontSize:13, padding:20, textAlign:'center' }}>Aucune vente enregistrée</div>
+              )}
+              {(s.ventes||[]).map(v => {
+                const pmts = v.paiements || [];
+                const totalVentePaye = pmts.reduce((acc, p) => acc + p.montant, 0);
+                const paidPct = v.prixVente > 0 ? Math.round(totalVentePaye / v.prixVente * 100) : 0;
+                const enRetard = v.echeanciers?.some(e => e.statut === 'RETARD');
                 return (
-                  <div key={v.id} className="card" style={{ marginBottom: 12, borderLeft: '3px solid #1a3f6f' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <div key={v.id} className="card" style={{ marginBottom:16, borderLeft:`3px solid ${enRetard?'#A32D2D':'#1a3f6f'}` }}>
+                    {/* En-tête lot */}
+                    <div style={{ display:'flex', justifyContent:'space-between', marginBottom:12 }}>
                       <div>
-                        <div style={{ fontFamily: 'Syne', fontWeight: 700, fontSize: 14 }}>Lot {v.lot?.numero} — {v.lot?.projet?.nom}</div>
-                        <div style={{ fontSize: 12, color: '#888' }}>{v.lot?.superficie} m² · {v.prixVente?.toLocaleString('fr')} F</div>
+                        <div style={{ fontFamily:'Syne', fontWeight:700, fontSize:15 }}>
+                          📍 Lot {v.lot?.numero} — {v.lot?.projet?.nom}
+                        </div>
+                        <div style={{ fontSize:12, color:'#888', marginTop:2 }}>
+                          {v.lot?.superficie ? `${v.lot.superficie.toLocaleString('fr')} m² · ` : ''}
+                          Vendu le {v.dateVente ? new Date(v.dateVente).toLocaleDateString('fr') : '—'}
+                        </div>
                       </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <span className={`badge ${v.statut === 'SOLDE' ? 'badge-green' : 'badge-blue'}`}>{v.statut}</span>
-                        <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>{paidPct}% payé</div>
-                      </div>
+                      <span style={{ fontSize:11, background:v.statut==='SOLDE'?'#EAF3DE':enRetard?'#FCEBEB':'#EEF3FB', color:v.statut==='SOLDE'?'#27500A':enRetard?'#A32D2D':'#1a3f6f', borderRadius:10, padding:'3px 10px', fontWeight:600, height:'fit-content' }}>
+                        {v.statut==='SOLDE'?'✅ Soldé':enRetard?'⚠ Retard':'En cours'}
+                      </span>
                     </div>
+
+                    {/* KPIs lot */}
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, marginBottom:12 }}>
+                      {[
+                        { label:'Prix vente', value:`${(v.prixVente||0).toLocaleString('fr')} F`, color:'#1a3f6f' },
+                        { label:'Payé', value:`${totalVentePaye.toLocaleString('fr')} F`, color:'#27500A' },
+                        { label:'Restant', value:`${Math.max(0,v.prixVente-totalVentePaye).toLocaleString('fr')} F`, color:paidPct<100?'#A32D2D':'#27500A' },
+                        { label:'Avancement', value:`${paidPct}%`, color:paidPct>=100?'#27500A':paidPct>=50?'#1a3f6f':'#BA7517' },
+                      ].map((k,i) => (
+                        <div key={i} style={{ background:'#F7F7F5', borderRadius:8, padding:'8px 10px', borderTop:`2px solid ${k.color}` }}>
+                          <div style={{ fontSize:10, color:'#888', marginBottom:2 }}>{k.label}</div>
+                          <div style={{ fontFamily:'Syne', fontWeight:700, fontSize:14, color:k.color }}>{k.value}</div>
+                        </div>
+                      ))}
+                    </div>
+
                     {/* Barre progression */}
-                    <div style={{ height: 4, background: '#EEF3FB', borderRadius: 2, marginBottom: 12 }}>
-                      <div style={{ height: '100%', width: `${paidPct}%`, background: paidPct === 100 ? '#27500A' : '#1a3f6f', borderRadius: 2, transition: 'width 0.5s' }} />
+                    <div style={{ height:6, background:'#EEF3FB', borderRadius:3, marginBottom:12 }}>
+                      <div style={{ height:'100%', width:`${Math.min(paidPct,100)}%`, background:paidPct>=100?'#27500A':'#1a3f6f', borderRadius:3, transition:'width 0.5s' }}/>
                     </div>
+
                     {/* Tableau échéancier */}
-                    <table className="table-erp" style={{ fontSize: 12 }}>
-                      <thead><tr><th>Éch. #</th><th>Montant dû</th><th>Payé</th><th>Échéance</th><th>Statut</th><th></th></tr></thead>
-                      <tbody>
-                        {v.echeanciers?.map(e => (
-                          <tr key={e.id}>
-                            <td>#{e.numero}</td>
-                            <td>{e.montant?.toLocaleString('fr')} F</td>
-                            <td style={{ color: e.montantPaye > 0 ? '#27500A' : '#888' }}>{(e.montantPaye || 0).toLocaleString('fr')} F</td>
-                            <td style={{ color: e.statut === 'RETARD' ? '#A32D2D' : '#888' }}>{new Date(e.dateEcheance).toLocaleDateString('fr')}</td>
-                            <td><span className={`badge ${STATUT_ECH[e.statut] || 'badge-gray'}`} style={{ fontSize: 10 }}>{e.statut}</span></td>
-                            <td>
-                              {e.statut !== 'PAYE' && (
-                                <button onClick={() => setPaiementFor({ vente: v, echeance: e })}
-                                  className="btn btn-sm" style={{ background: '#EEF3FB', color: '#1a3f6f', border: 'none', fontSize: 10, padding: '2px 8px' }}>
-                                  Encaisser
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
-                      <button onClick={() => setPaiementFor({ vente: v, echeance: null })}
-                        className="btn btn-sm" style={{ background: '#1a3f6f', color: 'white', border: 'none', fontSize: 12 }}>
-                        <Plus size={12} /> Paiement libre
+                    {v.echeanciers?.length > 0 ? (
+                      <table className="table-erp" style={{ fontSize:12, marginBottom:10 }}>
+                        <thead><tr><th>#</th><th>Dû</th><th>Payé</th><th>Date</th><th>Statut</th><th></th></tr></thead>
+                        <tbody>
+                          {v.echeanciers.map(e => (
+                            <tr key={e.id} style={{ background:e.statut==='RETARD'?'#FDF2F2':e.statut==='PAYE'?'#F5FAF0':undefined }}>
+                              <td style={{ fontWeight:600 }}>#{e.numero}</td>
+                              <td>{(e.montant||0).toLocaleString('fr')} F</td>
+                              <td style={{ color:e.montantPaye>0?'#27500A':'#888' }}>{(e.montantPaye||0).toLocaleString('fr')} F</td>
+                              <td style={{ color:e.statut==='RETARD'?'#A32D2D':'#888', fontSize:11 }}>{new Date(e.dateEcheance).toLocaleDateString('fr')}</td>
+                              <td>
+                                <span style={{ fontSize:10, fontWeight:600, color:e.statut==='PAYE'?'#27500A':e.statut==='RETARD'?'#A32D2D':e.statut==='PARTIEL'?'#BA7517':'#888' }}>
+                                  {e.statut==='PAYE'?'✅ Payé':e.statut==='RETARD'?'⚠ Retard':e.statut==='PARTIEL'?'Partiel':'En attente'}
+                                </span>
+                              </td>
+                              <td>
+                                {e.statut !== 'PAYE' && (
+                                  <button onClick={() => setPaiementFor({ vente:v, echeance:e })}
+                                    className="btn btn-sm" style={{ background:'#EEF3FB', color:'#1a3f6f', border:'none', fontSize:10, padding:'2px 8px' }}>
+                                    Encaisser
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div style={{ background:'#FAEEDA', borderRadius:8, padding:'10px 14px', marginBottom:10, fontSize:12, color:'#BA7517' }}>
+                        ⚠ Aucun échéancier — Ce lot a suivi le parcours CRM sans planification d'échéances.
+                        Cliquez sur "Planifier échéancier" pour définir le calendrier de paiement.
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                      <button onClick={() => setPaiementFor({ vente:v, echeance:null })}
+                        className="btn btn-sm" style={{ background:'#1a3f6f', color:'white', border:'none', fontSize:12 }}>
+                        <Plus size={12}/> Paiement libre
                       </button>
-                      {(!v.echeanciers || v.echeanciers.length === 0) && (
-                        <button onClick={() => setPlanifierFor(v)}
-                          className="btn btn-sm" style={{ background: '#27500A', color: 'white', border: 'none', fontSize: 12 }}>
-                          📅 Planifier échéancier
-                        </button>
-                      )}
-                      {v.echeanciers?.length > 0 && (
-                        <button onClick={() => setPlanifierFor(v)}
-                          className="btn btn-sm btn-ghost" style={{ fontSize: 11 }}>
-                          ✏ Modifier le plan
-                        </button>
-                      )}
+                      <button onClick={() => setPlanifierFor(v)}
+                        className="btn btn-sm" style={{ background: v.echeanciers?.length > 0 ? '#F7F7F5' : '#27500A', color: v.echeanciers?.length > 0 ? '#888' : 'white', border: v.echeanciers?.length > 0 ? '1px solid #e8e7e1' : 'none', fontSize:12 }}>
+                        📅 {v.echeanciers?.length > 0 ? 'Modifier le plan' : 'Planifier échéancier'}
+                      </button>
                     </div>
                   </div>
                 );
