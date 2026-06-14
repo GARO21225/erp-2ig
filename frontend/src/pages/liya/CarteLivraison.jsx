@@ -215,7 +215,7 @@ export default function CarteLivraison() {
           <div style={{ fontFamily: 'Syne', fontWeight: 700, fontSize: 13, color: '#1a1a1a' }}>
             Livraisons récentes
           </div>
-          {toutes.map(l => (
+          {toutes?.map(l => (
             <div key={l.id}
               onClick={() => setSelected(l)}
               style={{

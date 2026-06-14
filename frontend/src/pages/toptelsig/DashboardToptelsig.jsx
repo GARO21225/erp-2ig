@@ -16,7 +16,7 @@ const Tooltip2 = ({ active, payload, label }) => {
   return (
     <div style={{ background:'white', border:'0.5px solid #e8e7e1', borderRadius:8, padding:'8px 12px', fontSize:11, boxShadow:'0 4px 12px rgba(0,0,0,0.08)' }}>
       <div style={{ fontWeight:600, marginBottom:4 }}>{label}</div>
-      {payload.map((p,i) => (
+      {payload?.map((p,i) => (
         <div key={i} style={{ color:p.color, display:'flex', gap:6 }}>
           <span style={{ width:8, height:8, borderRadius:'50%', background:p.color, display:'inline-block', marginTop:3, flexShrink:0 }} />
           {p.name}: <strong>{typeof p.value==='number' ? p.value.toLocaleString('fr')+'F' : p.value}</strong>
@@ -160,7 +160,7 @@ export default function DashboardToptelsig() {
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
                 <Pie data={pieData} cx="40%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value">
-                  {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i]} />)}
+                  {pieData?.map((_, i) => <Cell key={i} fill={PIE_COLORS[i]} />)}
                 </Pie>
                 <Tooltip formatter={v => [`${v} lot(s)`, '']} />
                 <Legend layout="vertical" align="right" verticalAlign="middle" formatter={v => <span style={{ fontSize:11 }}>{v}</span>} />
@@ -246,7 +246,7 @@ export default function DashboardToptelsig() {
                 <YAxis dataKey="categorie" type="category" tick={{ fontSize:9 }} width={70} />
                 <Tooltip content={<Tooltip2 />} />
                 <Bar dataKey="montant" name="Montant" fill="#1a3f6f" radius={[0,4,4,0]}>
-                  {depensesParCateg.map((_,i) => <Cell key={i} fill={['#1a3f6f','#E85D04','#27500A','#A32D2D','#BA7517','#888'][i]} />)}
+                  {depensesParCateg?.map((_,i) => <Cell key={i} fill={['#1a3f6f','#E85D04','#27500A','#A32D2D','#BA7517','#888'][i]} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -286,7 +286,7 @@ export default function DashboardToptelsig() {
           <table className="table-erp">
             <thead><tr><th>Souscripteur</th><th>Lot / Projet</th><th>Prix vente</th><th>Statut</th><th>Date</th></tr></thead>
             <tbody>
-              {ventesRecentes.map(v => (
+              {ventesRecentes?.map(v => (
                 <tr key={v.id}>
                   <td style={{ fontWeight:500, fontSize:12 }}>{v.souscripteur ? `${v.souscripteur.prenom} ${v.souscripteur.nom}` : '—'}</td>
                   <td style={{ fontSize:11, color:'#888' }}>

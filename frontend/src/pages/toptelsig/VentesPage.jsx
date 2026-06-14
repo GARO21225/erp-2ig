@@ -228,7 +228,7 @@ export default function VentesPage() {
 
   const exportData = () => {
     const entetes = ['Souscripteur', 'Téléphone', 'Lot', 'Projet', 'Prix vente', 'Statut', 'Échéances payées', 'Date vente'];
-    const lignes = ventes.map(v => {
+    const lignes = ventes?.map(v => {
       const payees = v.echeanciers?.filter(e => e.statut === 'PAYE').length || 0;
       return [
         `${v.souscripteur?.prenom} ${v.souscripteur?.nom}`,
@@ -285,7 +285,7 @@ export default function VentesPage() {
       {showRetards && Array.isArray(retards) && retards.length > 0 && (
         <div className="card" style={{ marginBottom: 14, border: '1px solid #F7C1C1', background: '#FEF8F8' }}>
           <div style={{ fontFamily: 'Syne', fontWeight: 700, fontSize: 13, color: '#A32D2D', marginBottom: 10 }}>⚠ Échéanciers en retard</div>
-          {retards.map(r => (
+          {retards?.map(r => (
             <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '0.5px solid #F7C1C1', fontSize: 12 }}>
               <div>
                 <span style={{ fontWeight: 600 }}>{r.vente?.souscripteur?.prenom} {r.vente?.souscripteur?.nom}</span>
@@ -311,7 +311,7 @@ export default function VentesPage() {
             <tr><th>Souscripteur</th><th>Lot / Projet</th><th>Prix vente</th><th>Statut</th><th>Progression</th><th>Date</th><th></th></tr>
           </thead>
           <tbody>
-            {ventes.map(v => {
+            {ventes?.map(v => {
               const total = v.echeanciers?.length || 0;
               const payees = v.echeanciers?.filter(e => e.statut === 'PAYE').length || 0;
               const enRetard = v.echeanciers?.filter(e => e.statut === 'RETARD').length || 0;
@@ -401,7 +401,7 @@ export default function VentesPage() {
                 <select className="input" value={form.lotId} onChange={e => handleLotChange(e.target.value)}
                   disabled={!form.projetId || loadingLots}>
                   <option value="">{!form.projetId ? "Sélectionner un projet d'abord" : "Choisir un lot"}</option>
-                  {lotsDispos.map(l => (
+                  {lotsDispos?.map(l => (
                     <option key={l.id} value={l.id}>
                       Lot {l.numero}{l.ilot ? ` — Îlot ${l.ilot}` : ''} — {l.superficie} m² — {l.prix?.toLocaleString('fr')} F
                     </option>

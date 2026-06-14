@@ -15,7 +15,6 @@ const STATUT_TABLE = {
   RESERVEE: { label:'Réservée',  color:'#BA7517', bg:'#FEFAF0', border:'#FAC775' },
   NETTOYAGE:{ label:'Nettoyage', color:'#1a3f6f', bg:'#EEF3FB', border:'#B5D4F4' },
 };
-const ZONES = ['Salle','Terrasse','VIP','Bar'];
 const MOYENS_PMT = [
   { key:'ESPECES',      label:'Espèces',      icon:Banknote,   color:'#27500A' },
   { key:'ORANGE_MONEY', label:'Orange Money', icon:Smartphone, color:'#E87722' },
@@ -563,14 +562,34 @@ export default function POS() {
         </div>
       </div>
 
-      {/* Filtres zones */}
-      <div style={{ display:'flex',gap:6,marginBottom:14 }}>
-        {ZONES.map(z=>(
-          <button key={z} onClick={()=>setZone(z)}
-            style={{ padding:'5px 16px',borderRadius:20,border:'none',cursor:'pointer',fontSize:12,fontWeight:500,background:zone===z?'#8B1A1A':'#F1EFE8',color:zone===z?'white':'#666' }}>
-            {z}
+      {/* Filtres zones dynamiques + statut + serveur + recherche */}
+      <div style={{ display:'flex',gap:6,marginBottom:10,flexWrap:'wrap',alignItems:'center' }}>
+        <button onClick={()=>setZone('TOUTES')}
+          style={{ padding:'4px 12px',borderRadius:16,border:'none',cursor:'pointer',fontSize:11,fontWeight:500,background:zone==='TOUTES'?'#8B1A1A':'#F1EFE8',color:zone==='TOUTES'?'white':'#666',whiteSpace:'nowrap' }}>
+          Toutes ({tables.length})
+        </button>
+        {zonesDisponibles.map(z=>(
+          <button key={z} onClick={()=>setZone(zone===z?'TOUTES':z)}
+            style={{ padding:'4px 12px',borderRadius:16,border:'none',cursor:'pointer',fontSize:11,fontWeight:500,background:zone===z?'#8B1A1A':'#F1EFE8',color:zone===z?'white':'#666',whiteSpace:'nowrap' }}>
+            {z} ({tables.filter(t=>t.zone===z).length})
           </button>
         ))}
+        {[
+          ['LIBRE','🟢 Libres'],['OCCUPEE','🔴 Occ.'],['EN_COURS','🟡 EnCours'],
+        ].map(([v,l])=>(
+          <button key={v} onClick={()=>setFiltreStatut(v===filtreStatut?'':v)}
+            style={{ padding:'4px 10px',borderRadius:16,border:`1px solid ${filtreStatut===v?'#BA7517':'#e8e7e1'}`,cursor:'pointer',fontSize:10,background:filtreStatut===v?'#FAEEDA':'white',color:filtreStatut===v?'#BA7517':'#888',whiteSpace:'nowrap' }}>
+            {l}
+          </button>
+        ))}
+        <input value={searchTable} onChange={e=>setSearchTable(e.target.value)}
+          placeholder="N° table..." style={{ border:'0.5px solid #e8e7e1',borderRadius:16,padding:'4px 10px',fontSize:11,width:75,outline:'none' }}/>
+        {filtreServeur || filtreStatut || searchTable ? (
+          <button onClick={()=>{setFiltreServeur('');setFiltreStatut('');setSearchTable('');setZone('TOUTES');}}
+            style={{ padding:'3px 8px',borderRadius:16,border:'1px solid #A32D2D',background:'#FCEBEB',color:'#A32D2D',fontSize:10,cursor:'pointer' }}>
+            ✕ Reset
+          </button>
+        ) : null}
       </div>
 
       {/* Grille tables */}
