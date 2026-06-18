@@ -17,8 +17,12 @@ const STATUT_MAP = {
 
 function ModalCreateLivraison({ motos, onClose, onSave }) {
   const [clientType, setClientType] = useState('ordinaire'); // 'ordinaire' | 'stock3pl'
-  const [stock3plId, setStock3plId] = useState('');
+  // Étape d'ajout d'une nouvelle ligne (panier multi-partenaires)
   const [partenaireSelId, setPartenaireSelId] = useState('');
+  const [stock3plId, setStock3plId] = useState('');
+  const [quantiteSaisie, setQuantiteSaisie] = useState('');
+  // Lignes déjà ajoutées au panier de cette livraison : [{ partenaireId, partenaireNom, stockClientId, article, quantite, unite, disponible }]
+  const [lignesPanier, setLignesPanier] = useState([]);
   const [form, setForm] = useState({ clientNom: '', clientTel: '', adressePrise: '', adresseLivraison: '', montant: '', typePaiement: 'ORANGE_MONEY', motoId: '', notes: '' });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -36,15 +40,26 @@ function ModalCreateLivraison({ motos, onClose, onSave }) {
   });
   const listePartenaires = Array.isArray(partenaires) ? partenaires : [];
 
-  // Quand on sélectionne un article 3PL, pré-remplir le client
-  const handleStock3plChange = (id) => {
-    setStock3plId(id);
-    const item = listeStocks.find(s => s.id === id);
-    if (item) {
-      set('clientNom', item.clientNom);
-      set('clientTel', item.clientTel);
-    }
+  const stockSelectionne = listeStocks.find(s => s.id === stock3plId);
+
+  const ajouterLigne = () => {
+    if (!partenaireSelId || !stock3plId || !quantiteSaisie || Number(quantiteSaisie) <= 0) return;
+    const partenaire = listePartenaires.find(p => p.id === partenaireSelId);
+    setLignesPanier(prev => [...prev, {
+      partenaireId: partenaireSelId,
+      partenaireNom: partenaire?.nom || '',
+      stockClientId: stock3plId,
+      article: stockSelectionne?.article || '',
+      quantite: Number(quantiteSaisie),
+      unite: stockSelectionne?.unite || 'unité',
+      disponible: stockSelectionne?.quantite || 0,
+    }]);
+    // Reset pour permettre d'ajouter un autre article, éventuellement d'un autre partenaire
+    setPartenaireSelId(''); setStock3plId(''); setQuantiteSaisie('');
   };
+
+  const retirerLigne = (idx) => setLignesPanier(prev => prev.filter((_, i) => i !== idx));
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
@@ -56,37 +71,51 @@ function ModalCreateLivraison({ motos, onClose, onSave }) {
         <div style={{ display:'flex', gap:8, marginBottom:16 }}>
           {[['ordinaire','🧑 Client ordinaire'],['stock3pl','📦 Stock clients 3PL']].map(([key,label]) => (
             <button key={key} type="button"
-              onClick={() => { setClientType(key); setStock3plId(''); }}
+              onClick={() => { setClientType(key); setLignesPanier([]); setPartenaireSelId(''); setStock3plId(''); }}
               style={{ flex:1, padding:'8px', borderRadius:8, border:`1.5px solid ${clientType===key?'#E85D04':'#e8e7e1'}`, background:clientType===key?'#FFF0EB':'white', color:clientType===key?'#E85D04':'#666', fontSize:12, fontWeight:clientType===key?600:400, cursor:'pointer' }}>
               {label}
             </button>
           ))}
         </div>
 
-        {/* Parcours Stock 3PL : Partenaire → Articles → Formulaire */}
+        {/* Parcours Stock 3PL : Partenaire → Stock → Quantité, répétable pour plusieurs partenaires */}
         {clientType === 'stock3pl' && (
-          <div style={{ marginBottom:12 }}>
-            {/* Étape 1 : Choisir le partenaire */}
+          <div style={{ marginBottom:14 }}>
+            {/* Panier des lignes déjà ajoutées */}
+            {lignesPanier.length > 0 && (
+              <div style={{ marginBottom:12, display:'flex', flexDirection:'column', gap:6 }}>
+                <label className="label">Articles de cette livraison ({lignesPanier.length})</label>
+                {lignesPanier.map((l, idx) => (
+                  <div key={idx} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:'#FFF0EB', borderRadius:8, padding:'7px 10px', fontSize:12 }}>
+                    <div>
+                      <span style={{ fontWeight:600 }}>{l.article}</span>
+                      <span style={{ color:'#888' }}> · {l.quantite} {l.unite} · 🏢 {l.partenaireNom}</span>
+                      {l.quantite > l.disponible && <span style={{ color:'#A32D2D', fontWeight:600 }}> ⚠ stock insuffisant ({l.disponible} dispo)</span>}
+                    </div>
+                    <button type="button" onClick={() => retirerLigne(idx)} style={{ background:'none', border:'none', cursor:'pointer', color:'#A32D2D' }}><X size={14}/></button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Étape 1 : Choisir le partenaire pour une nouvelle ligne */}
             <div style={{ marginBottom:10 }}>
-              <label className="label">1. Partenaire</label>
+              <label className="label">Ajouter un article — 1. Partenaire</label>
               <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:6 }}>
-                <button type="button" onClick={()=>{ setPartenaireSelId(''); setStock3plId(''); set('clientNom',''); set('clientTel',''); }}
-                  style={{ padding:'5px 12px', borderRadius:16, border:`1.5px solid ${!partenaireSelId?'#E85D04':'#e8e7e1'}`, background:!partenaireSelId?'#FFF0EB':'white', color:!partenaireSelId?'#E85D04':'#888', fontSize:11, cursor:'pointer' }}>
-                  Client ponctuel
-                </button>
                 {listePartenaires.map(p => (
-                  <button key={p.id} type="button" onClick={()=>{ setPartenaireSelId(p.id); setStock3plId(''); set('clientNom',p.nom); set('clientTel',p.telephone||''); }}
+                  <button key={p.id} type="button" onClick={()=>{ setPartenaireSelId(p.id); setStock3plId(''); }}
                     style={{ padding:'5px 12px', borderRadius:16, border:`1.5px solid ${partenaireSelId===p.id?'#E85D04':'#e8e7e1'}`, background:partenaireSelId===p.id?'#FFF0EB':'white', color:partenaireSelId===p.id?'#E85D04':'#555', fontSize:11, cursor:'pointer', fontWeight:partenaireSelId===p.id?600:400 }}>
                     🏢 {p.nom}
                   </button>
                 ))}
+                {listePartenaires.length === 0 && <div style={{ fontSize:11, color:'#888' }}>Aucun partenaire actif</div>}
               </div>
             </div>
 
-            {/* Étape 2 : Choisir l'article si partenaire sélectionné */}
+            {/* Étape 2 : Choisir le stock précis de ce partenaire (il peut en avoir plusieurs) */}
             {partenaireSelId && (
               <div style={{ marginBottom:10 }}>
-                <label className="label">2. Article du partenaire</label>
+                <label className="label">2. Stock du partenaire</label>
                 {listeStocks.filter(s=>s.partenaireId===partenaireSelId).length === 0 ? (
                   <div style={{ background:'#FAEEDA', borderRadius:8, padding:'8px 12px', fontSize:12, color:'#BA7517' }}>
                     ⚠ Aucun article en stock pour ce partenaire
@@ -94,7 +123,7 @@ function ModalCreateLivraison({ motos, onClose, onSave }) {
                 ) : (
                   <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                     {listeStocks.filter(s=>s.partenaireId===partenaireSelId).map(s => (
-                      <button key={s.id} type="button" onClick={()=>handleStock3plChange(s.id)}
+                      <button key={s.id} type="button" onClick={()=>setStock3plId(s.id)}
                         style={{ padding:'6px 12px', borderRadius:8, border:`1.5px solid ${stock3plId===s.id?'#E85D04':'#e8e7e1'}`, background:stock3plId===s.id?'#FFF0EB':'white', color:stock3plId===s.id?'#E85D04':'#555', fontSize:11, cursor:'pointer', textAlign:'left' }}>
                         <div style={{ fontWeight:600 }}>{s.article}</div>
                         <div style={{ fontSize:10, color:'#888' }}>{s.quantite} {s.unite} en stock</div>
@@ -105,11 +134,28 @@ function ModalCreateLivraison({ motos, onClose, onSave }) {
               </div>
             )}
 
+            {/* Étape 3 : Quantité à déduire */}
             {stock3plId && (
-              <div style={{ background:'#EAF3DE', borderRadius:6, padding:'6px 10px', fontSize:11, color:'#27500A', marginBottom:8 }}>
-                ✓ Client et article pré-remplis depuis le stock 3PL
+              <div style={{ marginBottom:10, display:'flex', gap:8, alignItems:'flex-end' }}>
+                <div style={{ flex:1 }}>
+                  <label className="label">3. Quantité ({stockSelectionne?.disponible !== undefined ? stockSelectionne.quantite : stockSelectionne?.quantite} {stockSelectionne?.unite} disponible)</label>
+                  <input className="input" type="number" min="0" step="any" value={quantiteSaisie} onChange={e=>setQuantiteSaisie(e.target.value)} placeholder="Quantité"/>
+                </div>
+                <button type="button" onClick={ajouterLigne} disabled={!quantiteSaisie || Number(quantiteSaisie)<=0}
+                  style={{ padding:'8px 16px', borderRadius:8, background:'#E85D04', color:'white', border:'none', cursor:'pointer', fontSize:12, fontWeight:600, opacity:(!quantiteSaisie||Number(quantiteSaisie)<=0)?0.5:1 }}>
+                  + Ajouter
+                </button>
               </div>
             )}
+            {quantiteSaisie && stockSelectionne && Number(quantiteSaisie) > stockSelectionne.quantite && (
+              <div style={{ background:'#FCEBEB', borderRadius:6, padding:'6px 10px', fontSize:11, color:'#A32D2D', marginBottom:8 }}>
+                ⚠ Quantité supérieure au stock disponible ({stockSelectionne.quantite} {stockSelectionne.unite}) — sera quand même autorisée, le stock deviendra négatif.
+              </div>
+            )}
+
+            <div style={{ fontSize:11, color:'#888', marginTop:8 }}>
+              Le client peut prendre des articles chez plusieurs partenaires différents : ajoutez autant de lignes que nécessaire avant de créer la livraison.
+            </div>
           </div>
         )}
 
@@ -134,7 +180,17 @@ function ModalCreateLivraison({ motos, onClose, onSave }) {
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
           <button className="btn btn-ghost btn-sm" onClick={onClose}>Annuler</button>
-          <button className="btn btn-sm" style={{ background: '#E85D04', color: 'white', border: 'none' }} onClick={() => onSave({ ...form, montant: Number(form.montant) })}>Créer</button>
+          <button className="btn btn-sm" style={{ background: '#E85D04', color: 'white', border: 'none' }}
+            onClick={() => onSave({
+              ...form,
+              montant: Number(form.montant),
+              lignesStock3PL: lignesPanier.map(l => ({
+                partenaireId: l.partenaireId, stockClientId: l.stockClientId,
+                article: l.article, quantite: l.quantite, unite: l.unite,
+              })),
+            })}>
+            Créer
+          </button>
         </div>
       </div>
     </div>
@@ -167,7 +223,17 @@ export default function LivraisonsPage() {
     onSuccess: () => { qc.invalidateQueries(['livraisons']); qc.invalidateQueries(['stats-liya']); setShowCreate(false); showToast('Livraison créée ✓'); },
     onError: e => showToast(e?.response?.data?.error || 'Erreur création livraison', 'error'),
   });
-  const updateStatut = useMutation({ mutationFn: ({ id, statut }) => liyaAPI.updateStatut(id, statut), onSuccess: () => { qc.invalidateQueries(['livraisons']); qc.invalidateQueries(['stats-liya']); } });
+  const updateStatut = useMutation({
+    mutationFn: ({ id, statut }) => liyaAPI.updateStatut(id, statut),
+    onSuccess: (res) => {
+      qc.invalidateQueries(['livraisons']);
+      qc.invalidateQueries(['stats-liya']);
+      if (res?.avertissementsStock?.length > 0) {
+        showToast(res.avertissementsStock.join(' '), 'error');
+      }
+    },
+    onError: e => showToast(e?.response?.data?.error || 'Erreur changement de statut', 'error'),
+  });
 
   const livraisons = data?.data || [];
 
@@ -230,6 +296,13 @@ export default function LivraisonsPage() {
                   <td>
                     <div style={{ fontWeight: 500, fontSize: 13 }}>{l.clientNom}</div>
                     <div style={{ fontSize: 11, color: '#888' }}>{l.clientTel}</div>
+                    {l.lignesStock3PL?.length > 0 && (
+                      <div style={{ fontSize: 10, color: '#E85D04', marginTop: 3 }}>
+                        {l.lignesStock3PL.map((ln, i) => (
+                          <div key={i}>📦 {ln.article} ({ln.quantite} {ln.unite}) · 🏢 {ln.partenaire?.nom}</div>
+                        ))}
+                      </div>
+                    )}
                   </td>
                   <td style={{ fontSize: 12 }}>
                     <div style={{ color: '#888', marginBottom: 2 }}>📍 {l.adressePrise}</div>

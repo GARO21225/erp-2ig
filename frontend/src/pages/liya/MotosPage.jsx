@@ -65,9 +65,9 @@ export default function MotosPage() {
   const { data: motos, isLoading } = useQuery({ queryKey: ['motos'], queryFn: liyaAPI.motos });
   const { data: histo } = useQuery({ queryKey: ['histo-moto', showHisto?.id], queryFn: () => liyaAPI.historique(showHisto.id), enabled: !!showHisto?.id });
 
-  const createMut = useMutation({ mutationFn: liyaAPI.createMoto, onSuccess: () => { qc.invalidateQueries(['motos']); setShowCreate(false); } });
-  const pleinMut = useMutation({ mutationFn: ({ id, data }) => liyaAPI.addPlein(id, data), onSuccess: () => { qc.invalidateQueries(['motos']); setShowPlein(null); } });
-  const maintMut = useMutation({ mutationFn: ({ id, data }) => liyaAPI.addMaintenance(id, data), onSuccess: () => { qc.invalidateQueries(['motos']); setShowMaint(null); } });
+  const createMut = useMutation({ mutationFn: liyaAPI.createMoto, onSuccess: () => { qc.invalidateQueries(['motos']); setShowCreate(false); showToast('Moto ajoutée ✓'); }, onError: e => showToast(e?.response?.data?.error||'Erreur création moto','error') });
+  const pleinMut = useMutation({ mutationFn: ({ id, data }) => liyaAPI.addPlein(id, data), onSuccess: () => { qc.invalidateQueries(['motos']); setShowPlein(null); showToast('Plein enregistré ✓'); }, onError: e => showToast(e?.response?.data?.error||'Erreur enregistrement plein','error') });
+  const maintMut = useMutation({ mutationFn: ({ id, data }) => liyaAPI.addMaintenance(id, data), onSuccess: () => { qc.invalidateQueries(['motos']); setShowMaint(null); showToast('Maintenance enregistrée ✓'); }, onError: e => showToast(e?.response?.data?.error||'Erreur enregistrement maintenance','error') });
 
   const list = Array.isArray(motos) ? motos : [];
   const disponibles = list.filter(m => m.statut === 'DISPONIBLE').length;

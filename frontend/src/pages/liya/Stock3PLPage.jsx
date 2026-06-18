@@ -230,6 +230,7 @@ export default function Stock3PLPage() {
   const sortirMut = useMutation({
     mutationFn: id=>liyaAPI.sortirStock3pl(id),
     onSuccess:()=>{qc.invalidateQueries(['stock3pl']);showToast('Article sorti ✓');},
+    onError:e=>showToast(e?.response?.data?.error||'Erreur sortie de stock','error'),
   });
 
   return (

@@ -33,6 +33,7 @@ router.get('/', auth, liya, async (req, res) => {
         include: {
           moto: { select: { immatriculation: true, marque: true } },
           chauffeur: { select: { nom: true, prenom: true, telephone: true } },
+          lignesStock3PL: { include: { partenaire: { select: { nom: true } } } },
         }
       })
     ]);
@@ -97,7 +98,26 @@ router.post('/', auth, liya, async (req, res) => {
 
     const numero = `LY-${Date.now()}`;
     // Extraire uniquement les champs du modèle Livraison
-    const { clientNom, clientTel, adressePrise, adresseLivraison, montant, typePaiement, notes } = req.body;
+    const { clientNom, clientTel, adressePrise, adresseLivraison, montant, typePaiement, notes, lignesStock3PL } = req.body;
+
+    // lignesStock3PL : tableau optionnel [{ partenaireId, stockClientId?, article, quantite, unite }]
+    // Une livraison peut prendre des articles chez plusieurs partenaires différents.
+    let lignesValidees = [];
+    if (Array.isArray(lignesStock3PL) && lignesStock3PL.length > 0) {
+      for (const l of lignesStock3PL) {
+        if (!l.partenaireId || !l.article || !l.quantite || Number(l.quantite) <= 0) {
+          return res.status(400).json({ error: 'Chaque ligne doit avoir un partenaire, un article et une quantité positive' });
+        }
+        lignesValidees.push({
+          partenaireId: l.partenaireId,
+          stockClientId: l.stockClientId || null,
+          article: l.article,
+          quantite: Number(l.quantite),
+          unite: l.unite || 'unité',
+        });
+      }
+    }
+
     const livraison = await prisma.livraison.create({
       data: {
         numero,
@@ -110,8 +130,9 @@ router.post('/', auth, liya, async (req, res) => {
         montant: Number(montant || 0),
         typePaiement: typePaiement || null,
         notes: notes || null,
+        lignesStock3PL: lignesValidees.length > 0 ? { create: lignesValidees } : undefined,
       },
-      include: { moto: true, chauffeur: true }
+      include: { moto: true, chauffeur: true, lignesStock3PL: { include: { partenaire: { select: { nom: true } } } } }
     });
 
     // Mettre moto en livraison
@@ -131,10 +152,44 @@ router.put('/:id/statut', auth, liya, async (req, res) => {
     if (req.body.statut === 'LIVRE') data.dateFin = new Date();
     if (req.body.statut === 'PRISE_EN_CHARGE') data.dateDebut = new Date();
 
+    const avertissementsStock = [];
+
+    // Déduction du stock partenaire — uniquement au passage à LIVRE, jamais avant
+    // (tant que ce n'est pas livré, la livraison peut encore échouer ou être annulée).
+    if (req.body.statut === 'LIVRE') {
+      const livraisonAvant = await prisma.livraison.findUnique({
+        where: { id: req.params.id },
+        include: { lignesStock3PL: true },
+      });
+
+      if (livraisonAvant && livraisonAvant.statut !== 'LIVRE' && livraisonAvant.lignesStock3PL?.length > 0) {
+        for (const ligne of livraisonAvant.lignesStock3PL) {
+          if (!ligne.stockClientId) continue; // ligne sans stock précis lié, rien à déduire
+          const stock = await prisma.stockClient3PL.findUnique({ where: { id: ligne.stockClientId } });
+          if (!stock) continue;
+
+          const nouvelleQuantite = stock.quantite - ligne.quantite;
+          if (nouvelleQuantite < 0) {
+            avertissementsStock.push(
+              `⚠ Stock "${ligne.article}" chez le partenaire devient négatif (${nouvelleQuantite} ${ligne.unite}) — quantité demandée supérieure au stock disponible.`
+            );
+          }
+          await prisma.stockClient3PL.update({
+            where: { id: ligne.stockClientId },
+            data: {
+              quantite: nouvelleQuantite,
+              statut: nouvelleQuantite <= 0 ? 'SORTI_TOTAL' : 'SORTI_PARTIEL',
+              dateSortie: new Date(),
+            },
+          });
+        }
+      }
+    }
+
     const livraison = await prisma.livraison.update({
       where: { id: req.params.id },
       data,
-      include: { moto: true }
+      include: { moto: true, lignesStock3PL: { include: { partenaire: { select: { nom: true } } } } }
     });
 
     // Libérer la moto si terminé
@@ -142,7 +197,7 @@ router.put('/:id/statut', auth, liya, async (req, res) => {
       await prisma.moto.update({ where: { id: livraison.motoId }, data: { statut: 'DISPONIBLE' } });
     }
 
-    res.json(livraison);
+    res.json({ ...livraison, avertissementsStock });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

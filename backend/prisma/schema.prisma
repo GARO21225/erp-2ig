@@ -1059,8 +1059,29 @@ model Livraison {
   updatedAt       DateTime @updatedAt
 
   positions       PositionGPS[]
+  lignesStock3PL  LigneLivraison3PL[]
 
   @@map("livraisons")
+}
+
+// Une ligne par article pris chez un partenaire pour une livraison donnée.
+// Une livraison peut contenir des articles de plusieurs partenaires —
+// d'où la table séparée plutôt qu'un lien direct Livraison → Partenaire.
+model LigneLivraison3PL {
+  id              String   @id @default(cuid())
+  livraisonId     String
+  livraison       Livraison @relation(fields: [livraisonId], references: [id], onDelete: Cascade)
+  partenaireId    String
+  partenaire      Partenaire @relation(fields: [partenaireId], references: [id])
+  stockClientId   String?     // référence au lot de stock précis si connu
+  article         String      // dénormalisé : reste lisible même si le stock est modifié après
+  quantite        Float
+  unite           String   @default("unité")
+  createdAt       DateTime @default(now())
+
+  @@index([livraisonId])
+  @@index([partenaireId])
+  @@map("lignes_livraison_3pl")
 }
 
 model PositionGPS {
@@ -1152,6 +1173,7 @@ model Partenaire {
   updatedAt    DateTime @updatedAt
 
   stocks3pl    StockClient3PL[]
+  lignesLivraison3PL LigneLivraison3PL[]
 
   @@map("partenaires")
 }
