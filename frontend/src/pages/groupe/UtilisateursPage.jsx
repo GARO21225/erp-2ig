@@ -257,6 +257,12 @@ export default function UtilisateursPage() {
     onError: e => showToast(e?.response?.data?.error||'Erreur','error'),
   });
 
+  const unlockMut = useMutation({
+    mutationFn: (id) => authAPI.unlockAccount(id),
+    onSuccess: () => { qc.invalidateQueries(['utilisateurs']); showToast('Compte débloqué ✓'); },
+    onError: e => showToast(e?.response?.data?.error||'Erreur','error'),
+  });
+
   const createUserMut = useMutation({
     mutationFn: (data) => authAPI.register(data),
     onSuccess: (res) => {
@@ -445,6 +451,14 @@ export default function UtilisateursPage() {
                             onClick={()=>{ if(window.confirm(`Réinitialiser le mot de passe de ${u.prenom} ${u.nom} ?`)) resetMut.mutate(u.id); }}>
                             <Key size={9}/> Reset
                           </button>
+                          {/* Débloquer — visible seulement si compte verrouillé */}
+                          {u.lockedUntil && new Date(u.lockedUntil) > new Date() && (
+                            <button className="btn btn-xs" style={{ background:'#EAF3DE', color:'#27500A', border:'none', fontSize:10 }}
+                              title="Débloquer le compte immédiatement"
+                              onClick={()=>{ if(window.confirm(`Débloquer immédiatement le compte de ${u.prenom} ${u.nom} ?`)) unlockMut.mutate(u.id); }}>
+                              🔓 Débloquer
+                            </button>
+                          )}
                           {/* Activer/désactiver */}
                           <button className="btn btn-xs"
                             style={{ background:u.actif?'#FCEBEB':'#EAF3DE', color:u.actif?'#A32D2D':'#27500A', border:'none', fontSize:10 }}
