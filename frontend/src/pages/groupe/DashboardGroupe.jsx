@@ -181,10 +181,23 @@ function DashboardLiya() {
 }
 
 // ── Dashboard GROUPE (DG) enrichi ─────────────────────────────────────────
-export default function DashboardGroupe({ data, alertes, nbCritiques, scores }) {
+export default function DashboardGroupe() {
   const navigate = useNavigate();
   const [now, setNow] = useState(new Date());
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
+
+  // Ce composant attendait data/alertes/nbCritiques/scores en PROPS, mais
+  // App.jsx le monte sans rien lui transmettre (<DashboardGroupe /> seul) —
+  // alertes était donc toujours undefined, d'où le crash sur alertes.length
+  // dès le premier rendu. Le composant récupère maintenant ses propres
+  // données via useQuery, comme tous les autres dashboards de l'app
+  // (DashboardToptelsig, DashboardYakro).
+  const { data } = useQuery({ queryKey: ['dashboard-groupe'], queryFn: dashboardAPI.groupe, staleTime: 30000 });
+  const { data: alertesData } = useQuery({ queryKey: ['dashboard-alertes'], queryFn: alertesAPI.critiques, staleTime: 60000 });
+  const { data: scores = [] } = useQuery({ queryKey: ['dashboard-score-sante'], queryFn: dashboardAPI.scoreSante, staleTime: 60000 });
+
+  const alertes = alertesData?.alertes || [];
+  const nbCritiques = alertesData?.critiques || 0;
 
   const courbeCA = data?.graphiques?.courbeCA || [];
   const camembert = (data?.graphiques?.camembertCA || []).filter(d => d.value > 0);
@@ -214,7 +227,7 @@ export default function DashboardGroupe({ data, alertes, nbCritiques, scores }) 
       </div>
 
       {/* Alertes */}
-      {alertes.length > 0 && (
+      {alertes?.length > 0 && (
         <div style={{ display:'flex', flexDirection:'column', gap:5, marginBottom:16 }}>
           {alertes.slice(0,3).map((a,i) => (
             <div key={i} style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 14px', background: a.gravite==='CRITIQUE'?'#FDF2F2':'#FAEEDA', borderRadius:8, border:`1px solid ${a.gravite==='CRITIQUE'?'#F7C1C1':'#FAC775'}` }}>
