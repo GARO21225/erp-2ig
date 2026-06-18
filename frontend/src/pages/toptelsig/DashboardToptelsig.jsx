@@ -46,10 +46,13 @@ export default function DashboardToptelsig() {
   const lotsVendus = projets.reduce((s,p) => s+(p.statsLots?.VENDU||0), 0);
   const lotsReserves = projets.reduce((s,p) => s+(p.statsLots?.RESERVE||0), 0);
   const caTotal = ventes.reduce((s,v) => s+v.prixVente, 0);
-  const caPercu = ventes.reduce((s,v) => {
-    const paiements = v.echeanciers?.filter(e=>e.statut==='PAYE').reduce((a,e)=>a+e.montantPaye,0) || 0;
-    return s + paiements;
-  }, 0);
+  // CA réellement encaissé = somme de TOUS les paiements liés à la vente,
+  // qu'ils soient rattachés à un échéancier ou versés librement (paiement
+  // "libre" sans échéance planifiée — cas fréquent en pratique). Le calcul
+  // précédent ne comptait que v.echeanciers[].montantPaye, ce qui ignorait
+  // silencieusement tout paiement libre : un encaissement réel de 500k
+  // pouvait ainsi ne jamais apparaître dans ce total.
+  const caPercu = ventes.reduce((s,v) => s + (v.paiements?.reduce((a,p)=>a+p.montant,0) || 0), 0);
   const nbRetards = Array.isArray(retards) ? retards.length : 0;
   const totalDepenses = listeDepenses.filter(d=>['PAYEE','JUSTIFIEE','CLOTUREE'].includes(d.statut)).reduce((s,d)=>s+d.montant,0);
   const nbSouscripteurs = souscripteurs?.total || souscripteurs?.length || 0;
@@ -108,6 +111,7 @@ export default function DashboardToptelsig() {
       {/* KPI principaux */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap:10, marginBottom:20 }}>
         {[
+          { label:'Projets', value:projets.length, sub:`${projets.filter(p=>p.statut==='EN_COURS').length} actif(s)`, color:'#1a3f6f', icon:Building2 },
           { label:'CA Total portefeuille', value:fmtF(caTotal), sub:`${ventes.length} vente(s)`, color:'#1a3f6f', icon:TrendingUp },
           { label:'Perçu à ce jour', value:fmtF(caPercu), sub:`Tx encaissement : ${tauxEncaissement}%`, color:'#27500A', icon:CheckCircle },
           { label:'Restant à percevoir', value:fmtF(caTotal-caPercu), sub:`${nbRetards} retard(s)`, color: nbRetards>0?'#A32D2D':'#888', icon:Wallet },
@@ -197,6 +201,41 @@ export default function DashboardToptelsig() {
             <div style={{ height:200, display:'flex', alignItems:'center', justifyContent:'center', color:'#ccc', fontSize:12 }}>En attente de données</div>
           )}
         </div>
+      </div>
+
+      {/* Détail exact par projet — chiffres précis, tous les projets (pas seulement les 8 du graphique) */}
+      <div className="card" style={{ padding:0, marginBottom:20, overflowX:'auto' }}>
+        <div style={{ fontFamily:'Syne', fontWeight:700, fontSize:14, padding:'14px 16px 8px' }}>
+          📋 Détail par projet
+        </div>
+        <table className="table-erp">
+          <thead>
+            <tr>
+              <th>Projet</th><th>Ville</th><th style={{textAlign:'center'}}>Total lots</th>
+              <th style={{textAlign:'center'}}>Disponibles</th><th style={{textAlign:'center'}}>Vendus</th>
+              <th style={{textAlign:'center'}}>Réservés</th><th style={{textAlign:'right'}}>CA vendu</th>
+            </tr>
+          </thead>
+          <tbody>
+            {projets.map(p => {
+              const caProjet = ventes.filter(v => v.lot?.projet?.id === p.id || v.lot?.projetId === p.id).reduce((s,v)=>s+v.prixVente,0);
+              return (
+                <tr key={p.id} style={{ cursor:'pointer' }} onClick={()=>navigate('/toptelsig/projets')}>
+                  <td style={{ fontWeight:600, fontSize:13 }}>{p.nom}</td>
+                  <td style={{ fontSize:12, color:'#888' }}>{p.ville || '—'}</td>
+                  <td style={{ textAlign:'center', fontWeight:700 }}>{p._count?.lots || 0}</td>
+                  <td style={{ textAlign:'center', color:'#27500A' }}>{p.statsLots?.DISPONIBLE || 0}</td>
+                  <td style={{ textAlign:'center', color:'#A32D2D' }}>{p.statsLots?.VENDU || 0}</td>
+                  <td style={{ textAlign:'center', color:'#BA7517' }}>{p.statsLots?.RESERVE || 0}</td>
+                  <td style={{ textAlign:'right', fontWeight:600 }}>{fmtF(caProjet)}</td>
+                </tr>
+              );
+            })}
+            {projets.length === 0 && (
+              <tr><td colSpan={7} style={{ textAlign:'center', color:'#ccc', padding:30, fontSize:13 }}>Aucun projet enregistré</td></tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
       {/* Carte CI */}
