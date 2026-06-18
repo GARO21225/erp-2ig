@@ -30,7 +30,23 @@ router.get('/', auth, async (req, res) => {
 
 router.post('/', auth, yakro, requireRole('DG', 'MANAGER', 'DIRECTEUR'), async (req, res) => {
   try {
-    const item = await prisma.menuYakro.create({ data: req.body });
+    const { nom, description, categorie, sousCategorie, prix, prixMini, prixMaxi, disponible, image, coutRevient } = req.body;
+    if (!nom || !categorie || prix === undefined || prix === '') {
+      return res.status(400).json({ error: 'Nom, catégorie et prix requis' });
+    }
+    const item = await prisma.menuYakro.create({
+      data: {
+        nom, categorie,
+        description: description || null,
+        sousCategorie: sousCategorie || null,
+        prix: Number(prix),
+        prixMini: prixMini ? Number(prixMini) : null,
+        prixMaxi: prixMaxi ? Number(prixMaxi) : null,
+        disponible: disponible !== undefined ? !!disponible : true,
+        image: image || null,
+        coutRevient: coutRevient ? Number(coutRevient) : null,
+      }
+    });
     res.status(201).json(item);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -39,7 +55,19 @@ router.post('/', auth, yakro, requireRole('DG', 'MANAGER', 'DIRECTEUR'), async (
 
 router.put('/:id', auth, yakro, requireRole('DG', 'MANAGER', 'DIRECTEUR'), async (req, res) => {
   try {
-    const item = await prisma.menuYakro.update({ where: { id: req.params.id }, data: req.body });
+    const { nom, description, categorie, sousCategorie, prix, prixMini, prixMaxi, disponible, image, coutRevient } = req.body;
+    const data = {};
+    if (nom !== undefined) data.nom = nom;
+    if (description !== undefined) data.description = description || null;
+    if (categorie !== undefined) data.categorie = categorie;
+    if (sousCategorie !== undefined) data.sousCategorie = sousCategorie || null;
+    if (prix !== undefined) data.prix = Number(prix);
+    if (prixMini !== undefined) data.prixMini = prixMini ? Number(prixMini) : null;
+    if (prixMaxi !== undefined) data.prixMaxi = prixMaxi ? Number(prixMaxi) : null;
+    if (disponible !== undefined) data.disponible = !!disponible;
+    if (image !== undefined) data.image = image || null;
+    if (coutRevient !== undefined) data.coutRevient = coutRevient ? Number(coutRevient) : null;
+    const item = await prisma.menuYakro.update({ where: { id: req.params.id }, data });
     res.json(item);
   } catch (e) {
     res.status(500).json({ error: e.message });

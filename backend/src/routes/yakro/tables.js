@@ -34,9 +34,19 @@ router.get('/', auth, yakro, async (req, res) => {
 
 router.post('/', auth, yakro, async (req, res) => {
   try {
-    const table = await prisma.tableRestaurant.create({ data: req.body });
+    const { numero, nom, capacite, zone } = req.body;
+    if (!numero || isNaN(Number(numero))) return res.status(400).json({ error: 'Numéro de table requis (nombre)' });
+    const table = await prisma.tableRestaurant.create({
+      data: {
+        numero: Number(numero),
+        nom: nom || null,
+        capacite: capacite ? Number(capacite) : 4,
+        zone: zone || 'Salle',
+      }
+    });
     res.status(201).json(table);
   } catch (e) {
+    if (e.code === 'P2002') return res.status(400).json({ error: `La table n°${req.body.numero} existe déjà` });
     res.status(500).json({ error: e.message });
   }
 });
@@ -57,9 +67,18 @@ router.put('/:id/statut', auth, yakro, async (req, res) => {
 // PUT /:id — Modifier une table
 router.put('/:id', auth, yakro, async (req, res) => {
   try {
-    const t = await prisma.tableRestaurant.update({ where: { id: req.params.id }, data: req.body });
+    const { numero, nom, capacite, zone } = req.body;
+    const data = {};
+    if (numero !== undefined) data.numero = Number(numero);
+    if (nom !== undefined) data.nom = nom || null;
+    if (capacite !== undefined) data.capacite = Number(capacite || 4);
+    if (zone !== undefined) data.zone = zone;
+    const t = await prisma.tableRestaurant.update({ where: { id: req.params.id }, data });
     res.json(t);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    if (e.code === 'P2002') return res.status(400).json({ error: `Le numéro ${req.body.numero} est déjà utilisé` });
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // DELETE /:id — Supprimer une table

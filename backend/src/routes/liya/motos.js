@@ -48,9 +48,26 @@ router.post('/', auth, liya, async (req, res) => {
 
 router.put('/:id', auth, liya, async (req, res) => {
   try {
-    const moto = await prisma.moto.update({ where: { id: req.params.id }, data: req.body });
+    const { immatriculation, marque, modele, annee, statut, kilometrage,
+      numeroAssurance, dateExpirationAssurance, dateVisiteTechnique, dateProchaineVisite,
+      consommationMoyenne, valeurAcquisition } = req.body;
+    const data = {};
+    if (immatriculation !== undefined) data.immatriculation = String(immatriculation).toUpperCase().trim();
+    if (marque !== undefined) data.marque = String(marque).trim();
+    if (modele !== undefined) data.modele = modele || null;
+    if (annee !== undefined) data.annee = annee ? Number(annee) : null;
+    if (statut !== undefined) data.statut = statut;
+    if (kilometrage !== undefined) data.kilometrage = Number(kilometrage || 0);
+    if (numeroAssurance !== undefined) data.numeroAssurance = numeroAssurance || null;
+    if (dateExpirationAssurance !== undefined) data.dateExpirationAssurance = dateExpirationAssurance ? new Date(dateExpirationAssurance) : null;
+    if (dateVisiteTechnique !== undefined) data.dateVisiteTechnique = dateVisiteTechnique ? new Date(dateVisiteTechnique) : null;
+    if (dateProchaineVisite !== undefined) data.dateProchaineVisite = dateProchaineVisite ? new Date(dateProchaineVisite) : null;
+    if (consommationMoyenne !== undefined) data.consommationMoyenne = consommationMoyenne ? Number(consommationMoyenne) : null;
+    if (valeurAcquisition !== undefined) data.valeurAcquisition = valeurAcquisition ? Number(valeurAcquisition) : null;
+    const moto = await prisma.moto.update({ where: { id: req.params.id }, data });
     res.json(moto);
   } catch (e) {
+    if (e.code === 'P2002') return res.status(400).json({ error: 'Immatriculation déjà existante' });
     res.status(500).json({ error: e.message });
   }
 });
@@ -58,10 +75,18 @@ router.put('/:id', auth, liya, async (req, res) => {
 // Maintenance
 router.post('/:id/maintenances', auth, liya, async (req, res) => {
   try {
+    const { type, description, cout, date, prestataire, statut } = req.body;
+    if (!type || !description) return res.status(400).json({ error: 'Type et description requis' });
     const m = await prisma.maintenanceMoto.create({
-      data: { ...req.body, motoId: req.params.id, cout: Number(req.body.cout || 0) }
+      data: {
+        motoId: req.params.id, type, description,
+        cout: Number(cout || 0),
+        date: date ? new Date(date) : new Date(),
+        prestataire: prestataire || null,
+        statut: statut || 'PLANIFIE',
+      }
     });
-    if (req.body.statut === 'EN_COURS') {
+    if (statut === 'EN_COURS') {
       await prisma.moto.update({ where: { id: req.params.id }, data: { statut: 'MAINTENANCE' } });
     }
     res.status(201).json(m);
@@ -72,11 +97,19 @@ router.post('/:id/maintenances', auth, liya, async (req, res) => {
 
 router.put('/:id/maintenances/:mid', auth, liya, async (req, res) => {
   try {
+    const { type, description, cout, date, prestataire, statut } = req.body;
+    const data = {};
+    if (type !== undefined) data.type = type;
+    if (description !== undefined) data.description = description;
+    if (cout !== undefined) data.cout = Number(cout || 0);
+    if (date !== undefined) data.date = date ? new Date(date) : new Date();
+    if (prestataire !== undefined) data.prestataire = prestataire || null;
+    if (statut !== undefined) data.statut = statut;
     const m = await prisma.maintenanceMoto.update({
       where: { id: req.params.mid },
-      data: req.body
+      data
     });
-    if (req.body.statut === 'TERMINE') {
+    if (statut === 'TERMINE') {
       await prisma.moto.update({ where: { id: req.params.id }, data: { statut: 'DISPONIBLE' } });
     }
     res.json(m);
@@ -88,12 +121,23 @@ router.put('/:id/maintenances/:mid', auth, liya, async (req, res) => {
 // Carburant
 router.post('/:id/pleins', auth, liya, async (req, res) => {
   try {
+    const { litres, montant, kilometrage, date, station } = req.body;
+    if (litres === undefined || montant === undefined) {
+      return res.status(400).json({ error: 'Litres et montant requis' });
+    }
     const plein = await prisma.pleinCarburant.create({
-      data: { ...req.body, motoId: req.params.id, litres: Number(req.body.litres), montant: Number(req.body.montant) }
+      data: {
+        motoId: req.params.id,
+        litres: Number(litres),
+        montant: Number(montant),
+        kilometrage: Number(kilometrage || 0),
+        date: date ? new Date(date) : new Date(),
+        station: station || null,
+      }
     });
     await prisma.moto.update({
       where: { id: req.params.id },
-      data: { kilometrage: Number(req.body.kilometrage), dernierePlein: new Date() }
+      data: { kilometrage: Number(kilometrage || 0), dernierePlein: new Date() }
     });
 
     // Décaisser carburant
@@ -103,13 +147,13 @@ router.post('/:id/pleins', auth, liya, async (req, res) => {
         prisma.decaissement.create({
           data: {
             caisseId: caisse.id, filiale: 'LIYA',
-            montant: Number(req.body.montant),
+            montant: Number(montant),
             typePaiement: 'ESPECES',
             motif: `Carburant moto ${req.params.id}`,
             categorie: 'CARBURANT', valide: true, validePar: req.user.id,
           }
         }),
-        prisma.caisse.update({ where: { id: caisse.id }, data: { solde: { decrement: Number(req.body.montant) } } })
+        prisma.caisse.update({ where: { id: caisse.id }, data: { solde: { decrement: Number(montant) } } })
       ]);
     }
 

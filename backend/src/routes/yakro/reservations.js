@@ -28,8 +28,20 @@ router.get('/', auth, yakro, async (req, res) => {
 
 router.post('/', auth, yakro, async (req, res) => {
   try {
-    const resa = await prisma.reservationYakro.create({ data: req.body });
-    await prisma.tableRestaurant.update({ where: { id: req.body.tableId }, data: { statut: 'RESERVEE' } });
+    const { tableId, nomClient, telephone, dateHeure, nbPersonnes, statut, notes } = req.body;
+    if (!tableId || !nomClient || !telephone || !dateHeure) {
+      return res.status(400).json({ error: 'Table, nom client, téléphone et date/heure requis' });
+    }
+    const resa = await prisma.reservationYakro.create({
+      data: {
+        tableId, nomClient, telephone,
+        dateHeure: new Date(dateHeure),
+        nbPersonnes: nbPersonnes ? Number(nbPersonnes) : 2,
+        statut: statut || 'CONFIRMEE',
+        notes: notes || null,
+      }
+    });
+    await prisma.tableRestaurant.update({ where: { id: tableId }, data: { statut: 'RESERVEE' } });
     res.status(201).json(resa);
   } catch (e) {
     res.status(500).json({ error: e.message });

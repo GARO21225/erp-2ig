@@ -36,7 +36,17 @@ router.post('/', auth, liya, async (req, res) => {
 // PUT /:id — Modifier
 router.put('/:id', auth, liya, async (req, res) => {
   try {
-    const p = await prisma.partenaire.update({ where: { id: req.params.id }, data: req.body });
+    const { nom, raisonSociale, telephone, email, adresse, typeActivite, notes, actif } = req.body;
+    const data = {};
+    if (nom !== undefined) data.nom = nom;
+    if (raisonSociale !== undefined) data.raisonSociale = raisonSociale || null;
+    if (telephone !== undefined) data.telephone = telephone;
+    if (email !== undefined) data.email = email || null;
+    if (adresse !== undefined) data.adresse = adresse || null;
+    if (typeActivite !== undefined) data.typeActivite = typeActivite || null;
+    if (notes !== undefined) data.notes = notes || null;
+    if (actif !== undefined) data.actif = !!actif;
+    const p = await prisma.partenaire.update({ where: { id: req.params.id }, data });
     res.json(p);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

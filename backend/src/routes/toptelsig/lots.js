@@ -29,9 +29,22 @@ router.get('/', auth, toptelsig, async (req, res) => {
 
 router.post('/', auth, toptelsig, async (req, res) => {
   try {
-    const lot = await prisma.lot.create({ data: req.body });
+    const { projetId, numero, superficie, prix, ilot, statut, latitude, longitude } = req.body;
+    if (!projetId || !numero) return res.status(400).json({ error: 'projetId et numero requis' });
+    const lot = await prisma.lot.create({
+      data: {
+        projetId, numero: String(numero),
+        superficie: Number(superficie || 0),
+        prix: Number(prix || 0),
+        ilot: ilot || null,
+        statut: statut || 'DISPONIBLE',
+        latitude: latitude ? Number(latitude) : null,
+        longitude: longitude ? Number(longitude) : null,
+      }
+    });
     res.status(201).json(lot);
   } catch (e) {
+    if (e.code === 'P2002') return res.status(400).json({ error: `Le lot ${req.body.numero} existe déjà sur ce projet` });
     res.status(500).json({ error: e.message });
   }
 });
@@ -49,7 +62,16 @@ router.post('/batch', auth, toptelsig, async (req, res) => {
 
 router.put('/:id', auth, toptelsig, async (req, res) => {
   try {
-    const lot = await prisma.lot.update({ where: { id: req.params.id }, data: req.body });
+    const { numero, superficie, prix, ilot, statut, latitude, longitude } = req.body;
+    const data = {};
+    if (numero !== undefined) data.numero = String(numero);
+    if (superficie !== undefined) data.superficie = Number(superficie || 0);
+    if (prix !== undefined) data.prix = Number(prix || 0);
+    if (ilot !== undefined) data.ilot = ilot || null;
+    if (statut !== undefined) data.statut = statut;
+    if (latitude !== undefined) data.latitude = latitude ? Number(latitude) : null;
+    if (longitude !== undefined) data.longitude = longitude ? Number(longitude) : null;
+    const lot = await prisma.lot.update({ where: { id: req.params.id }, data });
     res.json(lot);
   } catch (e) {
     res.status(500).json({ error: e.message });

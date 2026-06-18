@@ -165,7 +165,17 @@ router.post('/taches', auth, toptelsig, async (req, res) => {
 
 router.put('/taches/:id', auth, toptelsig, async (req, res) => {
   try {
-    const t = await prisma.tacheFoncier.update({ where: { id: req.params.id }, data: { ...req.body, dateEcheance: req.body.dateEcheance ? new Date(req.body.dateEcheance) : undefined } });
+    const { nom, description, dateEcheance, statut, priorite, assigneA, assigneNom, termine } = req.body;
+    const data = {};
+    if (nom !== undefined) data.nom = nom;
+    if (description !== undefined) data.description = description || null;
+    if (dateEcheance !== undefined) data.dateEcheance = dateEcheance ? new Date(dateEcheance) : null;
+    if (statut !== undefined) data.statut = statut;
+    if (priorite !== undefined) data.priorite = priorite;
+    if (assigneA !== undefined) data.assigneA = assigneA || null;
+    if (assigneNom !== undefined) data.assigneNom = assigneNom || null;
+    if (termine !== undefined) data.termine = !!termine;
+    const t = await prisma.tacheFoncier.update({ where: { id: req.params.id }, data });
     res.json(t);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -194,9 +204,18 @@ router.post('/livrables', auth, toptelsig, async (req, res) => {
 
 router.put('/livrables/:id', auth, toptelsig, async (req, res) => {
   try {
-    const { statut, version, documentId, notes, dateLivraison } = req.body;
+    const { statut, version, documentId, notes, dateLivraison, datePrevue, nom, responsableId, responsableNom, obligatoire } = req.body;
     const old = await prisma.livrableFoncier.findUnique({ where: { id: req.params.id } });
-    const data = { ...req.body };
+    const data = {};
+    if (statut !== undefined) data.statut = statut;
+    if (version !== undefined) data.version = Number(version);
+    if (documentId !== undefined) data.documentId = documentId || null;
+    if (notes !== undefined) data.notes = notes || null;
+    if (nom !== undefined) data.nom = nom;
+    if (responsableId !== undefined) data.responsableId = responsableId || null;
+    if (responsableNom !== undefined) data.responsableNom = responsableNom || null;
+    if (obligatoire !== undefined) data.obligatoire = !!obligatoire;
+    if (datePrevue !== undefined) data.datePrevue = datePrevue ? new Date(datePrevue) : null;
     if (dateLivraison) data.dateLivraison = new Date(dateLivraison);
     // Incrémenter version si soumis à nouveau
     if (statut === 'SOUMIS' && old?.statut === 'REFUSE') data.version = (old.version || 1) + 1;

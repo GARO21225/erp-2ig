@@ -98,9 +98,33 @@ router.post('/', auth, requireRole('DG', 'RH', 'DIRECTEUR'), async (req, res) =>
 // PUT /api/employes/:id
 router.put('/:id', auth, requireRole('DG', 'RH', 'DIRECTEUR'), async (req, res) => {
   try {
+    const { nom, prenom, telephone, email, filiale, poste, departement,
+      dateEmbauche, salaireBase, statut, photo, adresse, numeroCni } = req.body;
+    const filialesValides = ['GROUPE', 'YAKRO_GRILL', 'TOPTELSIG', 'LIYA'];
+    const statutsValides = ['ACTIF', 'CONGE', 'SUSPENDU', 'DEMISSIONNAIRE', 'QUITTE'];
+    const data = {};
+    if (nom !== undefined) data.nom = nom;
+    if (prenom !== undefined) data.prenom = prenom;
+    if (telephone !== undefined) data.telephone = telephone;
+    if (email !== undefined) data.email = email || null;
+    if (filiale !== undefined) {
+      if (!filialesValides.includes(filiale)) return res.status(400).json({ error: `Filiale invalide (${filialesValides.join(', ')})` });
+      data.filiale = filiale;
+    }
+    if (poste !== undefined) data.poste = poste;
+    if (departement !== undefined) data.departement = departement || null;
+    if (dateEmbauche !== undefined && dateEmbauche) data.dateEmbauche = new Date(dateEmbauche);
+    if (salaireBase !== undefined) data.salaireBase = Number(salaireBase || 0);
+    if (statut !== undefined) {
+      if (!statutsValides.includes(statut)) return res.status(400).json({ error: `Statut invalide (${statutsValides.join(', ')})` });
+      data.statut = statut;
+    }
+    if (photo !== undefined) data.photo = photo || null;
+    if (adresse !== undefined) data.adresse = adresse || null;
+    if (numeroCni !== undefined) data.numeroCni = numeroCni || null;
     const employe = await prisma.employe.update({
       where: { id: req.params.id },
-      data: req.body
+      data
     });
     res.json(employe);
   } catch (e) {
@@ -111,8 +135,10 @@ router.put('/:id', auth, requireRole('DG', 'RH', 'DIRECTEUR'), async (req, res) 
 // ── Congés
 router.post('/:id/conges', auth, async (req, res) => {
   try {
+    const { type, dateDebut, dateFin, motif } = req.body;
+    if (!type || !dateDebut || !dateFin) return res.status(400).json({ error: 'Type, date début et date fin requis' });
     const conge = await prisma.conge.create({
-      data: { ...req.body, employeId: req.params.id, dateDebut: new Date(req.body.dateDebut), dateFin: new Date(req.body.dateFin) }
+      data: { employeId: req.params.id, type, dateDebut: new Date(dateDebut), dateFin: new Date(dateFin), motif: motif || null }
     });
     res.status(201).json(conge);
   } catch (e) {
@@ -148,8 +174,10 @@ router.post('/:id/avances', auth, async (req, res) => {
       });
     }
 
+    const { montant, motif } = req.body;
+    if (!montant || Number(montant) <= 0) return res.status(400).json({ error: 'Montant requis et positif' });
     const avance = await prisma.avance.create({
-      data: { ...req.body, employeId: req.params.id, montant: Number(req.body.montant) }
+      data: { employeId: req.params.id, montant: Number(montant), motif: motif || null }
     });
     res.status(201).json(avance);
   } catch (e) {
@@ -160,8 +188,10 @@ router.post('/:id/avances', auth, async (req, res) => {
 // ── Évaluations
 router.post('/:id/evaluations', auth, requireRole('DG', 'RH', 'DIRECTEUR', 'MANAGER'), async (req, res) => {
   try {
+    const { periode, note, commentaire } = req.body;
+    if (!periode || note === undefined || note === '') return res.status(400).json({ error: 'Période et note requis' });
     const eval_ = await prisma.evaluation.create({
-      data: { ...req.body, employeId: req.params.id, note: Number(req.body.note), evaluateurId: req.user.id }
+      data: { employeId: req.params.id, periode, note: Number(note), commentaire: commentaire || null, evaluateurId: req.user.id }
     });
     res.status(201).json(eval_);
   } catch (e) {

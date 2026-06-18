@@ -3,7 +3,7 @@ import AssistantERP from '../ui/AssistantERP';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '../../store';
-import { authAPI } from '../../lib/api';
+import { authAPI, rechercheAPI } from '../../lib/api';
 import {
   LayoutDashboard, Users, Wallet, Package, ChevronDown, ChevronRight, Shield, Settings, Clock, Target,
   Flame, MapPin, Truck, Search, Bell, LogOut, Menu, X,
@@ -133,7 +133,6 @@ export default function Layout() {
     if (val.trim().length < 3) { setSearchResults(null); return; }
     setSearchLoading(true); setSearchOpen(true);
     try {
-      const { rechercheAPI } = await import('../../lib/api');
       const res = await rechercheAPI.global(val.trim());
       setSearchResults(res);
     } catch { setSearchResults(null); }

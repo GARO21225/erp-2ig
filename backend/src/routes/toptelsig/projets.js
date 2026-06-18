@@ -80,16 +80,73 @@ router.get('/:id', auth, toptelsig, async (req, res) => {
 
 router.post('/', auth, toptelsig, async (req, res) => {
   try {
-    const projet = await prisma.projetFoncier.create({ data: req.body });
+    const {
+      code, nom, localisation, ville, superficie, nombreLots,
+      prixLotMin, prixLotMax, statut, dateDebut, dateFin, description,
+      latitude, longitude, responsableId, responsableNom, priorite,
+      caPrevu, budgetTotal,
+    } = req.body;
+    if (!nom || !ville || !localisation) {
+      return res.status(400).json({ error: 'Nom, ville et localisation sont requis' });
+    }
+    const finalCode = code && code.trim() ? code.trim() : `PRJ-${Date.now().toString(36).toUpperCase()}`;
+    const projet = await prisma.projetFoncier.create({
+      data: {
+        code: finalCode, nom, localisation, ville,
+        superficie: Number(superficie || 0),
+        nombreLots: Number(nombreLots || 0),
+        prixLotMin: Number(prixLotMin || 0),
+        prixLotMax: Number(prixLotMax || 0),
+        statut: statut || 'EN_COURS',
+        dateDebut: dateDebut ? new Date(dateDebut) : null,
+        dateFin: dateFin ? new Date(dateFin) : null,
+        description: description || null,
+        latitude: latitude ? Number(latitude) : null,
+        longitude: longitude ? Number(longitude) : null,
+        responsableId: responsableId || null,
+        responsableNom: responsableNom || null,
+        priorite: priorite || 'NORMALE',
+        caPrevu: caPrevu ? Number(caPrevu) : null,
+        budgetTotal: budgetTotal ? Number(budgetTotal) : null,
+      }
+    });
     res.status(201).json(projet);
   } catch (e) {
+    if (e.code === 'P2002') return res.status(400).json({ error: 'Ce code projet existe déjà' });
     res.status(500).json({ error: e.message });
   }
 });
 
 router.put('/:id', auth, toptelsig, async (req, res) => {
   try {
-    const projet = await prisma.projetFoncier.update({ where: { id: req.params.id }, data: req.body });
+    const {
+      code, nom, localisation, ville, superficie, nombreLots,
+      prixLotMin, prixLotMax, statut, dateDebut, dateFin, description,
+      latitude, longitude, responsableId, responsableNom, priorite,
+      caPrevu, budgetTotal, avancement,
+    } = req.body;
+    const data = {};
+    if (code !== undefined && code.trim()) data.code = code.trim();
+    if (nom !== undefined) data.nom = nom;
+    if (localisation !== undefined) data.localisation = localisation;
+    if (ville !== undefined) data.ville = ville;
+    if (superficie !== undefined) data.superficie = Number(superficie || 0);
+    if (nombreLots !== undefined) data.nombreLots = Number(nombreLots || 0);
+    if (prixLotMin !== undefined) data.prixLotMin = Number(prixLotMin || 0);
+    if (prixLotMax !== undefined) data.prixLotMax = Number(prixLotMax || 0);
+    if (statut !== undefined) data.statut = statut;
+    if (dateDebut !== undefined) data.dateDebut = dateDebut ? new Date(dateDebut) : null;
+    if (dateFin !== undefined) data.dateFin = dateFin ? new Date(dateFin) : null;
+    if (description !== undefined) data.description = description || null;
+    if (latitude !== undefined) data.latitude = latitude ? Number(latitude) : null;
+    if (longitude !== undefined) data.longitude = longitude ? Number(longitude) : null;
+    if (responsableId !== undefined) data.responsableId = responsableId || null;
+    if (responsableNom !== undefined) data.responsableNom = responsableNom || null;
+    if (priorite !== undefined) data.priorite = priorite;
+    if (caPrevu !== undefined) data.caPrevu = caPrevu ? Number(caPrevu) : null;
+    if (budgetTotal !== undefined) data.budgetTotal = budgetTotal ? Number(budgetTotal) : null;
+    if (avancement !== undefined) data.avancement = Number(avancement || 0);
+    const projet = await prisma.projetFoncier.update({ where: { id: req.params.id }, data });
     res.json(projet);
   } catch (e) {
     res.status(500).json({ error: e.message });

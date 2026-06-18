@@ -42,10 +42,29 @@ router.get('/produits', auth, async (req, res) => {
 
 router.post('/produits', auth, async (req, res) => {
   try {
-    const ref = `PRD-${Date.now()}`;
-    const produit = await prisma.produit.create({ data: { ...req.body, reference: req.body.reference || ref } });
+    const { reference, nom, description, categorie, unite, filiale, prixAchat, prixVente, stockAlert, stockMinimum, stockMaximum, actif } = req.body;
+    const filialesValides = ['GROUPE', 'YAKRO_GRILL', 'TOPTELSIG', 'LIYA'];
+    if (!nom || !categorie || !filialesValides.includes(filiale)) {
+      return res.status(400).json({ error: `Nom, catégorie et filiale valide requis (${filialesValides.join(', ')})` });
+    }
+    const ref = reference && reference.trim() ? reference.trim() : `PRD-${Date.now()}`;
+    const produit = await prisma.produit.create({
+      data: {
+        reference: ref, nom, filiale,
+        description: description || null,
+        categorie,
+        unite: unite || 'unité',
+        prixAchat: prixAchat ? Number(prixAchat) : 0,
+        prixVente: prixVente ? Number(prixVente) : 0,
+        stockAlert: stockAlert ? Number(stockAlert) : 5,
+        stockMinimum: stockMinimum ? Number(stockMinimum) : 3,
+        stockMaximum: stockMaximum ? Number(stockMaximum) : null,
+        actif: actif !== undefined ? !!actif : true,
+      }
+    });
     res.status(201).json(produit);
   } catch (e) {
+    if (e.code === 'P2002') return res.status(400).json({ error: 'Cette référence existe déjà' });
     res.status(500).json({ error: e.message });
   }
 });
@@ -147,14 +166,24 @@ router.get('/achats', auth, async (req, res) => {
 
 router.post('/achats', auth, async (req, res) => {
   try {
+    const { fournisseurId, filiale, lignes, dateReception, notes } = req.body;
+    const filialesValides = ['GROUPE', 'YAKRO_GRILL', 'TOPTELSIG', 'LIYA'];
+    if (!fournisseurId || !filialesValides.includes(filiale)) {
+      return res.status(400).json({ error: `Fournisseur et filiale valide requis (${filialesValides.join(', ')})` });
+    }
+    if (!Array.isArray(lignes) || lignes.length === 0) {
+      return res.status(400).json({ error: 'Au moins une ligne d\u2019achat requise' });
+    }
     const ref = `ACH-${Date.now()}`;
-    const montantTotal = req.body.lignes.reduce((s, l) => s + l.quantite * l.prixUnitaire, 0);
+    const montantTotal = lignes.reduce((s, l) => s + Number(l.quantite || 0) * Number(l.prixUnitaire || 0), 0);
     const achat = await prisma.achat.create({
       data: {
-        ...req.body,
+        fournisseurId, filiale,
         reference: ref,
         montantTotal,
-        lignes: { create: req.body.lignes }
+        dateReception: dateReception ? new Date(dateReception) : null,
+        notes: notes || null,
+        lignes: { create: lignes.map(l => ({ produitId: l.produitId, quantite: Number(l.quantite || 0), prixUnitaire: Number(l.prixUnitaire || 0) })) }
       },
       include: { lignes: true }
     });

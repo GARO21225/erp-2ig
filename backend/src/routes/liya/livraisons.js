@@ -151,8 +151,12 @@ router.put('/:id/statut', auth, liya, async (req, res) => {
 // Position GPS
 router.post('/:id/position', auth, async (req, res) => {
   try {
+    const { latitude, longitude, vitesse } = req.body;
+    if (latitude === undefined || longitude === undefined) {
+      return res.status(400).json({ error: 'Latitude et longitude requises' });
+    }
     const pos = await prisma.positionGPS.create({
-      data: { livraisonId: req.params.id, ...req.body }
+      data: { livraisonId: req.params.id, latitude: Number(latitude), longitude: Number(longitude), vitesse: vitesse !== undefined ? Number(vitesse) : null }
     });
     res.status(201).json(pos);
   } catch (e) {

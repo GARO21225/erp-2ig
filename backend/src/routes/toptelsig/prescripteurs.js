@@ -68,8 +68,19 @@ router.get('/:id', auth, toptelsig, async (req, res) => {
 // POST /api/toptelsig/prescripteurs
 router.post('/', auth, toptelsig, async (req, res) => {
   try {
+    const { nom, prenom, telephone, email, typePersonne, raisonSociale, ribOuMobile, tauxCommission } = req.body;
+    if (!nom || !prenom || !telephone) return res.status(400).json({ error: 'Nom, prénom et téléphone requis' });
     const code = `PRESC-${Date.now()}`;
-    const p = await prisma.prescripteur.create({ data: { ...req.body, code } });
+    const p = await prisma.prescripteur.create({
+      data: {
+        code, nom, prenom, telephone,
+        email: email || null,
+        typePersonne: typePersonne || 'PHYSIQUE',
+        raisonSociale: raisonSociale || null,
+        ribOuMobile: ribOuMobile || null,
+        tauxCommission: tauxCommission !== undefined ? Number(tauxCommission) : 3,
+      }
+    });
     res.status(201).json(p);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -77,7 +88,18 @@ router.post('/', auth, toptelsig, async (req, res) => {
 // PUT /api/toptelsig/prescripteurs/:id
 router.put('/:id', auth, toptelsig, async (req, res) => {
   try {
-    const p = await prisma.prescripteur.update({ where: { id: req.params.id }, data: req.body });
+    const { nom, prenom, telephone, email, typePersonne, raisonSociale, ribOuMobile, tauxCommission, actif } = req.body;
+    const data = {};
+    if (nom !== undefined) data.nom = nom;
+    if (prenom !== undefined) data.prenom = prenom;
+    if (telephone !== undefined) data.telephone = telephone;
+    if (email !== undefined) data.email = email || null;
+    if (typePersonne !== undefined) data.typePersonne = typePersonne;
+    if (raisonSociale !== undefined) data.raisonSociale = raisonSociale || null;
+    if (ribOuMobile !== undefined) data.ribOuMobile = ribOuMobile || null;
+    if (tauxCommission !== undefined) data.tauxCommission = Number(tauxCommission);
+    if (actif !== undefined) data.actif = !!actif;
+    const p = await prisma.prescripteur.update({ where: { id: req.params.id }, data });
     res.json(p);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

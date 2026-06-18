@@ -24,7 +24,12 @@ router.get('/caisses', auth, async (req, res) => {
 
 router.post('/caisses', auth, requireRole('DG', 'COMPTABLE'), async (req, res) => {
   try {
-    const caisse = await prisma.caisse.create({ data: req.body });
+    const { nom, filiale, solde } = req.body;
+    const filialesValides = ['GROUPE', 'YAKRO_GRILL', 'TOPTELSIG', 'LIYA'];
+    if (!nom || !filialesValides.includes(filiale)) {
+      return res.status(400).json({ error: `Nom requis, filiale doit être l'une de : ${filialesValides.join(', ')}` });
+    }
+    const caisse = await prisma.caisse.create({ data: { nom, filiale, solde: solde ? Number(solde) : 0 } });
     res.status(201).json(caisse);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -65,9 +70,24 @@ router.get('/encaissements', auth, async (req, res) => {
 
 router.post('/encaissements', auth, requireRole('DG', 'COMPTABLE', 'MANAGER'), async (req, res) => {
   try {
+    const { caisseId, filiale, montant, typePaiement, reference, motif, entiteRef, entiteType } = req.body;
+    const filialesValides = ['GROUPE', 'YAKRO_GRILL', 'TOPTELSIG', 'LIYA'];
+    if (!caisseId || !filialesValides.includes(filiale) || !montant || !motif) {
+      return res.status(400).json({ error: 'Caisse, filiale valide, montant et motif requis' });
+    }
     const [enc] = await prisma.$transaction([
-      prisma.encaissement.create({ data: { ...req.body, montant: Number(req.body.montant), operateurId: req.user.id } }),
-      prisma.caisse.update({ where: { id: req.body.caisseId }, data: { solde: { increment: Number(req.body.montant) } } })
+      prisma.encaissement.create({
+        data: {
+          caisseId, filiale, montant: Number(montant),
+          typePaiement: typePaiement || 'ESPECES',
+          reference: reference || null,
+          motif,
+          entiteRef: entiteRef || null,
+          entiteType: entiteType || null,
+          operateurId: req.user.id,
+        }
+      }),
+      prisma.caisse.update({ where: { id: caisseId }, data: { solde: { increment: Number(montant) } } })
     ]);
     res.status(201).json(enc);
   } catch (e) {
@@ -100,8 +120,22 @@ router.get('/decaissements', auth, async (req, res) => {
 
 router.post('/decaissements', auth, async (req, res) => {
   try {
+    const { caisseId, filiale, montant, typePaiement, reference, motif, categorie, beneficiaire, valide } = req.body;
+    const filialesValides = ['GROUPE', 'YAKRO_GRILL', 'TOPTELSIG', 'LIYA'];
+    if (!caisseId || !filialesValides.includes(filiale) || !montant || !motif) {
+      return res.status(400).json({ error: 'Caisse, filiale valide, montant et motif requis' });
+    }
     const dec = await prisma.decaissement.create({
-      data: { ...req.body, montant: Number(req.body.montant) }
+      data: {
+        caisseId, filiale, montant: Number(montant),
+        typePaiement: typePaiement || 'ESPECES',
+        reference: reference || null,
+        motif,
+        categorie: categorie || null,
+        beneficiaire: beneficiaire || null,
+        valide: valide !== undefined ? !!valide : false,
+        validePar: valide ? req.user.id : null,
+      }
     });
     res.status(201).json(dec);
   } catch (e) {
