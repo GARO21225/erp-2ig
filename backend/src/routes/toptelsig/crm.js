@@ -99,6 +99,45 @@ router.get('/prospects', auth, toptelsig, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Scoring prospect — signaux réels, formule transparente ──────────────────
+// Score 0-100. Chaque composante est plafonnée pour qu'aucun facteur seul
+// ne domine le score.
+function calculerScoreProspect(p) {
+  const relances = p.relances || [];
+  let score = 30; // base neutre pour tout prospect actif
+
+  // 1) Engagement concret : réservation active ou vente = signal fort (+35 max)
+  const nbReservationsActives = p.reservations?.filter(r => r.statut === 'ACTIVE').length || 0;
+  const nbVentes = p.ventes?.length || 0;
+  if (nbVentes > 0) score += 35;
+  else if (nbReservationsActives > 0) score += 25;
+
+  // 2) Historique des relances : résultats positifs pèsent, négatifs déduisent (+/-25)
+  const resultatsScore = { interesse: 10, rappeler: 4, converti: 15, pas_interesse: -15, perdu: -25 };
+  const sommeResultats = relances.reduce((s, r) => s + (resultatsScore[r.resultat] || 0), 0);
+  score += Math.max(-25, Math.min(25, sommeResultats));
+
+  // 3) Fraîcheur du contact : pénalise le silence prolongé (-20 max)
+  const derniere = relances[0];
+  if (derniere) {
+    const joursDepuis = Math.floor((Date.now() - new Date(derniere.dateRelance)) / 86400000);
+    if (joursDepuis > 60) score -= 20;
+    else if (joursDepuis > 30) score -= 10;
+    else if (joursDepuis <= 7) score += 5; // contact récent = momentum
+  } else {
+    score -= 10; // jamais relancé = signal faible
+  }
+
+  // 4) Retard de relance planifiée = signal d'opportunité manquée (-10)
+  const enRetard = relances.find(r => r.statut === 'planifiee' && r.prochain && new Date(r.prochain) < new Date());
+  if (enRetard) score -= 10;
+
+  // 5) Statut explicitement perdu = score plancher
+  if (p.statut === 'PERDU') return Math.min(score, 15);
+
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
 function enrichirContact(p, contactProjet) {
   const relances = p.relances || [];
   const derniere = relances[0];
@@ -116,6 +155,7 @@ function enrichirContact(p, contactProjet) {
     statutProjet: contactProjet?.statut || p.statut,
     projetContext: contactProjet?.projet || null,
     tagsArr,
+    score: calculerScoreProspect(p),
     _crm: {
       nbRelances: relances.length,
       derniereRelance: derniere ? { date: derniere.dateRelance, canal: derniere.canal, commercialNom: derniere.commercialNom, resultat: derniere.resultat } : null,
@@ -496,6 +536,68 @@ router.get('/:id', auth, toptelsig, async (req, res) => {
     });
     if (!prospect) return res.status(404).json({ error: 'Contact introuvable' });
     res.json(prospect);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── GET /a-relancer — File des prospects à relancer aujourd'hui ─────────────
+// Combine : relances planifiées en retard + prospects jamais/peu contactés
+router.get('/a-relancer', auth, toptelsig, async (req, res) => {
+  try {
+    const now = new Date();
+
+    const prospects = await prisma.souscripteur.findMany({
+      where: { statut: { notIn: ['CLIENT', 'PERDU'] } },
+      include: {
+        relances: { orderBy: { dateRelance: 'desc' }, take: 5 },
+        reservations: { select: { id: true, statut: true, lot: { select: { numero: true, projet: { select: { nom: true } } } } } },
+        ventes: { select: { id: true } },
+      },
+    });
+
+    const aRelancer = prospects
+      .map(p => {
+        const relances = p.relances || [];
+        const derniere = relances[0];
+        const planifieeEnRetard = relances.find(r => r.statut === 'planifiee' && r.prochain && new Date(r.prochain) < now);
+        const joursDepuis = derniere ? Math.floor((now - new Date(derniere.dateRelance)) / 86400000) : null;
+
+        let raison = null;
+        if (planifieeEnRetard) raison = `Relance planifiée le ${new Date(planifieeEnRetard.prochain).toLocaleDateString('fr')} non faite`;
+        else if (!derniere) raison = 'Jamais contacté';
+        else if (joursDepuis > 30) raison = `Silence depuis ${joursDepuis} jours`;
+        else if (joursDepuis > 14 && derniere.resultat === 'rappeler') raison = `À rappeler — dernier contact il y a ${joursDepuis}j`;
+
+        if (!raison) return null;
+
+        const score = calculerScoreProspect(p);
+        const reservationActive = p.reservations?.find(r => r.statut === 'ACTIVE');
+        const prenom = p.prenom || '';
+        const projetNom = reservationActive?.lot?.projet?.nom;
+        const lotNumero = reservationActive?.lot?.numero;
+
+        // Brouillon de message — variables réellement substituées, pas de placeholder
+        let brouillon;
+        if (reservationActive) {
+          brouillon = `Bonjour ${prenom}, j'espère que vous allez bien. Je reviens vers vous concernant le lot ${lotNumero} sur le projet ${projetNom} que vous avez réservé. Souhaitez-vous qu'on avance sur les modalités de paiement ? Je reste disponible pour en discuter.`;
+        } else if (derniere?.resultat === 'interesse') {
+          brouillon = `Bonjour ${prenom}, suite à notre dernier échange, je voulais savoir si vous aviez eu le temps de réfléchir à notre offre. N'hésitez pas si vous avez des questions.`;
+        } else if (!derniere) {
+          brouillon = `Bonjour ${prenom}, je me permets de vous contacter au sujet de votre intérêt pour nos projets fonciers. Avez-vous quelques minutes pour qu'on en discute ?`;
+        } else {
+          brouillon = `Bonjour ${prenom}, je reviens vers vous pour faire le point ensemble. Êtes-vous disponible pour un échange ?`;
+        }
+
+        return {
+          id: p.id, code: p.code, prenom: p.prenom, nom: p.nom, telephone: p.telephone,
+          score, raison,
+          joursDepuis, dernierResultat: derniere?.resultat || null,
+          brouillonMessage: brouillon,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.score - a.score); // priorité aux scores les plus élevés
+
+    res.json({ total: aRelancer.length, prospects: aRelancer });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

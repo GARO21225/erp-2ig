@@ -66,6 +66,12 @@ function ModalProposerLot({ prospect, onClose, onSave, loading }) {
   const [notes, setNotes] = useState('');
 
   const { data: projets = [] } = useQuery({ queryKey:['projets'], queryFn:toptelsigAPI.projets, staleTime:300000 });
+  const { data: aRelancerData } = useQuery({
+    queryKey: ['crm-a-relancer'],
+    queryFn: toptelsigAPI.crmARelancer,
+    staleTime: 60000,
+    enabled: showARelancer,
+  });
   const { data: projetData } = useQuery({
     queryKey: ['projet-complet', projetId],
     queryFn: () => toptelsigAPI.projetComplet(projetId),
@@ -311,6 +317,12 @@ function ModalCreateProspect({ onClose, onSave, loading, listeCommerciaux }) {
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
 
   const { data: projets = [] } = useQuery({ queryKey:['projets'], queryFn:toptelsigAPI.projets, staleTime:300000 });
+  const { data: aRelancerData } = useQuery({
+    queryKey: ['crm-a-relancer'],
+    queryFn: toptelsigAPI.crmARelancer,
+    staleTime: 60000,
+    enabled: showARelancer,
+  });
   const listeProjets = Array.isArray(projets) ? projets : [];
 
   return (
@@ -393,6 +405,8 @@ export default function CRMPage() {
   const [convertirFor, setConvertirFor] = useState(null);
   const [editFor, setEditFor] = useState(null);   // prospect à modifier
   const [deleteFor, setDeleteFor] = useState(null); // prospect à supprimer
+  const [sortBy, setSortBy] = useState('score'); // 'score' | 'recent' | 'nom'
+  const [showARelancer, setShowARelancer] = useState(false);
   const [toast, setToast] = useState(null);
   const showToast = (msg,t='success') => { setToast({msg,t}); setTimeout(()=>setToast(null),3500); };
 
@@ -413,6 +427,12 @@ export default function CRMPage() {
   });
 
   const { data: projets = [] } = useQuery({ queryKey:['projets'], queryFn:toptelsigAPI.projets, staleTime:300000 });
+  const { data: aRelancerData } = useQuery({
+    queryKey: ['crm-a-relancer'],
+    queryFn: toptelsigAPI.crmARelancer,
+    staleTime: 60000,
+    enabled: showARelancer,
+  });
   const { data: commerciaux = [] } = useQuery({
     queryKey: ['commerciaux-toptelsig'],
     queryFn: () => employesAPI.list({ filiale:'TOPTELSIG', statut:'ACTIF', limit:50 }),
@@ -425,6 +445,7 @@ export default function CRMPage() {
     mutationFn: ({ id, data }) => toptelsigAPI.crmAddRelance(id, data),
     onSuccess: (res) => {
       qc.invalidateQueries(['crm-prospects']);
+      qc.invalidateQueries(['crm-a-relancer']);
       setRelanceFor(null);
       if (res?.souscripteurConverti) {
         showToast('🎉 Prospect converti — basculé dans Souscripteurs');
@@ -493,7 +514,13 @@ export default function CRMPage() {
     onSuccess: ok => { qc.invalidateQueries(['crm-prospects']); setShowImport(false); showToast(`${ok} prospect(s) importés ✓`); },
   });
 
-  const list = Array.isArray(prospects) ? prospects : [];
+  const listBrute = Array.isArray(prospects) ? prospects : [];
+  const list = [...listBrute].sort((a, b) => {
+    if (sortBy === 'score') return (b.score||0) - (a.score||0);
+    if (sortBy === 'recent') return new Date(b.createdAt||0) - new Date(a.createdAt||0);
+    if (sortBy === 'nom') return `${a.prenom}${a.nom}`.localeCompare(`${b.prenom}${b.nom}`);
+    return 0;
+  });
   const kpi = dashboard?.kpi || {};
   const pipeline = dashboard?.pipeline || [];
   const alertes = dashboard?.alertesRelance || [];
@@ -514,11 +541,24 @@ export default function CRMPage() {
           </p>
         </div>
         <div style={{ display:'flex', gap:8 }}>
+          <button className="btn btn-sm" style={{ background:'#FAEEDA', color:'#BA7517', border:'none' }} onClick={()=>setShowARelancer(true)}>
+            📞 À relancer
+          </button>
           <button className="btn btn-ghost btn-sm" onClick={()=>setShowImport(true)}><Upload size={13}/> Importer</button>
           <button className="btn btn-primary btn-sm" style={{ background:'#1a3f6f', border:'none' }} onClick={()=>setShowCreate(true)}>
             <Plus size={13}/> Nouveau prospect
           </button>
         </div>
+      </div>
+
+      {/* Tri */}
+      <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:8 }}>
+        <select value={sortBy} onChange={e=>setSortBy(e.target.value)}
+          style={{ fontSize:12, border:'0.5px solid #e8e7e1', borderRadius:8, padding:'5px 10px', background:'white', color:'#555' }}>
+          <option value="score">Trier par score (potentiel)</option>
+          <option value="recent">Trier par plus récent</option>
+          <option value="nom">Trier par nom</option>
+        </select>
       </div>
 
       {/* Alertes relances en retard */}
@@ -599,7 +639,17 @@ export default function CRMPage() {
                 return (
                   <tr key={p.id} style={{ background:enRetard?'#FDF2F2':undefined }}>
                     <td style={{ cursor:'pointer' }} onClick={()=>navigate(`/toptelsig/prospects/${p.id}`)}>
-                      <div style={{ fontWeight:600, fontSize:13, color:'#1a3f6f', textDecoration:'underline' }}>{p.prenom} {p.nom}</div>
+                      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                        <div style={{ fontWeight:600, fontSize:13, color:'#1a3f6f', textDecoration:'underline' }}>{p.prenom} {p.nom}</div>
+                        {typeof p.score === 'number' && (
+                          <span title="Score de potentiel (signaux : engagement, historique relances, fraîcheur)"
+                            style={{ fontSize:10, fontWeight:700, borderRadius:8, padding:'1px 7px',
+                              background: p.score>=70?'#EAF3DE':p.score>=40?'#FAEEDA':'#FCEBEB',
+                              color: p.score>=70?'#27500A':p.score>=40?'#BA7517':'#A32D2D' }}>
+                            {p.score}
+                          </span>
+                        )}
+                      </div>
                       <div style={{ fontSize:10, color:'#888' }}>{p.profession||p.sourceAcquisition||''}</div>
                       {/* Multi-projets */}
                       {p._crm?.projets?.length > 1 && (
@@ -768,6 +818,16 @@ export default function CRMPage() {
             </div>
           </div>
         </div>
+      )}
+      {showARelancer && (
+        <ModalARelancer
+          data={aRelancerData}
+          onClose={() => setShowARelancer(false)}
+          onMarquerFait={(p) => addRelance.mutate({
+            id: p.id,
+            data: { canal: 'whatsapp', statut: 'effectuee', resultat: 'rappeler', notes: 'Relance envoyée depuis la file "À relancer"' }
+          })}
+        />
       )}
       {showImport && (
         <ModalImport onClose={()=>setShowImport(false)} onSave={importProspects.mutate}
