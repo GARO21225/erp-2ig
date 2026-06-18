@@ -193,7 +193,7 @@ export default function LivraisonsPage() {
       </div>
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))', gap: 10, marginBottom: 20 }}>
         {[
           { label: 'Livraisons / jour', value: stats?.total || 0, color: '#E85D04' },
           { label: 'Livrées', value: stats?.livrees || 0, color: '#639922' },
@@ -216,7 +216,7 @@ export default function LivraisonsPage() {
       </div>
 
       {/* Liste */}
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
         <table className="table-erp">
           <thead>
             <tr><th>N° Livraison</th><th>Client</th><th>Itinéraire</th><th>Moto</th><th>Montant</th><th>Statut</th><th>Actions</th></tr>

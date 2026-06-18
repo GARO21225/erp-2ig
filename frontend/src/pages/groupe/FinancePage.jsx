@@ -244,7 +244,7 @@ export default function FinancePage() {
       )}
 
       {/* ── KPI EXÉCUTIFS ── */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10, marginBottom:20 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))', gap:10, marginBottom:20 }}>
         <KPICard label="CA Groupe" value={fmtF(kpi.caTotal)} variation={kpi.variationCA} color="#1a3f6f" icon={TrendingUp} sub={`Période préc: ${fmtF(kpi.caPrec)}`}/>
         <KPICard label="Dépenses" value={fmtF(kpi.depTotal)} variation={kpi.variationDep} color="#A32D2D" icon={ArrowDownLeft} sub={`Période préc: ${fmtF(kpi.depPrec)}`}/>
         <KPICard label="Résultat Brut" value={fmtF(kpi.resultatBrut)} color={kpi.resultatBrut>=0?'#27500A':'#A32D2D'} icon={Activity} sub={`Marge: ${kpi.marge||0}%`}/>

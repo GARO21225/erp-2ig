@@ -316,7 +316,7 @@ export default function DashboardGroupe({ data, alertes, nbCritiques, scores }) 
         {/* Scores santé */}
         <div className="card">
           <div style={{ fontFamily:'Syne', fontWeight:700, fontSize:14, marginBottom:8 }}>💚 Scores de santé filiales</div>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)' }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))' }}>
             {(scores || []).map(s => (
               <ScoreCard key={s.filiale} label={s.label} score={Math.round(s.score)} color={s.filiale==='YAKRO_GRILL'?'#8B1A1A':s.filiale==='LIYA'?'#E85D04':'#1a3f6f'} detail={s.detail} />
             ))}

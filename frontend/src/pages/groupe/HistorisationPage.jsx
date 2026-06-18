@@ -84,7 +84,7 @@ export default function HistorisationPage() {
       </div>
 
       {/* Tableau */}
-      <div className="card" style={{ padding:0, overflow:'hidden' }}>
+      <div className="card" style={{ padding:0, overflowX:'auto' }}>
         <div className="table-container">
           <table className="table-erp">
             <thead>

@@ -106,7 +106,7 @@ export default function DashboardToptelsig() {
       )}
 
       {/* KPI principaux */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:20 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap:10, marginBottom:20 }}>
         {[
           { label:'CA Total portefeuille', value:fmtF(caTotal), sub:`${ventes.length} vente(s)`, color:'#1a3f6f', icon:TrendingUp },
           { label:'Perçu à ce jour', value:fmtF(caPercu), sub:`Tx encaissement : ${tauxEncaissement}%`, color:'#27500A', icon:CheckCircle },
@@ -129,7 +129,7 @@ export default function DashboardToptelsig() {
       </div>
 
       {/* KPI lots */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:20 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap:10, marginBottom:20 }}>
         {[
           { label:'Total lots', value:totalLots, color:'#1a3f6f' },
           { label:'Disponibles', value:lotsDispos, color:'#27500A', pct: totalLots?Math.round(lotsDispos/totalLots*100):0 },
@@ -259,7 +259,7 @@ export default function DashboardToptelsig() {
       </div>
 
       {/* Caisse TOPTELSIG : Vendu - Dépenses = Solde net */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:20 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))', gap:10, marginBottom:20 }}>
         {[
           { label:'Total encaissé (ventes)', value:fmtF(caPercu), color:'#27500A', icon:'💰', sub:'Paiements reçus des souscripteurs' },
           { label:'Total dépenses payées', value:fmtF(totalDepenses), color:'#A32D2D', icon:'💳', sub:'Dépenses validées et payées' },

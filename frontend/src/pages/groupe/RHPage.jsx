@@ -448,7 +448,7 @@ export default function RHPage() {
       </div>
 
       {/* KPI */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:16 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap:10, marginBottom:16 }}>
         {[
           { label:'Total effectif', value:total, color:'#1a3f6f' },
           { label:'Actifs', value:actifs, color:'#27500A' },
@@ -481,7 +481,7 @@ export default function RHPage() {
       </div>
 
       {/* Tableau */}
-      <div className="card" style={{ padding:0, overflow:'hidden' }}>
+      <div className="card" style={{ padding:0, overflowX:'auto' }}>
         {isLoading ? (
           <div style={{ padding:40, textAlign:'center', color:'#888' }}>Chargement...</div>
         ) : (

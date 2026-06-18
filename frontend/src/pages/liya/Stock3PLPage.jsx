@@ -256,7 +256,7 @@ export default function Stock3PLPage() {
       </div>
 
       {/* KPI */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginBottom:16}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))',gap:10,marginBottom:16}}>
         {[
           {label:'En stock',value:stats.enStock,color:'#27500A'},
           {label:'En transit',value:stats.enTransit,color:'#BA7517'},
@@ -319,7 +319,7 @@ export default function Stock3PLPage() {
       </div>
 
       {/* Tableau */}
-      <div className="card" style={{padding:0,overflow:'hidden'}}>
+      <div className="card" style={{padding:0,overflowX:'auto'}}>
         {isLoading ? <div style={{padding:40,textAlign:'center',color:'#888'}}>Chargement...</div> : (
           <table className="table-erp">
             <thead>

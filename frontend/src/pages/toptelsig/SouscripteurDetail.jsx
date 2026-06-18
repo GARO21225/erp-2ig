@@ -230,7 +230,7 @@ export default function SouscripteurDetail() {
       </div>
 
       {/* KPI */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap: 10, marginBottom: 20 }}>
         {[
           { label: 'Lots acquis', value: s.ventes?.length || 0 },
           { label: 'Total investi', value: (totalDu / 1000000).toFixed(2) + ' M F' },
@@ -298,7 +298,7 @@ export default function SouscripteurDetail() {
                     </div>
 
                     {/* KPIs lot */}
-                    <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, marginBottom:12 }}>
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap:8, marginBottom:12 }}>
                       {[
                         { label:'Prix vente', value:`${(v.prixVente||0).toLocaleString('fr')} F`, color:'#1a3f6f' },
                         { label:'Payé', value:`${totalVentePaye.toLocaleString('fr')} F`, color:'#27500A' },
@@ -371,7 +371,7 @@ export default function SouscripteurDetail() {
 
           {/* Historique paiements */}
           {tab === 'paiements' && (
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
               <table className="table-erp">
                 <thead><tr><th>Date</th><th>Lot / Projet</th><th>Montant</th><th>Type</th><th>Référence</th></tr></thead>
                 <tbody>

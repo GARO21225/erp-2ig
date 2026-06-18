@@ -566,7 +566,7 @@ TOPTELSIG — Groupe 2IG`);
         {vente && (
           <div style={{ marginTop: 14 }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 8, textTransform: 'uppercase' }}>Suivi financier</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap: 8 }}>
               <KBox label="Prix vente" value={fmtF(vente.prixVente)} color="#1a3f6f" />
               <KBox label="Total payé" value={fmtF(totalPaye)} color="#27500A" />
               <KBox label="Restant" value={fmtF(vente.prixVente - totalPaye)} color="#BA7517" />
@@ -702,7 +702,7 @@ function OngletFinances({ data }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* KPI finances */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))', gap: 10 }}>
         {[
           { label: 'CA prévisionnel', value: fmtF(f.caPrevu), color: '#1a3f6f' },
           { label: 'CA encaissé', value: fmtF(f.caEnc), color: '#27500A' },
@@ -917,7 +917,7 @@ function OngletLivrables({ phases = [], projetId }) {
 
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap: 8, marginBottom: 14 }}>
         {['A_PRODUIRE','EN_COURS','SOUMIS','VALIDE'].map(s => (
           <div key={s} style={{ background: (STATUT_LIV[s] || '#888') + '15', border: `1px solid ${STATUT_LIV[s] || '#888'}30`, borderRadius: 8, padding: '8px 12px', textAlign: 'center' }}>
             <div style={{ fontFamily: 'Syne', fontWeight: 800, fontSize: 22, color: STATUT_LIV[s] || '#888' }}>{allLivrables.filter(l => l.statut === s).length}</div>
@@ -1207,7 +1207,7 @@ export default function ProjetsPage() {
       </div>
 
       {/* KPI globaux */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10, marginBottom: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))', gap: 10, marginBottom: 16 }}>
         {[
           { label: 'Projets actifs', value: projets.filter(p => p.statut === 'EN_COURS').length, color: '#1a3f6f' },
           { label: 'Total lots', value: projets.reduce((s, p) => s + (p._count?.lots || 0), 0), color: '#1a3f6f' },

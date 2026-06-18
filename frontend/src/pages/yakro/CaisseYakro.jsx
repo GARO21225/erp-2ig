@@ -173,7 +173,7 @@ export default function CaisseYakro() {
       {onglet === 'resume' && (
         <>
           {/* KPI */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:20 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap:10, marginBottom:20 }}>
             {[
               { label:'CA Total', value:fmtF(total), color:'#8B1A1A' },
               { label:'Bar 🍾', value:fmtF(totalBar), color:'#E87722' },

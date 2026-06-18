@@ -208,7 +208,7 @@ export default function StocksPage() {
       {/* Dashboard */}
       {view === 'dashboard' && (
         <>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10, marginBottom:20 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))', gap:10, marginBottom:20 }}>
             {[
               { label:'Valeur totale', value:fmtF(stats.valeurStock), color:'#1a3f6f', icon:'💰' },
               { label:'🟢 Normal', value:stats.normal, color:'#27500A' },
@@ -279,7 +279,7 @@ export default function StocksPage() {
             {(catFilter||niveauFilter||search) && <button className="btn btn-ghost btn-xs" onClick={()=>{setCatFilter('');setNiveauFilter('');setSearch('');}}>✕ Réinitialiser</button>}
           </div>
 
-          <div className="card" style={{ padding:0, overflow:'hidden' }}>
+          <div className="card" style={{ padding:0, overflowX:'auto' }}>
             {isLoading ? <div style={{ padding:40, textAlign:'center', color:'#888' }}>Chargement...</div> : (
               <table className="table-erp">
                 <thead>

@@ -328,7 +328,7 @@ export default function UtilisateursPage() {
           <div style={{ fontSize:12, color:'#888', marginBottom:12 }}>
             {listeEmployes.length} employés · <span style={{ color:'#27500A' }}>{listeEmployes.filter(e=>e.utilisateurId).length} ont un compte ERP</span> · <span style={{ color:'#A32D2D' }}>{listeEmployes.filter(e=>!e.utilisateurId).length} sans accès</span>
           </div>
-          <div className="card" style={{ padding:0, overflow:'hidden' }}>
+          <div className="card" style={{ padding:0, overflowX:'auto' }}>
             <table className="table-erp">
               <thead>
                 <tr><th>Employé</th><th>Poste</th><th>Filiale</th><th>Contact</th><th>Accès ERP</th><th>Action</th></tr>
@@ -404,7 +404,7 @@ export default function UtilisateursPage() {
           </div>
 
           {/* Tableau */}
-          <div className="card" style={{ padding:0, overflow:'hidden' }}>
+          <div className="card" style={{ padding:0, overflowX:'auto' }}>
             {isLoading ? <div style={{ padding:40, textAlign:'center', color:'#888' }}>Chargement...</div> : (
               <table className="table-erp">
                 <thead>
@@ -518,7 +518,7 @@ export default function UtilisateursPage() {
       {onglet === 'historisation' && (
         <div>
           <div style={{ fontSize:12, color:'#888', marginBottom:12 }}>{logs.length} action(s) enregistrée(s)</div>
-          <div className="card" style={{ padding:0, overflow:'hidden' }}>
+          <div className="card" style={{ padding:0, overflowX:'auto' }}>
             <table className="table-erp">
               <thead>
                 <tr><th>Date/Heure</th><th>Utilisateur</th><th>Action</th><th>Module</th><th>Description</th><th>Filiale</th></tr>

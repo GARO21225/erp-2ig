@@ -522,7 +522,7 @@ export default function GestionProjetPage() {
 
       {/* KPI rapides */}
       {phases.length > 0 && (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:8, marginBottom:16 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(100px,1fr))', gap:8, marginBottom:16 }}>
           {[
             { label:'Phases', value:`${nbTerminees}/${nbPhases}`, sub:'terminées', color:'#1a3f6f' },
             { label:'Avancement', value:`${avancementMoyen}%`, sub:'moyen', color:'#E87722' },

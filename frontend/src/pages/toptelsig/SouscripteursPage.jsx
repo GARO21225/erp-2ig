@@ -519,7 +519,7 @@ export function SouscripteursPage() {
       </div>
 
       {/* KPI Dashboard */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10, marginBottom:20 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))', gap:10, marginBottom:20 }}>
         {[
           { label:'Total souscripteurs', value:kpi.nbTotal||0, color:'#1a3f6f', icon:'👥' },
           { label:'Actifs', value:kpi.nbActifs||0, color:'#27500A', icon:'✅' },
@@ -574,7 +574,7 @@ export function SouscripteursPage() {
       </div>
 
       {/* Tableau */}
-      <div className="card" style={{ padding:0, overflow:'hidden' }}>
+      <div className="card" style={{ padding:0, overflowX:'auto' }}>
         {isLoading ? (
           <div style={{ padding:40, textAlign:'center', color:'#888' }}>Chargement...</div>
         ) : (

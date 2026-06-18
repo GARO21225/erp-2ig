@@ -97,14 +97,14 @@ export default function DashboardYakro() {
       )}
 
       {/* KPI exécutifs */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10, marginBottom:20 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))', gap:10, marginBottom:20 }}>
         <KPI label="CA du jour" value={fmtF(kpi.caJour)} sub={`Objectif: ${fmtF(kpi.objectifJour)}`} color="#8B1A1A" icon={TrendingUp}/>
         <KPI label="Tickets" value={kpi.nbTickets||0} sub={`${kpi.nbClients||0} clients`} color="#E87722" icon={ShoppingBag}/>
         <KPI label="Ticket moyen" value={fmtF(kpi.ticketMoyen)} sub="Par commande" color="#1a3f6f"/>
         <KPI label="Marge brute est." value={fmtF(kpi.margeEstimee)} sub={`~${kpi.tauxMarge||0}% du CA`} color="#27500A" icon={TrendingUp}/>
         <KPI label="Tables occupées" value={`${kpi.tablesOccupees||0}/${kpi.totalTables||0}`} sub={`${kpi.tablesLibres||0} libres`} color="#BA7517" icon={Users}/>
       </div>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:20 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap:10, marginBottom:20 }}>
         <KPI label="CA semaine" value={fmtF(kpi.caSemaine)} color="#8B1A1A"/>
         <KPI label="CA mois" value={fmtF(kpi.caMois)} color="#8B1A1A"/>
         <KPI label="Dépenses jour" value={fmtF(kpi.depensesJour)} color="#A32D2D"/>
@@ -168,7 +168,7 @@ export default function DashboardYakro() {
       {/* Ligne 2 : Serveurs + Tables + Produits */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:14, marginBottom:20 }}>
         {/* Top serveurs */}
-        <div className="card" style={{ padding:0, overflow:'hidden' }}>
+        <div className="card" style={{ padding:0, overflowX:'auto' }}>
           <div style={{ padding:'12px 16px', borderBottom:'0.5px solid #e8e7e1', fontFamily:'Syne', fontWeight:700, fontSize:13, color:'#8B1A1A' }}>🏆 Top Serveurs</div>
           <table className="table-erp">
             <thead><tr><th>#</th><th>Serveur</th><th>CA</th><th>Tickets</th><th>Moy.</th></tr></thead>
@@ -188,7 +188,7 @@ export default function DashboardYakro() {
         </div>
 
         {/* Top tables */}
-        <div className="card" style={{ padding:0, overflow:'hidden' }}>
+        <div className="card" style={{ padding:0, overflowX:'auto' }}>
           <div style={{ padding:'12px 16px', borderBottom:'0.5px solid #e8e7e1', fontFamily:'Syne', fontWeight:700, fontSize:13, color:'#1a3f6f' }}>🪑 Top Tables</div>
           <table className="table-erp">
             <thead><tr><th>Table</th><th>CA</th><th>Clients</th><th>Tps moy.</th></tr></thead>
@@ -207,7 +207,7 @@ export default function DashboardYakro() {
         </div>
 
         {/* Top produits */}
-        <div className="card" style={{ padding:0, overflow:'hidden' }}>
+        <div className="card" style={{ padding:0, overflowX:'auto' }}>
           <div style={{ padding:'12px 16px', borderBottom:'0.5px solid #e8e7e1', fontFamily:'Syne', fontWeight:700, fontSize:13, color:'#27500A' }}>🍽️ Top Produits</div>
           <table className="table-erp">
             <thead><tr><th>Produit</th><th>Qté</th><th>CA</th><th>Marge</th></tr></thead>

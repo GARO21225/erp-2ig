@@ -109,7 +109,7 @@ export default function ProspectDetailPage() {
         </div>
 
         {/* Stats rapides */}
-        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginTop:16}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))',gap:10,marginTop:16}}>
           {[
             {label:'Relances',value:nbRelances,color:'#1a3f6f'},
             {label:'Réservations actives',value:reservationsActives.length,color:'#27500A'},
@@ -269,6 +269,7 @@ export default function ProspectDetailPage() {
           {p.ventes?.flatMap(v=>v.paiements.map(pm=>({...pm,lotNumero:v.lot?.numero,projetNom:v.lot?.projet?.nom,venteId:v.id,venteTotal:v.prixVente}))).length === 0 ? (
             <div className="empty-state"><p>Aucun paiement enregistré</p></div>
           ) : (
+            <div style={{ overflowX:'auto' }}>
             <table className="table-erp">
               <thead>
                 <tr><th>Date</th><th>Lot · Projet</th><th>Mode</th><th>Référence</th><th style={{textAlign:'right'}}>Montant</th></tr>
@@ -285,6 +286,7 @@ export default function ProspectDetailPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
       )}

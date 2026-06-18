@@ -576,7 +576,7 @@ export default function CRMPage() {
       )}
 
       {/* KPI */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10, marginBottom:16 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))', gap:10, marginBottom:16 }}>
         {[
           { label:'Total prospects', value:list.length, color:'#1a3f6f' },
           { label:'Contactés', value:list.filter(p=>p.statutProjet==='CONTACTE'||p.statutGlobal==='CONTACTE').length, color:'#BA7517' },
@@ -612,7 +612,7 @@ export default function CRMPage() {
       </div>
 
       {/* Tableau */}
-      <div className="card" style={{ padding:0, overflow:'hidden' }}>
+      <div className="card" style={{ padding:0, overflowX:'auto' }}>
         {isLoading ? <div style={{ padding:40, textAlign:'center', color:'#888' }}>Chargement...</div> : (
           <table className="table-erp">
             <thead>

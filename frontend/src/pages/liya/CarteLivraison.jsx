@@ -250,7 +250,7 @@ export default function CarteLivraison() {
         <div style={{ background: 'white', border: '0.5px solid #e8e7e1', borderRadius: 10, padding: '14px 20px', display: 'flex', gap: 24, alignItems: 'flex-start' }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontFamily: 'Syne', fontWeight: 700, fontSize: 14, marginBottom: 8, color: '#E85D04' }}>{selected.numero}</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap: 12 }}>
               {[
                 ['Client', selected.clientNom],
                 ['Téléphone', selected.clientTel],

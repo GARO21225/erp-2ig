@@ -534,7 +534,7 @@ export default function DepensesPage() {
       </div>
 
       {/* KPI Stats globales */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:16 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap:10, marginBottom:16 }}>
         {[
           { label:'Total dépenses',    value:fmtF(totalGlobal),    color:'#1a3f6f', sub:`${nbGlobal} dépense(s)` },
           { label:'Montant payé',      value:fmtF(totalPayee),     color:'#27500A', sub:'Décaissé' },

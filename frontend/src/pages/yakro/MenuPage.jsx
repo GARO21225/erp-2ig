@@ -47,7 +47,7 @@ export default function MenuPage() {
         ))}
       </div>
 
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
         {isLoading ? <div style={{ padding: 40, textAlign: 'center', color: '#888', fontSize: 13 }}>Chargement...</div> : (
           <table className="table-erp">
             <thead><tr><th>Article</th><th>Catégorie</th><th>Prix</th><th>Disponible</th><th></th></tr></thead>
