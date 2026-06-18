@@ -19,6 +19,16 @@ api.interceptors.response.use(
       useAuthStore.getState().logout();
       window.location.href = '/login';
     }
+    // Pas de err.response = la requête n'a jamais atteint le serveur
+    // (coupure réseau, timeout). On distingue ce cas d'une vraie erreur
+    // métier pour que les pages affichent un message juste plutôt
+    // qu'un 'Erreur' générique qui laisse croire à un bug.
+    if (!err.response) {
+      return Promise.reject({
+        isNetworkError: true,
+        error: 'Pas de connexion internet — vérifiez votre réseau et réessayez.',
+      });
+    }
     return Promise.reject(err.response?.data || err);
   }
 );

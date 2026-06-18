@@ -1,6 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { useAuthStore } from './store';
+import OfflineIndicator from './components/ui/OfflineIndicator';
 import Layout from './components/layout/Layout';
 import LoginPage from './pages/LoginPage';
 import PortailPage from './pages/PortailPage';
@@ -36,7 +39,25 @@ import MotosPage from './pages/liya/MotosPage';
 import CarteLivraison from './pages/liya/CarteLivraison';
 import Stock3PLPage from './pages/liya/Stock3PLPage';
 
-const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30000, retry: 1 } } });
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30000,
+      retry: 1,
+      // Garde les données en mémoire 24h — assez pour qu'une coupure réseau
+      // d'une journée terrain n'efface pas ce qui a déjà été consulté
+      gcTime: 24 * 60 * 60 * 1000,
+    }
+  }
+});
+
+// Persistance dans localStorage : ce qui a été chargé une fois reste
+// consultable même après fermeture de l'app ou coupure totale du réseau.
+// On ne persiste QUE les requêtes de lecture (GET) métier — jamais l'auth.
+const persister = createSyncStoragePersister({
+  storage: window.localStorage,
+  key: 'erp-2ig-cache-offline',
+});
 
 function PrivateRoute({ children }) {
   const isAuth = useAuthStore(s => s.isAuth());
@@ -45,7 +66,23 @@ function PrivateRoute({ children }) {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{
+        persister,
+        maxAge: 24 * 60 * 60 * 1000,
+        // Sécurité : on ne persiste jamais les requêtes liées à l'authentification
+        // ou aux sessions, même si elles passent par React Query un jour.
+        dehydrateOptions: {
+          shouldDehydrateQuery: (query) => {
+            const key = JSON.stringify(query.queryKey).toLowerCase();
+            if (key.includes('auth') || key.includes('session') || key.includes('password')) return false;
+            return query.state.status === 'success';
+          },
+        },
+      }}
+    >
+      <OfflineIndicator />
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -87,6 +124,6 @@ export default function App() {
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </BrowserRouter>
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   );
 }
