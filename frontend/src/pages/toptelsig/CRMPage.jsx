@@ -66,12 +66,6 @@ function ModalProposerLot({ prospect, onClose, onSave, loading }) {
   const [notes, setNotes] = useState('');
 
   const { data: projets = [] } = useQuery({ queryKey:['projets'], queryFn:toptelsigAPI.projets, staleTime:300000 });
-  const { data: aRelancerData } = useQuery({
-    queryKey: ['crm-a-relancer'],
-    queryFn: toptelsigAPI.crmARelancer,
-    staleTime: 60000,
-    enabled: showARelancer,
-  });
   const { data: projetData } = useQuery({
     queryKey: ['projet-complet', projetId],
     queryFn: () => toptelsigAPI.projetComplet(projetId),
@@ -244,6 +238,80 @@ function ModalRelance({ prospect, onClose, onSave, loading }) {
   );
 }
 
+// ── Modal À relancer — file priorisée avec brouillon de message pré-rempli ──
+// Le backend (GET /toptelsig/crm/a-relancer) calcule déjà la raison de la
+// relance et génère un brouillon contextuel par prospect (score décroissant).
+// Ce composant manquait : la query et le bouton d'ouverture existaient déjà
+// dans CRMPage, mais rien n'affichait jamais le résultat.
+function ModalARelancer({ data, onClose, onMarquerFait }) {
+  const prospects = data?.prospects || [];
+  const [copiedId, setCopiedId] = useState(null);
+
+  const lienWhatsApp = (telephone, message) => {
+    const tel = (telephone || '').replace(/[\s\-+]/g, '').replace(/^0/, '225');
+    return `https://wa.me/${tel}?text=${encodeURIComponent(message)}`;
+  };
+
+  const copierMessage = (id, message) => {
+    navigator.clipboard?.writeText(message);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 640, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+          <h3 style={{ margin: 0, fontFamily: 'Syne', fontSize: 16 }}>📞 À relancer ({prospects.length})</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+        </div>
+        <p style={{ fontSize: 12, color: '#888', margin: '0 0 14px' }}>
+          Triés par priorité. Le message est pré-rempli selon le contexte — à relire avant envoi.
+        </p>
+
+        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {prospects.length === 0 && (
+            <div style={{ textAlign: 'center', color: '#888', padding: 30, fontSize: 13 }}>
+              Aucun prospect à relancer pour le moment ✓
+            </div>
+          )}
+          {prospects.map(p => (
+            <div key={p.id} style={{ border: '0.5px solid #e8e7e1', borderRadius: 10, padding: '12px 14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{p.prenom} {p.nom}</div>
+                  <div style={{ fontSize: 11, color: '#A32D2D' }}>{p.raison}</div>
+                </div>
+                <span style={{ fontSize: 10, background: '#EEF3FB', color: '#1a3f6f', borderRadius: 8, padding: '2px 8px', fontWeight: 600, flexShrink: 0 }}>
+                  Score {p.score}
+                </span>
+              </div>
+              <div style={{ background: '#F7F7F5', borderRadius: 8, padding: '8px 10px', fontSize: 12, color: '#444', marginBottom: 8, lineHeight: 1.5 }}>
+                {p.brouillonMessage}
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <a href={lienWhatsApp(p.telephone, p.brouillonMessage)} target="_blank" rel="noreferrer"
+                  onClick={() => onMarquerFait(p)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 16, background: '#25D366', color: 'white', fontSize: 11, fontWeight: 600, textDecoration: 'none' }}>
+                  💬 Envoyer sur WhatsApp
+                </a>
+                <button type="button" onClick={() => copierMessage(p.id, p.brouillonMessage)}
+                  style={{ padding: '5px 12px', borderRadius: 16, border: '1px solid #e8e7e1', background: 'white', color: '#666', fontSize: 11, cursor: 'pointer' }}>
+                  {copiedId === p.id ? '✓ Copié' : '📋 Copier le texte'}
+                </button>
+                <a href={`tel:${p.telephone}`}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 12px', borderRadius: 16, border: '1px solid #e8e7e1', color: '#1a3f6f', fontSize: 11, textDecoration: 'none' }}>
+                  <Phone size={11} /> Appeler
+                </a>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Modal Import ───────────────────────────────────────────────────────────────
 function ModalImport({ onClose, onSave, loading }) {
   const fileRef = useRef(null);
@@ -317,12 +385,6 @@ function ModalCreateProspect({ onClose, onSave, loading, listeCommerciaux }) {
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
 
   const { data: projets = [] } = useQuery({ queryKey:['projets'], queryFn:toptelsigAPI.projets, staleTime:300000 });
-  const { data: aRelancerData } = useQuery({
-    queryKey: ['crm-a-relancer'],
-    queryFn: toptelsigAPI.crmARelancer,
-    staleTime: 60000,
-    enabled: showARelancer,
-  });
   const listeProjets = Array.isArray(projets) ? projets : [];
 
   return (

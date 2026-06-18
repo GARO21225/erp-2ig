@@ -9,7 +9,7 @@ import {
   Flame, MapPin, Truck, Search, Bell, LogOut, Menu, X,
   ClipboardList, BookOpen, Calendar, Activity, ArrowDownLeft, ArrowUpRight,
   Building2, Map, Bike, Layers, FileText, TrendingUp, Home, Utensils,
-  UserCheck, BarChart2, Archive, CheckSquare, Star, Receipt, Folder
+  UserCheck, BarChart2, Archive, CheckSquare, Star, Receipt, Folder, Megaphone
 } from 'lucide-react';
 
 // ── Filiales ───────────────────────────────────────────────────────────────────
@@ -68,6 +68,7 @@ const NAV = {
   TOPTELSIG: [
     { id: 'toptelsig-dashboard', label: 'Dashboard',           to: '/toptelsig/dashboard',     icon: LayoutDashboard },
     { id: 'crm',                 label: 'CRM — Prospects',     to: '/toptelsig/prospects',     icon: Target },
+    { id: 'campagnes',           label: 'Campagnes',           to: '/toptelsig/campagnes',     icon: Megaphone },
     { id: 'projets',             label: 'Projets fonciers',    to: '/toptelsig/projets',       icon: Building2 },
     { id: 'souscripteurs',       label: 'Souscripteurs',       to: '/toptelsig/souscripteurs', icon: UserCheck },
     { id: 'ventes',              label: 'Ventes & Échéanciers',to: '/toptelsig/ventes',        icon: TrendingUp },

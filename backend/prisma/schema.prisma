@@ -1198,6 +1198,57 @@ model RelanceCRM {
   @@map("relances_crm")
 }
 
+// ── CAMPAGNES (promotions, annonces — envoi groupé multi-canal) ────────────
+// Conçu pour rester scalable : `canal` et le statut d'envoi sont des strings
+// libres (pas des enums) pour qu'ajouter un nouveau canal (Telegram, SMS via
+// un autre fournisseur...) ne nécessite jamais de migration de schéma —
+// seulement une nouvelle implémentation d'envoi côté backend.
+// Filiale en string libre (pas l'enum Filiale) pour la même raison : la
+// table doit pouvoir servir à TOPTELSIG aujourd'hui, Yakro Grill ou LiYA
+// demain, sans modification de structure.
+model Campagne {
+  id              String   @id @default(cuid())
+  nom             String
+  filiale         String              // GROUPE | TOPTELSIG | YAKRO_GRILL | LIYA
+  type            String   @default("PROMOTION") // PROMOTION, ANNONCE, RELANCE_GROUPEE, AUTRE
+  canal           String              // whatsapp | sms | email | telegram | autre
+  message         String              // Corps du message, peut contenir {prenom} etc.
+  statut          String   @default("BROUILLON") // BROUILLON, EN_COURS, TERMINEE, ANNULEE
+  creePar         String?             // userId
+  creeParNom      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  envois          EnvoiCampagne[]
+
+  @@map("campagnes")
+}
+
+// Une ligne par destinataire ciblé par la campagne. Dénormalisé (nom,
+// téléphone, email recopiés au moment de la création) plutôt que lié
+// strictement à Souscripteur : permet de cibler n'importe quelle source
+// de contacts (souscripteurs TOPTELSIG, clients Yakro, partenaires LiYA...)
+// sans dépendre d'une seule table, et garde l'historique exact même si
+// le contact change de coordonnées après l'envoi.
+model EnvoiCampagne {
+  id              String   @id @default(cuid())
+  campagneId      String
+  campagne        Campagne @relation(fields: [campagneId], references: [id], onDelete: Cascade)
+  souscripteurId  String?             // lien optionnel si la cible existe dans Souscripteur
+  nom             String
+  telephone       String?
+  email           String?
+  messagePersonnalise String?         // message final après substitution des variables
+  statut          String   @default("EN_ATTENTE") // EN_ATTENTE, ENVOYE, ECHEC
+  methodeEnvoi    String?             // 'manuel' (lien copié/WhatsApp cliqué) | 'api' (envoyé automatiquement)
+  dateEnvoi       DateTime?
+  erreur          String?
+  createdAt       DateTime @default(now())
+
+  @@index([campagneId])
+  @@map("envois_campagne")
+}
+
 // ── FACTURATION & PARAMÈTRES ENTREPRISE ─────────────────────────────────────
 
 model ParametresEntreprise {
