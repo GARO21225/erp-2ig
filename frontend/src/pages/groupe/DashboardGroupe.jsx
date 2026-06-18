@@ -395,7 +395,7 @@ export default function DashboardGroupe({ data, alertes, nbCritiques, scores }) 
           </div>
         </div>
       </div>
-      <AssistantERP filiale="GROUPE" contexteData={kpiContexte}/>
+      <AssistantERP filiale="GROUPE"/>
     </div>
   );
 }

@@ -297,6 +297,11 @@ export const stock3plAPI = {
 };
 
 // ── ALERTES & DASHBOARD compléments
+export const assistantAPI = {
+  questions: () => api.get('/assistant/questions'),
+  query: (questionId) => api.post('/assistant/query', { questionId }),
+};
+
 export const alertesAPI = {
   critiques: () => api.get('/dashboard/alertes'),
 };

@@ -31,6 +31,7 @@ app.use('/api/finance',     require('./routes/finance'));
 app.use('/api/stocks',      require('./routes/stocks'));
 app.use('/api/documents',   require('./routes/documents'));
 app.use('/api/dashboard',   require('./routes/dashboard'));
+app.use('/api/assistant',   require('./routes/assistant'));
 app.use('/api/recherche',   require('./routes/recherche'));
 app.use('/api/audit', require('./routes/audit'));
 app.use('/api/backup',      require('./routes/backup'));
