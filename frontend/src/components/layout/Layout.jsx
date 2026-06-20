@@ -9,7 +9,8 @@ import {
   Flame, MapPin, Truck, Search, Bell, LogOut, Menu, X,
   ClipboardList, BookOpen, Calendar, Activity, ArrowDownLeft, ArrowUpRight,
   Building2, Map, Bike, Layers, FileText, TrendingUp, Home, Utensils,
-  UserCheck, BarChart2, Archive, CheckSquare, Star, Receipt, Folder, Megaphone
+  UserCheck, BarChart2, Archive, CheckSquare, Star, Receipt, Folder, Megaphone,
+  Briefcase, Award
 } from 'lucide-react';
 
 // ── Filiales ───────────────────────────────────────────────────────────────────
@@ -18,6 +19,7 @@ const FILIALES = [
   { key: 'YAKRO_GRILL', label: 'Yakro Grill',  color: '#8B1A1A', icon: '🍽', path: '/yakro/dashboard' },
   { key: 'TOPTELSIG',   label: 'TOPTELSIG',    color: '#27500A', icon: '🏘', path: '/toptelsig/dashboard' },
   { key: 'LIYA',        label: 'LiYA Logistics',color: '#E85D04', icon: '🚚', path: '/liya/livraisons' },
+  { key: 'EXPERTS',     label: 'Experts',       color: '#5B21B6', icon: '🎓', path: '/experts/dashboard' },
 ];
 
 // ── Permissions par rôle ───────────────────────────────────────────────────────
@@ -82,6 +84,11 @@ const NAV = {
     { id: 'stock3pl',    label: 'Stock Clients 3PL',   to: '/liya/stock3pl',   icon: Archive },
     { id: 'carte',       label: 'Carte GPS',           to: '/liya/carte',      icon: Map },
   ],
+  EXPERTS: [
+    { id: 'experts-dashboard', label: 'Dashboard',         to: '/experts/dashboard',  icon: LayoutDashboard },
+    { id: 'experts-repertoire',label: 'Répertoire experts',to: '/experts/repertoire', icon: Award },
+    { id: 'experts-missions',  label: 'Missions',          to: '/experts/missions',   icon: Briefcase },
+  ],
 };
 
 // Sections communes (toutes filiales sauf GROUPE)
@@ -108,7 +115,7 @@ export default function Layout() {
   const location  = useLocation();
 
   const role   = user?.role || 'EMPLOYE';
-  const color  = filiale === 'YAKRO_GRILL' ? '#8B1A1A' : filiale === 'LIYA' ? '#E85D04' : filiale === 'TOPTELSIG' ? '#27500A' : '#1a3f6f';
+  const color  = filiale === 'YAKRO_GRILL' ? '#8B1A1A' : filiale === 'LIYA' ? '#E85D04' : filiale === 'TOPTELSIG' ? '#27500A' : filiale === 'EXPERTS' ? '#5B21B6' : '#1a3f6f';
   const filInfo = FILIALES.find(f => f.key === filiale) || FILIALES[0];
 
   // Filtrer le menu selon les permissions du rôle
