@@ -36,6 +36,8 @@ export default function CarteLivraison() {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef({});
+  const routeLayerRef = useRef(null);
+  const departMarkerRef = useRef(null);
   const [selected, setSelected] = useState(null);
   const [erreurCarte, setErreurCarte] = useState(false);
 
@@ -100,6 +102,59 @@ export default function CarteLivraison() {
       }
     };
   }, []);
+
+  // Tracer la route pour la livraison sélectionnée
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+
+    import('leaflet').then(async L => {
+      const map = mapInstanceRef.current;
+
+      // Nettoyer la route précédente
+      if (routeLayerRef.current) { routeLayerRef.current.remove(); routeLayerRef.current = null; }
+      if (departMarkerRef.current) { departMarkerRef.current.remove(); departMarkerRef.current = null; }
+
+      if (!selected || !selected.latDest || !selected.lonDest) return;
+
+      const destIcon = L.divIcon({
+        html: `<div style="background:#A32D2D;color:white;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:15px;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);">🏁</div>`,
+        iconSize: [30, 30], iconAnchor: [15, 15], className: '',
+      });
+
+      if (selected.latPrise && selected.lonPrise) {
+        const departIcon = L.divIcon({
+          html: `<div style="background:#27500A;color:white;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:15px;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);">📍</div>`,
+          iconSize: [30, 30], iconAnchor: [15, 15], className: '',
+        });
+        departMarkerRef.current = L.marker([selected.latPrise, selected.lonPrise], { icon: departIcon })
+          .addTo(map)
+          .bindPopup(`<b>Départ</b><br/><span style="font-size:12px">${selected.adressePrise}</span>`);
+
+        // Essayer OSRM pour la route, fallback sur polyligne droite
+        try {
+          const url = `https://router.project-osrm.org/route/v1/driving/${selected.lonPrise},${selected.latPrise};${selected.lonDest},${selected.latDest}?overview=full&geometries=geojson`;
+          const res = await fetch(url);
+          const data = await res.json();
+          if (data.routes?.[0]?.geometry) {
+            routeLayerRef.current = L.geoJSON(data.routes[0].geometry, {
+              style: { color: '#E85D04', weight: 4, opacity: 0.8, dashArray: '8,4' },
+            }).addTo(map);
+          } else {
+            throw new Error('no route');
+          }
+        } catch {
+          routeLayerRef.current = L.polyline(
+            [[selected.latPrise, selected.lonPrise], [selected.latDest, selected.lonDest]],
+            { color: '#E85D04', weight: 3, opacity: 0.7, dashArray: '8,6' }
+          ).addTo(map);
+        }
+
+        map.fitBounds([[selected.latPrise, selected.lonPrise], [selected.latDest, selected.lonDest]], { padding: [40, 40] });
+      } else {
+        map.setView([selected.latDest, selected.lonDest], 15);
+      }
+    });
+  }, [selected]);
 
   // Mettre à jour les marqueurs quand les livraisons changent
   useEffect(() => {
