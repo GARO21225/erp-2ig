@@ -589,14 +589,21 @@ export default function LivraisonsPage() {
                   <td>
                     <div style={{ fontSize: 12 }}>
                       <span style={{ color: '#888' }}>📤</span> <span style={{ fontWeight: 500 }}>{l.expediteurNom || l.clientNom}</span>
+                      {l.expediteurTel && <span style={{ fontSize: 10, color: '#888' }}> · {l.expediteurTel}</span>}
                       {l.expediteurPartenaire && <span style={{ fontSize: 10, color: '#1a3f6f' }}> · Partenaire</span>}
                       {l.expediteurClient && <span style={{ fontSize: 10, color: '#27500A' }}> · {l.expediteurClient.typeClient}</span>}
                     </div>
                     <div style={{ fontSize: 12, marginTop: 2 }}>
                       <span style={{ color: '#888' }}>📥</span> <span style={{ fontWeight: 500 }}>{l.destinataireNom || '—'}</span>
+                      {l.destinataireTel && <span style={{ fontSize: 10, color: '#888' }}> · {l.destinataireTel}</span>}
                       {l.destinatairePartenaire && <span style={{ fontSize: 10, color: '#1a3f6f' }}> · Partenaire</span>}
                       {l.destinataireClient && <span style={{ fontSize: 10, color: '#27500A' }}> · {l.destinataireClient.typeClient}</span>}
                     </div>
+                    {l.codeCertification && !l.codeVerifieLe && (
+                      <div style={{ fontSize: 11, color: '#E85D04', marginTop: 3, fontWeight: 600 }}>
+                        🔑 Code à donner au destinataire : {l.codeCertification}
+                      </div>
+                    )}
                     {l.lignesStock3PL?.length > 0 && (
                       <div style={{ fontSize: 10, color: '#E85D04', marginTop: 3 }}>
                         {l.lignesStock3PL.map((ln, i) => (

@@ -462,7 +462,7 @@ export default function CarteLivraison() {
                 ['Livreur', selected.chauffeur ? `${selected.chauffeur.prenom} ${selected.chauffeur.nom}` : '—'],
                 ['Montant', `${(selected.montant || 0).toLocaleString('fr')} FCFA`],
                 ['Statut', selected.statut?.replace('_', ' ')],
-                ['Code certification', selected.codeVerifieLe ? '✓ Vérifié' : (selected.codeCertification ? `•••${selected.codeCertification.slice(-1)}` : '—')],
+                ['Code certification', selected.codeVerifieLe ? `✓ Vérifié (${selected.codeCertification})` : (selected.codeCertification || '—')],
               ].map(([label, val]) => (
                 <div key={label} style={{ background: '#F7F7F5', borderRadius: 8, padding: '6px 10px' }}>
                   <div style={{ fontSize: 10, color: '#888' }}>{label}</div>
