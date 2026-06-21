@@ -36,8 +36,10 @@ export default function CarteLivraison() {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef({});
+  const itineraireLayerRef = useRef(null); // polyligne + marqueurs départ/arrivée du tracé sélectionné
   const [selected, setSelected] = useState(null);
   const [erreurCarte, setErreurCarte] = useState(false);
+  const [itineraireErreur, setItineraireErreur] = useState(null);
 
   const { data: statsData } = useQuery({
     queryKey: ['stats-liya'],
@@ -156,6 +158,57 @@ export default function CarteLivraison() {
     });
   }, [enRoute]);
 
+  // Tracer l'itinéraire réel (départ → arrivée) de la livraison sélectionnée.
+  // Nécessite que les deux points aient été géocodés à la création (latPrise/
+  // lonPrise/latDest/lonDest) — les livraisons créées avant cette fonctionnalité,
+  // ou avec une adresse tapée sans choisir de suggestion, n'ont pas ces coordonnées.
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+
+    // Toujours nettoyer le tracé précédent avant d'en afficher un nouveau (ou aucun)
+    if (itineraireLayerRef.current) {
+      itineraireLayerRef.current.forEach(layer => layer.remove());
+      itineraireLayerRef.current = null;
+    }
+    setItineraireErreur(null);
+
+    if (!selected) return;
+    const { latPrise, lonPrise, latDest, lonDest } = selected;
+    if (!latPrise || !lonPrise || !latDest || !lonDest) {
+      // Pas une erreur à proprement parler — juste pas de coordonnées disponibles
+      // (adresse saisie en texte libre sans passer par la recherche de lieu)
+      return;
+    }
+
+    import('leaflet').then(async L => {
+      try {
+        const res = await liyaAPI.itineraire(latPrise, lonPrise, latDest, lonDest);
+        const coords = res.geometrie.coordinates.map(([lon, lat]) => [lat, lon]); // GeoJSON = [lon,lat], Leaflet = [lat,lon]
+
+        const ligne = L.polyline(coords, { color: '#1a3f6f', weight: 4, opacity: 0.75 }).addTo(map);
+        const depart = L.circleMarker([latPrise, lonPrise], { radius: 7, color: 'white', weight: 2, fillColor: '#27500A', fillOpacity: 1 })
+          .bindPopup('📍 Départ').addTo(map);
+        const arrivee = L.circleMarker([latDest, lonDest], { radius: 7, color: 'white', weight: 2, fillColor: '#A32D2D', fillOpacity: 1 })
+          .bindPopup('🏁 Arrivée').addTo(map);
+
+        itineraireLayerRef.current = [ligne, depart, arrivee];
+        map.fitBounds(ligne.getBounds(), { padding: [40, 40] });
+      } catch (e) {
+        // Service indisponible (limite atteinte, coupure du serveur démo OSRM...) —
+        // ne bloque jamais l'affichage de la carte, juste pas de tracé pour cette fois.
+        setItineraireErreur('Itinéraire indisponible pour le moment');
+      }
+    });
+
+    return () => {
+      if (itineraireLayerRef.current) {
+        itineraireLayerRef.current.forEach(layer => layer.remove());
+        itineraireLayerRef.current = null;
+      }
+    };
+  }, [selected]);
+
   return (
     <div className="page-enter" style={{ height: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
@@ -267,6 +320,16 @@ export default function CarteLivraison() {
                 </div>
               ))}
             </div>
+            {(!selected.latPrise || !selected.latDest) && (
+              <div style={{ marginTop: 10, fontSize: 11, color: '#BA7517', background: '#FAEEDA', borderRadius: 6, padding: '6px 10px' }}>
+                ⚠ Itinéraire non tracé — l'adresse de départ et/ou d'arrivée n'a pas été localisée précisément (saisie en texte libre sans choisir de suggestion lors de la création).
+              </div>
+            )}
+            {itineraireErreur && selected.latPrise && selected.latDest && (
+              <div style={{ marginTop: 10, fontSize: 11, color: '#A32D2D', background: '#FCEBEB', borderRadius: 6, padding: '6px 10px' }}>
+                ⚠ {itineraireErreur} — le service de calcul d'itinéraire est temporairement indisponible.
+              </div>
+            )}
           </div>
           <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888' }}>✕</button>
         </div>

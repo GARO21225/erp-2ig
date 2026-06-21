@@ -4,6 +4,7 @@ import { liyaAPI, partenairesLiyaAPI } from '../../lib/api';
 import { Plus, X, Truck, CheckCircle } from 'lucide-react';
 import FilterBar from '../../components/ui/FilterBar';
 import ExportBar from '../../components/ui/ExportBar';
+import SelecteurAdresse from '../../components/ui/SelecteurAdresse';
 import { exportExcel, exportPDF, exportLivraisons } from '../../lib/export';
 
 const STATUT_MAP = {
@@ -23,7 +24,7 @@ function ModalCreateLivraison({ motos, onClose, onSave }) {
   const [quantiteSaisie, setQuantiteSaisie] = useState('');
   // Lignes déjà ajoutées au panier de cette livraison : [{ partenaireId, partenaireNom, stockClientId, article, quantite, unite, disponible }]
   const [lignesPanier, setLignesPanier] = useState([]);
-  const [form, setForm] = useState({ clientNom: '', clientTel: '', adressePrise: '', adresseLivraison: '', montant: '', typePaiement: 'ORANGE_MONEY', motoId: '', notes: '' });
+  const [form, setForm] = useState({ clientNom: '', clientTel: '', adressePrise: '', adresseLivraison: '', latPrise: null, lonPrise: null, latDest: null, lonDest: null, montant: '', typePaiement: 'ORANGE_MONEY', motoId: '', notes: '' });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const { data: stocks3pl = [] } = useQuery({
@@ -162,8 +163,16 @@ function ModalCreateLivraison({ motos, onClose, onSave }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div><label className="label">Nom client</label><input className="input" value={form.clientNom} onChange={e => set('clientNom', e.target.value)} /></div>
           <div><label className="label">Téléphone</label><input className="input" value={form.clientTel} onChange={e => set('clientTel', e.target.value)} /></div>
-          <div style={{ gridColumn: '1/-1' }}><label className="label">Adresse de prise en charge</label><input className="input" value={form.adressePrise} onChange={e => set('adressePrise', e.target.value)} /></div>
-          <div style={{ gridColumn: '1/-1' }}><label className="label">Adresse de livraison</label><input className="input" value={form.adresseLivraison} onChange={e => set('adresseLivraison', e.target.value)} /></div>
+          <div style={{ gridColumn: '1/-1' }}>
+            <SelecteurAdresse label="Adresse de prise en charge"
+              value={{ adresse: form.adressePrise, lat: form.latPrise, lon: form.lonPrise }}
+              onChange={({ adresse, lat, lon }) => setForm(f => ({ ...f, adressePrise: adresse, latPrise: lat, lonPrise: lon }))} />
+          </div>
+          <div style={{ gridColumn: '1/-1' }}>
+            <SelecteurAdresse label="Adresse de livraison"
+              value={{ adresse: form.adresseLivraison, lat: form.latDest, lon: form.lonDest }}
+              onChange={({ adresse, lat, lon }) => setForm(f => ({ ...f, adresseLivraison: adresse, latDest: lat, lonDest: lon }))} />
+          </div>
           <div><label className="label">Montant (FCFA)</label><input className="input" type="number" value={form.montant} onChange={e => set('montant', e.target.value)} /></div>
           <div><label className="label">Paiement</label>
             <select className="input" value={form.typePaiement} onChange={e => set('typePaiement', e.target.value)}>

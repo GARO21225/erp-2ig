@@ -98,7 +98,8 @@ router.post('/', auth, liya, async (req, res) => {
 
     const numero = `LY-${Date.now()}`;
     // Extraire uniquement les champs du modèle Livraison
-    const { clientNom, clientTel, adressePrise, adresseLivraison, montant, typePaiement, notes, lignesStock3PL } = req.body;
+    const { clientNom, clientTel, adressePrise, adresseLivraison, montant, typePaiement, notes, lignesStock3PL,
+      latPrise, lonPrise, latDest, lonDest } = req.body;
 
     // lignesStock3PL : tableau optionnel [{ partenaireId, stockClientId?, article, quantite, unite }]
     // Une livraison peut prendre des articles chez plusieurs partenaires différents.
@@ -127,6 +128,10 @@ router.post('/', auth, liya, async (req, res) => {
         clientTel: clientTel || '',
         adressePrise: adressePrise || '',
         adresseLivraison: adresseLivraison || '',
+        latPrise: latPrise !== undefined && latPrise !== '' ? Number(latPrise) : null,
+        lonPrise: lonPrise !== undefined && lonPrise !== '' ? Number(lonPrise) : null,
+        latDest: latDest !== undefined && latDest !== '' ? Number(latDest) : null,
+        lonDest: lonDest !== undefined && lonDest !== '' ? Number(lonDest) : null,
         montant: Number(montant || 0),
         typePaiement: typePaiement || null,
         notes: notes || null,

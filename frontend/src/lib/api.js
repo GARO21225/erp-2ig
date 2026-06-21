@@ -240,6 +240,8 @@ export const liyaAPI = {
   updateStatut: (id, statut) => api.put(`/liya/livraisons/${id}/statut`, { statut }),
   addPosition: (id, data) => api.post(`/liya/livraisons/${id}/position`, data),
   positions: (id) => api.get(`/liya/livraisons/${id}/positions`),
+  rechercheAdresse: (q) => api.get('/liya/geo/recherche-adresse', { params: { q } }),
+  itineraire: (fromLat, fromLon, toLat, toLon) => api.get('/liya/geo/itineraire', { params: { fromLat, fromLon, toLat, toLon } }),
 
   motos: () => api.get('/liya/motos'),
   motosTemplate: () => `${api.defaults.baseURL}/liya/motos/template`,
