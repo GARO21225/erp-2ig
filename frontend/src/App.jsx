@@ -35,6 +35,9 @@ import VentesPage from './pages/toptelsig/VentesPage';
 import DepensesPage from './pages/toptelsig/DepensesPage';
 import PrescripteursPage from './pages/toptelsig/PrescripteursPage';
 import CampagnesPage from './pages/toptelsig/CampagnesPage';
+import DashboardExperts from './pages/experts/DashboardExperts';
+import ExpertsPage from './pages/experts/ExpertsPage';
+import MissionsPage from './pages/experts/MissionsPage';
 import LivraisonsPage from './pages/liya/LivraisonsPage';
 import MotosPage from './pages/liya/MotosPage';
 import CarteLivraison from './pages/liya/CarteLivraison';
@@ -118,6 +121,9 @@ export default function App() {
             <Route path="toptelsig/depenses" element={<DepensesPage />} />
             <Route path="toptelsig/prescripteurs" element={<PrescripteursPage />} />
             <Route path="toptelsig/campagnes" element={<CampagnesPage />} />
+            <Route path="experts/dashboard" element={<DashboardExperts />} />
+            <Route path="experts/repertoire" element={<ExpertsPage />} />
+            <Route path="experts/missions" element={<MissionsPage />} />
             <Route path="liya/livraisons" element={<LivraisonsPage />} />
             <Route path="liya/motos" element={<MotosPage />} />
             <Route path="liya/carte" element={<CarteLivraison />} />

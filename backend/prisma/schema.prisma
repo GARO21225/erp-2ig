@@ -1574,3 +1574,44 @@ model RetourArticleYakro {
 
   @@map("retours_articles_yakro")
 }
+
+// ── EXPERTS — répertoire d'experts externes et suivi de missions ──────────
+// Module intégré depuis une branche de travail parallèle (Claude Code),
+// vérifié indépendant du reste du schéma (aucune relation vers Livraison,
+// Partenaire, ou les autres modèles de cette session).
+model Expert {
+  id          String          @id @default(cuid())
+  nom         String
+  prenom      String
+  specialite  String          @default("AUTRE")
+  cabinet     String?
+  telephone   String?
+  email       String?
+  numAgrement String?
+  tarifJour   Float?
+  statut      String          @default("ACTIF")
+  notes       String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  missions    MissionExpert[]
+
+  @@map("experts")
+}
+
+model MissionExpert {
+  id          String    @id @default(cuid())
+  expertId    String
+  expert      Expert    @relation(fields: [expertId], references: [id])
+  titre       String
+  projetNom   String?
+  description String?
+  dateDebut   DateTime?
+  dateFin     DateTime?
+  montant     Float?
+  statut      String    @default("EN_ATTENTE")
+  rapport     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("missions_expert")
+}

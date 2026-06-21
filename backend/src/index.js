@@ -60,6 +60,7 @@ app.use('/api/liya/partenaires', require('./routes/liya/partenaires'));
 app.use('/api/liya/clients',     require('./routes/liya/clients'));
 app.use('/api/liya/stock3pl',   require('./routes/liya/stock3pl'));
 app.use('/api/liya/geo',        require('./routes/liya/geo'));
+app.use('/api/experts',         require('./routes/experts'));
 
 // ── Health check
 app.get('/health', (_, res) => res.json({ status: 'ok', timestamp: new Date(), version: '2.0', env: process.env.NODE_ENV }));
