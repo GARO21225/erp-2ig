@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 const cron = require('node-cron');
 const logger = require('./lib/logger');
 const { backupPostgres, getBackupType } = require('./backup/backup-service');
+const runMigrations = require('./lib/migrate');
 require('dotenv').config();
 
 const app = express();
@@ -54,6 +55,7 @@ app.use('/api/toptelsig/crm', require('./routes/toptelsig/crm'));
 app.use('/api/toptelsig/depenses',      require('./routes/toptelsig/depenses'));
 app.use('/api/toptelsig/prescripteurs', require('./routes/toptelsig/prescripteurs'));
 app.use('/api/toptelsig/campagnes', require('./routes/toptelsig/campagnes'));
+app.use('/api/experts',         require('./routes/experts'));
 app.use('/api/liya/livraisons', require('./routes/liya/livraisons'));
 app.use('/api/liya/motos',      require('./routes/liya/motos'));
 app.use('/api/liya/partenaires', require('./routes/liya/partenaires'));
@@ -83,4 +85,8 @@ cron.schedule('0 3 * * *', async () => {
 }, { timezone: 'Africa/Abidjan' });
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, '0.0.0.0', () => logger.info(`🚀 ERP 2IG API v2.0 → port ${PORT} [${process.env.NODE_ENV}]`));
+runMigrations()
+  .catch(e => logger.error('Migrations échouées', { error: e.message }))
+  .finally(() => {
+    app.listen(PORT, '0.0.0.0', () => logger.info(`🚀 ERP 2IG API v2.0 → port ${PORT} [${process.env.NODE_ENV}]`));
+  });

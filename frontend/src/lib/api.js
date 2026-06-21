@@ -260,6 +260,19 @@ export const liyaAPI = {
   deleteStock3pl: (id) => api.delete(`/liya/stock3pl/${id}`),
 };
 
+// ── EXPERTS
+export const expertsAPI = {
+  list: (params) => api.get('/experts', { params }),
+  get: (id) => api.get(`/experts/${id}`),
+  stats: () => api.get('/experts/stats'),
+  create: (data) => api.post('/experts', data),
+  update: (id, data) => api.put(`/experts/${id}`, data),
+  delete: (id) => api.delete(`/experts/${id}`),
+  missions: (params) => api.get('/experts/missions/all', { params }),
+  createMission: (expertId, data) => api.post(`/experts/${expertId}/missions`, data),
+  updateMission: (missionId, data) => api.put(`/experts/missions/${missionId}`, data),
+};
+
 export default api;
 
 // ── RECHERCHE GLOBALE
