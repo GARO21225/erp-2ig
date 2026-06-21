@@ -1039,8 +1039,40 @@ model Livraison {
   moto            Moto?    @relation(fields: [motoId], references: [id])
   chauffeurId     String?
   chauffeur       Employe? @relation(fields: [chauffeurId], references: [id])
+  // Position de cette course dans la file du livreur assigné — permet
+  // d'empiler plusieurs courses sur un même livreur déjà "En route" sans
+  // attendre qu'il finisse la précédente (demande explicite : "le livreur
+  // peut être en route puis on va lui demander d'aller faire une autre
+  // course"). Plus la valeur est petite, plus la course est prioritaire.
+  // Null = pas encore dans une file (pas assigné, ou déjà terminée).
+  ordreFile       Int?
+
+  // ── DÉPRÉCIÉ — conservé uniquement pour les livraisons créées avant
+  // le modèle expéditeur/destinataire. Ne plus utiliser pour les nouvelles
+  // courses ; lire expediteurNom/destinataireNom à la place.
   clientNom       String
   clientTel       String
+
+  // ── EXPÉDITEUR (celui qui remet le colis) — peut être un Partenaire
+  // (boutique/pharmacie avec stock), un ClientLiYA (client récurrent sans
+  // stock, ex: une administration), ou un particulier ponctuel (texte
+  // libre, aucune des deux relations remplie). Edgar a explicitement
+  // demandé que les 3 cas soient possibles pour expéditeur ET destinataire.
+  expediteurPartenaireId  String?
+  expediteurPartenaire    Partenaire?  @relation("PartenaireExpediteur", fields: [expediteurPartenaireId], references: [id])
+  expediteurClientId      String?
+  expediteurClient        ClientLiYA?  @relation("ClientExpediteur", fields: [expediteurClientId], references: [id])
+  expediteurNom           String?      // rempli systématiquement (dénormalisé depuis la relation, ou saisi si particulier)
+  expediteurTel           String?
+
+  // ── DESTINATAIRE (celui qui reçoit le colis) — même principe
+  destinatairePartenaireId String?
+  destinatairePartenaire   Partenaire?  @relation("PartenaireDestinataire", fields: [destinatairePartenaireId], references: [id])
+  destinataireClientId     String?
+  destinataireClient       ClientLiYA?  @relation("ClientDestinataire", fields: [destinataireClientId], references: [id])
+  destinataireNom          String?
+  destinataireTel          String?
+
   adressePrise    String
   adresseLivraison String
   latPrise        Float?
@@ -1055,6 +1087,20 @@ model Livraison {
   dateFin         DateTime?
   distance        Float?   // en km
   notes           String?
+
+  // ── Traçabilité façon Glovo : preuve photo à chaque étape + code de
+  // certification à la remise. Le code est généré automatiquement par le
+  // système à la création de la course, transmis au destinataire (par SMS
+  // — à connecter à un vrai fournisseur SMS plus tard, pour l'instant
+  // affiché à l'écran pour transmission manuelle), et c'est le DESTINATAIRE
+  // qui le communique oralement au livreur, qui le saisit pour valider :
+  // la saisie correcte du code EST l'action qui marque la livraison comme
+  // terminée (pas une simple confirmation à côté du statut LIVRE).
+  photoPriseEnCharge  String?  // URL du document GED (entiteType='Livraison', type='PHOTO')
+  photoLivraison      String?
+  codeCertification   String?  // généré à la création, ex: 4 chiffres
+  codeVerifieLe       DateTime?
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -1174,8 +1220,35 @@ model Partenaire {
 
   stocks3pl    StockClient3PL[]
   lignesLivraison3PL LigneLivraison3PL[]
+  livraisonsExpediteur   Livraison[] @relation("PartenaireExpediteur")
+  livraisonsDestinataire Livraison[] @relation("PartenaireDestinataire")
 
   @@map("partenaires")
+}
+
+// Client récurrent LiYA SANS stock (ex: une administration qui se fait
+// livrer des repas régulièrement). Volontairement séparé de Partenaire :
+// décision explicite d'Edgar de ne JAMAIS mélanger les deux notions —
+// Partenaire = a du stock 3PL déposé chez LiYA, ClientLiYA = relation
+// commerciale récurrente sans aucun stock. Un même tiers ne peut pas être
+// les deux à la fois dans ce modèle.
+model ClientLiYA {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  nom          String
+  typeClient   String   @default("ENTREPRISE") // ENTREPRISE, ADMINISTRATION, PARTICULIER, AUTRE
+  telephone    String
+  email        String?
+  adresse      String?
+  actif        Boolean  @default(true)
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  livraisonsExpediteur  Livraison[] @relation("ClientExpediteur")
+  livraisonsDestinataire Livraison[] @relation("ClientDestinataire")
+
+  @@map("clients_liya")
 }
 
 // ── CRM COMMERCIAL TOPTELSIG ─────────────────────────────────────

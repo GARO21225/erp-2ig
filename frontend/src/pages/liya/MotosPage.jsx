@@ -275,7 +275,16 @@ export default function MotosPage() {
                   <span style={{ color: '#A32D2D', fontWeight: 500 }}>{m.cout?.toLocaleString('fr')} F · {new Date(m.date).toLocaleDateString('fr')}</span>
                 </div>
               ))}
-              {(!histo?.pleins?.length && !histo?.maintenances?.length) && <div style={{ textAlign: 'center', color: '#ccc', padding: 30, fontSize: 13 }}>Aucun historique</div>}
+              {histo?.livraisons?.length > 0 && (
+                <div style={{ fontSize: 11, color: '#888', fontWeight: 600, marginTop: 10, marginBottom: 2 }}>COURSES RÉCENTES</div>
+              )}
+              {histo?.livraisons?.slice(0, 8).map(l => (
+                <div key={l.numero} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '0.5px solid #f0efe9', fontSize: 12 }}>
+                  <span>🛵 {l.numero} · {l.expediteurNom || l.clientNom}</span>
+                  <span style={{ color: '#1a3f6f' }}>{l.statut} · {new Date(l.createdAt).toLocaleDateString('fr')}</span>
+                </div>
+              ))}
+              {(!histo?.pleins?.length && !histo?.maintenances?.length && !histo?.livraisons?.length) && <div style={{ textAlign: 'center', color: '#ccc', padding: 30, fontSize: 13 }}>Aucun historique</div>}
             </div>
           </div>
         </div>

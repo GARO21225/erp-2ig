@@ -170,7 +170,7 @@ router.get('/:id/historique', auth, liya, async (req, res) => {
       prisma.pleinCarburant.findMany({ where: { motoId: req.params.id }, orderBy: { date: 'desc' } }),
       prisma.livraison.findMany({
         where: { motoId: req.params.id }, orderBy: { createdAt: 'desc' }, take: 20,
-        select: { numero: true, statut: true, clientNom: true, createdAt: true, montant: true }
+        select: { numero: true, statut: true, clientNom: true, expediteurNom: true, destinataireNom: true, createdAt: true, montant: true }
       }),
     ]);
     res.json({ maintenances, pleins, livraisons });

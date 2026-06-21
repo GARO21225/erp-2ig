@@ -57,6 +57,7 @@ app.use('/api/toptelsig/campagnes', require('./routes/toptelsig/campagnes'));
 app.use('/api/liya/livraisons', require('./routes/liya/livraisons'));
 app.use('/api/liya/motos',      require('./routes/liya/motos'));
 app.use('/api/liya/partenaires', require('./routes/liya/partenaires'));
+app.use('/api/liya/clients',     require('./routes/liya/clients'));
 app.use('/api/liya/stock3pl',   require('./routes/liya/stock3pl'));
 app.use('/api/liya/geo',        require('./routes/liya/geo'));
 

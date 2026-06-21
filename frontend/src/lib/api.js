@@ -237,11 +237,17 @@ export const liyaAPI = {
   exportLivraisonsXlsx: (params) => `${api.defaults.baseURL}/liya/livraisons/export?${new URLSearchParams(params || {}).toString()}`,
   stats: () => api.get('/liya/livraisons/stats'),
   createLivraison: (data) => api.post('/liya/livraisons', data),
-  updateStatut: (id, statut) => api.put(`/liya/livraisons/${id}/statut`, { statut }),
+  updateStatut: (id, statut, extra = {}) => api.put(`/liya/livraisons/${id}/statut`, { statut, ...extra }),
+  verifierCode: (id, code) => api.post(`/liya/livraisons/${id}/verifier-code`, { code }),
+  updateLivraison: (id, data) => api.put(`/liya/livraisons/${id}`, data),
+  deleteLivraison: (id) => api.delete(`/liya/livraisons/${id}`),
+  assignerMasse: (livraisonIds, chauffeurId, motoId) => api.put('/liya/livraisons/assigner-masse', { livraisonIds, chauffeurId, motoId }),
+  modifierMasse: (livraisonIds, data) => api.put('/liya/livraisons/modifier-masse', { livraisonIds, ...data }),
   addPosition: (id, data) => api.post(`/liya/livraisons/${id}/position`, data),
   positions: (id) => api.get(`/liya/livraisons/${id}/positions`),
   rechercheAdresse: (q) => api.get('/liya/geo/recherche-adresse', { params: { q } }),
   itineraire: (fromLat, fromLon, toLat, toLon) => api.get('/liya/geo/itineraire', { params: { fromLat, fromLon, toLat, toLon } }),
+  fileCourses: (chauffeurId) => api.get(`/liya/livraisons/file/${chauffeurId}`),
 
   motos: () => api.get('/liya/motos'),
   motosTemplate: () => `${api.defaults.baseURL}/liya/motos/template`,
@@ -336,6 +342,13 @@ export const partenairesLiyaAPI = {
   create: (data) => api.post('/liya/partenaires', data),
   update: (id, data) => api.put(`/liya/partenaires/${id}`, data),
   delete: (id) => api.delete(`/liya/partenaires/${id}`),
+};
+
+export const clientsLiyaAPI = {
+  list: (params) => api.get('/liya/clients', { params }),
+  create: (data) => api.post('/liya/clients', data),
+  update: (id, data) => api.put(`/liya/clients/${id}`, data),
+  delete: (id) => api.delete(`/liya/clients/${id}`),
 };
 
 export const facturationAPI = {

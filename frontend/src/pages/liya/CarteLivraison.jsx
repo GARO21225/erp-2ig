@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { liyaAPI } from '../../lib/api';
+import { liyaAPI, employesAPI } from '../../lib/api';
 import { MapPin, Truck, Navigation, Clock, CheckCircle, XCircle } from 'lucide-react';
 
 // Leaflet CSS via CDN injection
@@ -19,27 +19,55 @@ const STATUT_COULEUR = {
   EN_ATTENTE:      '#888780',
   PRISE_EN_CHARGE: '#1a3f6f',
   EN_ROUTE:        '#E85D04',
-  LIVREE:          '#27500A',
+  LIVRE:           '#27500A',
   ECHEC:           '#A32D2D',
-  ANNULEE:         '#888780',
+  ANNULE:          '#888780',
 };
 
 const STATUT_ICONE = {
   EN_ROUTE:  '🛵',
-  LIVREE:    '✅',
+  LIVRE:     '✅',
   ECHEC:     '❌',
   EN_ATTENTE:'⏳',
+  PRISE_EN_CHARGE: '📦',
+  ANNULE:    '✖',
 };
+
+// Zones arbitraires — notion inventée pour permettre le filtrage demandé,
+// le système n'a pas de découpage administratif réel. Quadrillage simple
+// autour du centre de Yamoussoukro (6.8276, -5.2893), 4 quadrants nommés
+// par point cardinal. Approximatif par construction : sert à filtrer
+// grossièrement, pas à délimiter une zone de livraison officielle.
+const CENTRE_VILLE = { lat: 6.8276, lon: -5.2893 };
+function zoneDe(lat, lon) {
+  if (lat == null || lon == null) return null;
+  const nord = lat >= CENTRE_VILLE.lat;
+  const est = lon >= CENTRE_VILLE.lon;
+  if (nord && est) return 'Nord-Est';
+  if (nord && !est) return 'Nord-Ouest';
+  if (!nord && est) return 'Sud-Est';
+  return 'Sud-Ouest';
+}
+const ZONES = ['Nord-Est', 'Nord-Ouest', 'Sud-Est', 'Sud-Ouest'];
 
 export default function CarteLivraison() {
   useLeafletCSS();
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef({});
+  const tracesHistoriqueRef = useRef([]); // polylignes des parcours historiques affichés
   const itineraireLayerRef = useRef(null); // polyligne + marqueurs départ/arrivée du tracé sélectionné
   const [selected, setSelected] = useState(null);
   const [erreurCarte, setErreurCarte] = useState(false);
   const [itineraireErreur, setItineraireErreur] = useState(null);
+
+  // Filtres pour l'historique des parcours
+  const [filtreChauffeurId, setFiltreChauffeurId] = useState('');
+  const [filtreZone, setFiltreZone] = useState('');
+  const [filtreHeureDebut, setFiltreHeureDebut] = useState('');
+  const [filtreHeureFin, setFiltreHeureFin] = useState('');
+  const [filtreDate, setFiltreDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [afficherHistorique, setAfficherHistorique] = useState(false);
 
   const { data: statsData } = useQuery({
     queryKey: ['stats-liya'],
@@ -53,15 +81,40 @@ export default function CarteLivraison() {
     refetchInterval: 10000,
   });
 
+  // Historique complet du jour sélectionné — utilisé pour la liste latérale
+  // ET pour le mode "voir tous les parcours" avec filtres heure/livreur/zone.
   const { data: toutesLivraisons } = useQuery({
-    queryKey: ['livraisons-liste-carte'],
-    queryFn: () => liyaAPI.livraisons({ limit: 20 }),
+    queryKey: ['livraisons-liste-carte', filtreDate, filtreChauffeurId],
+    queryFn: () => liyaAPI.livraisons({ date: filtreDate, chauffeurId: filtreChauffeurId || undefined, limit: 200 }),
     refetchInterval: 15000,
   });
 
+  const { data: livreursData } = useQuery({
+    queryKey: ['employes-liya-filtre-carte'],
+    queryFn: () => employesAPI.list({ filiale: 'LIYA', statut: 'ACTIF', limit: 50 }),
+    staleTime: 5 * 60000,
+  });
+  const listeLivreurs = Array.isArray(livreursData) ? livreursData : (livreursData?.data || []);
+
   const enRoute = livraisonsData?.data || [];
-  const toutes = toutesLivraisons?.data || [];
+  const toutesBrutes = toutesLivraisons?.data || [];
   const stats = statsData || {};
+
+  // Filtre zone/heure côté frontend — chauffeurId est déjà filtré côté
+  // backend (paramètre supporté par GET /), pas besoin de le refaire ici.
+  const toutes = toutesBrutes.filter(l => {
+    if (filtreZone) {
+      const zoneDepart = zoneDe(l.latPrise, l.lonPrise);
+      const zoneArrivee = zoneDe(l.latDest, l.lonDest);
+      if (zoneDepart !== filtreZone && zoneArrivee !== filtreZone) return false;
+    }
+    if (filtreHeureDebut || filtreHeureFin) {
+      const heure = new Date(l.createdAt).getHours() + new Date(l.createdAt).getMinutes() / 60;
+      if (filtreHeureDebut && heure < parseFloat(filtreHeureDebut)) return false;
+      if (filtreHeureFin && heure > parseFloat(filtreHeureFin)) return false;
+    }
+    return true;
+  });
 
   // Initialiser la carte Leaflet
   useEffect(() => {
@@ -209,6 +262,49 @@ export default function CarteLivraison() {
     };
   }, [selected]);
 
+  // Affichage de l'ensemble des parcours filtrés (mode "historique"). Pour
+  // ne pas multiplier les appels au service d'itinéraire (limite 1 req/s,
+  // potentiellement des dizaines de trajets affichés à la fois), ces tracés
+  // sont des lignes droites départ→arrivée — une vue d'ensemble, pas le
+  // tracé routier exact de chacun (réservé au mode "sélection unique"
+  // ci-dessus, qui lui appelle le vrai service de routing).
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+
+    tracesHistoriqueRef.current.forEach(layer => layer.remove());
+    tracesHistoriqueRef.current = [];
+
+    if (!afficherHistorique) return;
+
+    import('leaflet').then(L => {
+      const tracable = toutes.filter(l => l.latPrise && l.lonPrise && l.latDest && l.lonDest);
+      tracable.forEach(l => {
+        const couleur = STATUT_COULEUR[l.statut] || '#888';
+        const ligne = L.polyline(
+          [[l.latPrise, l.lonPrise], [l.latDest, l.lonDest]],
+          { color: couleur, weight: 2, opacity: 0.5, dashArray: '4,6' }
+        ).addTo(map).bindPopup(`
+          <div style="font-family:DM Sans,sans-serif;font-size:12px">
+            <strong>${l.numero}</strong><br/>
+            ${l.expediteurNom || l.clientNom || '—'} → ${l.destinataireNom || '—'}<br/>
+            ${new Date(l.createdAt).toLocaleString('fr')}
+          </div>
+        `);
+        tracesHistoriqueRef.current.push(ligne);
+      });
+      if (tracable.length > 0) {
+        const group = L.featureGroup(tracesHistoriqueRef.current);
+        map.fitBounds(group.getBounds(), { padding: [30, 30] });
+      }
+    });
+
+    return () => {
+      tracesHistoriqueRef.current.forEach(layer => layer.remove());
+      tracesHistoriqueRef.current = [];
+    };
+  }, [afficherHistorique, toutes]);
+
   return (
     <div className="page-enter" style={{ height: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
@@ -233,6 +329,57 @@ export default function CarteLivraison() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Filtres parcours / historique */}
+      <div className="card" style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <button
+          onClick={() => setAfficherHistorique(v => !v)}
+          className="btn btn-sm"
+          style={{
+            background: afficherHistorique ? '#1a3f6f' : '#F1EFE8',
+            color: afficherHistorique ? 'white' : '#666',
+            border: 'none', fontSize: 11, fontWeight: 600,
+          }}>
+          {afficherHistorique ? '🗺 Tous les parcours (actif)' : '🗺 Voir tous les parcours'}
+        </button>
+
+        <input type="date" className="input" style={{ width: 140, fontSize: 12 }}
+          value={filtreDate} onChange={e => setFiltreDate(e.target.value)} />
+
+        <select className="input" style={{ width: 150, fontSize: 12 }}
+          value={filtreChauffeurId} onChange={e => setFiltreChauffeurId(e.target.value)}>
+          <option value="">Tous les livreurs</option>
+          {listeLivreurs.map(l => <option key={l.id} value={l.id}>{l.prenom} {l.nom}</option>)}
+        </select>
+
+        <select className="input" style={{ width: 130, fontSize: 12 }}
+          value={filtreZone} onChange={e => setFiltreZone(e.target.value)}>
+          <option value="">Toutes les zones</option>
+          {ZONES.map(z => <option key={z} value={z}>{z}</option>)}
+        </select>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#888' }}>
+          <Clock size={12} />
+          <input type="number" min="0" max="23" placeholder="0h" className="input" style={{ width: 50, fontSize: 12, padding: '6px 8px' }}
+            value={filtreHeureDebut} onChange={e => setFiltreHeureDebut(e.target.value)} />
+          <span>—</span>
+          <input type="number" min="0" max="23" placeholder="23h" className="input" style={{ width: 50, fontSize: 12, padding: '6px 8px' }}
+            value={filtreHeureFin} onChange={e => setFiltreHeureFin(e.target.value)} />
+        </div>
+
+        {(filtreChauffeurId || filtreZone || filtreHeureDebut || filtreHeureFin) && (
+          <button onClick={() => { setFiltreChauffeurId(''); setFiltreZone(''); setFiltreHeureDebut(''); setFiltreHeureFin(''); }}
+            style={{ fontSize: 11, color: '#A32D2D', background: 'none', border: 'none', cursor: 'pointer' }}>
+            Réinitialiser
+          </button>
+        )}
+
+        {afficherHistorique && (
+          <span style={{ fontSize: 11, color: '#888', marginLeft: 'auto' }}>
+            {toutes.filter(l => l.latPrise && l.latDest).length} parcours affiché(s) sur {toutes.length} course(s) du jour
+          </span>
+        )}
       </div>
 
       {/* Carte + sidebar */}
@@ -266,7 +413,7 @@ export default function CarteLivraison() {
         {/* Liste livraisons */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto' }}>
           <div style={{ fontFamily: 'Syne', fontWeight: 700, fontSize: 13, color: '#1a1a1a' }}>
-            Livraisons récentes
+            {afficherHistorique ? 'Parcours filtrés' : 'Livraisons récentes'}
           </div>
           {toutes?.map(l => (
             <div key={l.id}
@@ -282,7 +429,7 @@ export default function CarteLivraison() {
                   {STATUT_ICONE[l.statut] || '•'} {l.statut?.replace('_', ' ')}
                 </span>
               </div>
-              <div style={{ fontSize: 12, fontWeight: 500 }}>{l.clientNom}</div>
+              <div style={{ fontSize: 12, fontWeight: 500 }}>{l.expediteurNom || l.clientNom} → {l.destinataireNom || '—'}</div>
               <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{l.adresseLivraison}</div>
               <div style={{ fontSize: 11, color: '#E85D04', marginTop: 4, fontWeight: 600 }}>
                 {(l.montant || 0).toLocaleString('fr')} FCFA
@@ -305,14 +452,17 @@ export default function CarteLivraison() {
             <div style={{ fontFamily: 'Syne', fontWeight: 700, fontSize: 14, marginBottom: 8, color: '#E85D04' }}>{selected.numero}</div>
             <div style={{ display: 'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap: 12 }}>
               {[
-                ['Client', selected.clientNom],
-                ['Téléphone', selected.clientTel],
+                ['Expéditeur', selected.expediteurNom || selected.clientNom],
+                ['Tél. expéditeur', selected.expediteurTel || selected.clientTel],
+                ['Destinataire', selected.destinataireNom || '—'],
+                ['Tél. destinataire', selected.destinataireTel || '—'],
                 ['Départ', selected.adressePrise],
                 ['Destination', selected.adresseLivraison],
                 ['Moto', selected.moto?.immatriculation || '—'],
                 ['Livreur', selected.chauffeur ? `${selected.chauffeur.prenom} ${selected.chauffeur.nom}` : '—'],
                 ['Montant', `${(selected.montant || 0).toLocaleString('fr')} FCFA`],
                 ['Statut', selected.statut?.replace('_', ' ')],
+                ['Code certification', selected.codeVerifieLe ? '✓ Vérifié' : (selected.codeCertification ? `•••${selected.codeCertification.slice(-1)}` : '—')],
               ].map(([label, val]) => (
                 <div key={label} style={{ background: '#F7F7F5', borderRadius: 8, padding: '6px 10px' }}>
                   <div style={{ fontSize: 10, color: '#888' }}>{label}</div>

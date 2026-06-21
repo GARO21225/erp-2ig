@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { liyaAPI, partenairesLiyaAPI } from '../../lib/api';
-import { Plus, X, Truck, CheckCircle } from 'lucide-react';
+import { liyaAPI, partenairesLiyaAPI, documentsAPI, employesAPI } from '../../lib/api';
+import { Plus, X, Truck, CheckCircle, Camera, Edit2, Trash2, Users } from 'lucide-react';
 import FilterBar from '../../components/ui/FilterBar';
 import ExportBar from '../../components/ui/ExportBar';
 import SelecteurAdresse from '../../components/ui/SelecteurAdresse';
+import SelecteurTiers from '../../components/ui/SelecteurTiers';
 import { exportExcel, exportPDF, exportLivraisons } from '../../lib/export';
 
 const STATUT_MAP = {
@@ -16,6 +17,207 @@ const STATUT_MAP = {
   ANNULE: { label: 'Annulé', badge: 'badge-red', color: '#A32D2D' },
 };
 
+// ── Modal Photo d'étape (prise en charge OU livraison) ─────────────────────
+// Capture photo obligatoire à chaque étape clé, comme demandé ("comme Glovo
+// lorsque le colis est pris le livreur fait une photo"). capture="environment"
+// ouvre directement l'appareil photo arrière sur mobile, pas juste la galerie.
+function ModalPhotoEtape({ livraison, etape, onClose, onValide }) {
+  const [fichier, setFichier] = useState(null);
+  const [apercu, setApercu] = useState(null);
+  const [envoiEnCours, setEnvoiEnCours] = useState(false);
+  const [erreur, setErreur] = useState(null);
+
+  const titre = etape === 'prise' ? '📸 Photo de prise en charge' : '📸 Photo de livraison';
+  const consigne = etape === 'prise'
+    ? `Prenez en photo le colis remis par ${livraison.expediteurNom || livraison.clientNom}`
+    : `Prenez en photo le colis remis à ${livraison.destinataireNom || '—'}`;
+
+  const handleFichier = (f) => {
+    setFichier(f);
+    setApercu(f ? URL.createObjectURL(f) : null);
+  };
+
+  const valider = async () => {
+    if (!fichier) return;
+    setEnvoiEnCours(true); setErreur(null);
+    try {
+      const formData = new FormData();
+      formData.append('fichier', fichier);
+      formData.append('entiteType', 'Livraison');
+      formData.append('entiteId', livraison.id);
+      formData.append('type', 'PHOTO');
+      formData.append('nom', `${etape === 'prise' ? 'Prise en charge' : 'Livraison'} ${livraison.numero}`);
+      const doc = await documentsAPI.upload(formData);
+      onValide(doc.url);
+    } catch (e) {
+      setErreur('Échec de l\'envoi de la photo — réessayez ou vérifiez votre connexion.');
+    } finally {
+      setEnvoiEnCours(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+          <h3 style={{ margin: 0, fontFamily: 'Syne', fontSize: 15 }}>{titre}</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+        </div>
+        <p style={{ fontSize: 12, color: '#888', marginBottom: 14 }}>{consigne}</p>
+
+        {apercu ? (
+          <img src={apercu} alt="Aperçu" style={{ width: '100%', borderRadius: 8, marginBottom: 12, maxHeight: 280, objectFit: 'cover' }} />
+        ) : (
+          <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '30px 10px', border: '2px dashed #e8e7e1', borderRadius: 10, cursor: 'pointer', marginBottom: 12 }}>
+            <Camera size={28} color="#ccc" />
+            <span style={{ fontSize: 12, color: '#888' }}>Prendre une photo</span>
+            <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+              onChange={e => handleFichier(e.target.files?.[0] || null)} />
+          </label>
+        )}
+
+        {erreur && <div style={{ fontSize: 11, color: '#A32D2D', marginBottom: 10 }}>{erreur}</div>}
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          {apercu && <button className="btn btn-ghost btn-sm" onClick={() => handleFichier(null)}>Refaire</button>}
+          <button className="btn btn-sm" style={{ background: '#1a3f6f', color: 'white', border: 'none' }}
+            disabled={!fichier || envoiEnCours} onClick={valider}>
+            {envoiEnCours ? 'Envoi...' : 'Valider'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Modal Code de certification ─────────────────────────────────────────────
+// La saisie correcte du code EST l'action qui termine la course (demande
+// explicite d'Edgar) — pas une confirmation séparée. Le destinataire reçoit
+// le code (par SMS à terme — pour l'instant affiché à l'écran pour
+// transmission manuelle) et le communique oralement au livreur.
+function ModalCodeLivraison({ livraison, onClose, onValide, loading, erreurServeur }) {
+  const [code, setCode] = useState('');
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+          <h3 style={{ margin: 0, fontFamily: 'Syne', fontSize: 15 }}>🔑 Code de certification</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+        </div>
+        <p style={{ fontSize: 12, color: '#888', marginBottom: 14 }}>
+          Demandez le code à <strong>{livraison.destinataireNom || 'le destinataire'}</strong> pour confirmer la remise du colis.
+        </p>
+        <input className="input" placeholder="Code à 4 chiffres" value={code} maxLength={4}
+          onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
+          style={{ textAlign: 'center', fontSize: 22, fontWeight: 700, letterSpacing: 6 }} />
+        {erreurServeur && <div style={{ fontSize: 11, color: '#A32D2D', marginTop: 8 }}>{erreurServeur}</div>}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>Annuler</button>
+          <button className="btn btn-sm" style={{ background: '#27500A', color: 'white', border: 'none' }}
+            disabled={code.length !== 4 || loading} onClick={() => onValide(code)}>
+            {loading ? 'Vérification...' : 'Confirmer la livraison'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Modal Modifier une livraison ────────────────────────────────────────────
+// Édition simple des infos (hors statut, qui garde sa logique propre avec
+// code/photo). Permet de corriger une erreur de saisie sans devoir annuler
+// et recréer toute la course.
+function ModalEditLivraison({ livraison, motos, onClose, onSave, loading }) {
+  const [form, setForm] = useState({
+    adressePrise: livraison.adressePrise || '', adresseLivraison: livraison.adresseLivraison || '',
+    montant: livraison.montant || '', typePaiement: livraison.typePaiement || 'ORANGE_MONEY',
+    motoId: livraison.motoId || '', notes: livraison.notes || '',
+    expediteurNom: livraison.expediteurNom || livraison.clientNom || '', expediteurTel: livraison.expediteurTel || livraison.clientTel || '',
+    destinataireNom: livraison.destinataireNom || '', destinataireTel: livraison.destinataireTel || '',
+  });
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+          <h3 style={{ margin: 0, fontFamily: 'Syne', fontSize: 16 }}>Modifier {livraison.numero}</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div><label className="label">Expéditeur</label><input className="input" value={form.expediteurNom} onChange={e => set('expediteurNom', e.target.value)} /></div>
+          <div><label className="label">Tél. expéditeur</label><input className="input" value={form.expediteurTel} onChange={e => set('expediteurTel', e.target.value)} /></div>
+          <div><label className="label">Destinataire</label><input className="input" value={form.destinataireNom} onChange={e => set('destinataireNom', e.target.value)} /></div>
+          <div><label className="label">Tél. destinataire</label><input className="input" value={form.destinataireTel} onChange={e => set('destinataireTel', e.target.value)} /></div>
+          <div style={{ gridColumn: '1/-1' }}><label className="label">Adresse de prise en charge</label><input className="input" value={form.adressePrise} onChange={e => set('adressePrise', e.target.value)} /></div>
+          <div style={{ gridColumn: '1/-1' }}><label className="label">Adresse de livraison</label><input className="input" value={form.adresseLivraison} onChange={e => set('adresseLivraison', e.target.value)} /></div>
+          <div><label className="label">Montant (FCFA)</label><input className="input" type="number" value={form.montant} onChange={e => set('montant', e.target.value)} /></div>
+          <div><label className="label">Paiement</label>
+            <select className="input" value={form.typePaiement} onChange={e => set('typePaiement', e.target.value)}>
+              {['ESPECES', 'ORANGE_MONEY', 'WAVE', 'MTN_MONEY'].map(t => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
+            </select>
+          </div>
+          <div style={{ gridColumn: '1/-1' }}><label className="label">Moto</label>
+            <select className="input" value={form.motoId} onChange={e => set('motoId', e.target.value)}>
+              <option value="">Non assignée</option>
+              {(motos || []).map(m => <option key={m.id} value={m.id}>{m.immatriculation} — {m.marque}</option>)}
+            </select>
+          </div>
+          <div style={{ gridColumn: '1/-1' }}><label className="label">Notes</label><input className="input" value={form.notes} onChange={e => set('notes', e.target.value)} /></div>
+        </div>
+        <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>Annuler</button>
+          <button className="btn btn-sm" style={{ background: '#1a3f6f', color: 'white', border: 'none' }} disabled={loading}
+            onClick={() => onSave({ ...form, montant: Number(form.montant) })}>
+            {loading ? '...' : 'Enregistrer'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Modal Assigner en masse ──────────────────────────────────────────────────
+function ModalAssignerMasse({ nbSelection, onClose, onSave, loading }) {
+  const [chauffeurId, setChauffeurId] = useState('');
+  const [motoId, setMotoId] = useState('');
+  const { data: livreurs = [] } = useQuery({ queryKey: ['employes-liya-livreurs'], queryFn: () => employesAPI.list({ filiale: 'LIYA', statut: 'ACTIF', limit: 50 }) });
+  const { data: motosDispo = [] } = useQuery({ queryKey: ['motos-dispo-masse'], queryFn: () => liyaAPI.motos() });
+  const listeLivreurs = Array.isArray(livreurs) ? livreurs : (livreurs?.data || []);
+  const listeMotos = (Array.isArray(motosDispo) ? motosDispo : (motosDispo?.data || [])).filter(m => m.statut === 'DISPONIBLE');
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+          <h3 style={{ margin: 0, fontFamily: 'Syne', fontSize: 15 }}><Users size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} />Assigner {nbSelection} livraison(s)</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+        </div>
+        <p style={{ fontSize: 12, color: '#888', marginBottom: 14 }}>
+          Les livraisons sélectionnées seront ajoutées à la file de ce livreur, dans l'ordre.
+        </p>
+        <label className="label">Livreur *</label>
+        <select className="input" value={chauffeurId} onChange={e => setChauffeurId(e.target.value)} style={{ marginBottom: 10 }}>
+          <option value="">Sélectionner...</option>
+          {listeLivreurs.map(l => <option key={l.id} value={l.id}>{l.prenom} {l.nom}</option>)}
+        </select>
+        <label className="label">Moto (optionnel)</label>
+        <select className="input" value={motoId} onChange={e => setMotoId(e.target.value)}>
+          <option value="">Ne pas changer</option>
+          {listeMotos.map(m => <option key={m.id} value={m.id}>{m.immatriculation} — {m.marque}</option>)}
+        </select>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 18 }}>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>Annuler</button>
+          <button className="btn btn-sm" style={{ background: '#1a3f6f', color: 'white', border: 'none' }}
+            disabled={!chauffeurId || loading} onClick={() => onSave(chauffeurId, motoId)}>
+            {loading ? '...' : 'Assigner'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ModalCreateLivraison({ motos, onClose, onSave }) {
   const [clientType, setClientType] = useState('ordinaire'); // 'ordinaire' | 'stock3pl'
   // Étape d'ajout d'une nouvelle ligne (panier multi-partenaires)
@@ -24,7 +226,12 @@ function ModalCreateLivraison({ motos, onClose, onSave }) {
   const [quantiteSaisie, setQuantiteSaisie] = useState('');
   // Lignes déjà ajoutées au panier de cette livraison : [{ partenaireId, partenaireNom, stockClientId, article, quantite, unite, disponible }]
   const [lignesPanier, setLignesPanier] = useState([]);
-  const [form, setForm] = useState({ clientNom: '', clientTel: '', adressePrise: '', adresseLivraison: '', latPrise: null, lonPrise: null, latDest: null, lonDest: null, montant: '', typePaiement: 'ORANGE_MONEY', motoId: '', notes: '' });
+  const [form, setForm] = useState({
+    expediteur: { partenaireId: null, clientId: null, nom: '', tel: '' },
+    destinataire: { partenaireId: null, clientId: null, nom: '', tel: '' },
+    adressePrise: '', adresseLivraison: '', latPrise: null, lonPrise: null, latDest: null, lonDest: null,
+    montant: '', typePaiement: 'ORANGE_MONEY', motoId: '', notes: '',
+  });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const { data: stocks3pl = [] } = useQuery({
@@ -161,8 +368,14 @@ function ModalCreateLivraison({ motos, onClose, onSave }) {
         )}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div><label className="label">Nom client</label><input className="input" value={form.clientNom} onChange={e => set('clientNom', e.target.value)} /></div>
-          <div><label className="label">Téléphone</label><input className="input" value={form.clientTel} onChange={e => set('clientTel', e.target.value)} /></div>
+          <div style={{ gridColumn: '1/-1' }}>
+            <SelecteurTiers label="📤 Expéditeur (remet le colis)" value={form.expediteur}
+              onChange={v => setForm(f => ({ ...f, expediteur: v }))} />
+          </div>
+          <div style={{ gridColumn: '1/-1' }}>
+            <SelecteurTiers label="📥 Destinataire (reçoit le colis)" value={form.destinataire}
+              onChange={v => setForm(f => ({ ...f, destinataire: v }))} />
+          </div>
           <div style={{ gridColumn: '1/-1' }}>
             <SelecteurAdresse label="Adresse de prise en charge"
               value={{ adresse: form.adressePrise, lat: form.latPrise, lon: form.lonPrise }}
@@ -190,9 +403,19 @@ function ModalCreateLivraison({ motos, onClose, onSave }) {
         <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
           <button className="btn btn-ghost btn-sm" onClick={onClose}>Annuler</button>
           <button className="btn btn-sm" style={{ background: '#E85D04', color: 'white', border: 'none' }}
+            disabled={!form.expediteur.nom || !form.expediteur.tel || !form.destinataire.nom || !form.destinataire.tel}
             onClick={() => onSave({
-              ...form,
-              montant: Number(form.montant),
+              expediteurPartenaireId: form.expediteur.partenaireId,
+              expediteurClientId: form.expediteur.clientId,
+              expediteurNom: form.expediteur.nom,
+              expediteurTel: form.expediteur.tel,
+              destinatairePartenaireId: form.destinataire.partenaireId,
+              destinataireClientId: form.destinataire.clientId,
+              destinataireNom: form.destinataire.nom,
+              destinataireTel: form.destinataire.tel,
+              adressePrise: form.adressePrise, adresseLivraison: form.adresseLivraison,
+              latPrise: form.latPrise, lonPrise: form.lonPrise, latDest: form.latDest, lonDest: form.lonDest,
+              montant: Number(form.montant), typePaiement: form.typePaiement, motoId: form.motoId, notes: form.notes,
               lignesStock3PL: lignesPanier.map(l => ({
                 partenaireId: l.partenaireId, stockClientId: l.stockClientId,
                 article: l.article, quantite: l.quantite, unite: l.unite,
@@ -211,6 +434,12 @@ export default function LivraisonsPage() {
   const [statut, setStatut] = useState('');
   const [filtreDates, setFiltreDates] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [photoEtape, setPhotoEtape] = useState(null); // { livraison, etape: 'prise'|'livraison' }
+  const [codeLivraisonFor, setCodeLivraisonFor] = useState(null); // livraison en attente de code
+  const [erreurCode, setErreurCode] = useState(null);
+  const [selection, setSelection] = useState([]); // ids des livraisons sélectionnées pour action en masse
+  const [editLivraison, setEditLivraison] = useState(null);
+  const [showAssignerMasse, setShowAssignerMasse] = useState(false);
 
   const { data } = useQuery({
     queryKey: ['livraisons', statut, filtreDates],
@@ -232,13 +461,31 @@ export default function LivraisonsPage() {
     onSuccess: () => { qc.invalidateQueries(['livraisons']); qc.invalidateQueries(['stats-liya']); setShowCreate(false); showToast('Livraison créée ✓'); },
     onError: e => showToast(e?.response?.data?.error || 'Erreur création livraison', 'error'),
   });
+  const editMut = useMutation({
+    mutationFn: ({ id, data }) => liyaAPI.updateLivraison(id, data),
+    onSuccess: () => { qc.invalidateQueries(['livraisons']); setEditLivraison(null); showToast('Livraison modifiée ✓'); },
+    onError: e => showToast(e?.response?.data?.error || 'Erreur modification', 'error'),
+  });
+  const deleteMut = useMutation({
+    mutationFn: liyaAPI.deleteLivraison,
+    onSuccess: () => { qc.invalidateQueries(['livraisons']); qc.invalidateQueries(['stats-liya']); showToast('Livraison annulée'); },
+    onError: e => showToast(e?.response?.data?.error || 'Erreur annulation', 'error'),
+  });
+  const assignerMasseMut = useMutation({
+    mutationFn: ({ chauffeurId, motoId }) => liyaAPI.assignerMasse(selection, chauffeurId, motoId || undefined),
+    onSuccess: (res) => { qc.invalidateQueries(['livraisons']); setShowAssignerMasse(false); setSelection([]); showToast(res.message); },
+    onError: e => showToast(e?.response?.data?.error || 'Erreur assignation', 'error'),
+  });
   const updateStatut = useMutation({
-    mutationFn: ({ id, statut }) => liyaAPI.updateStatut(id, statut),
+    mutationFn: ({ id, statut, codeSaisi, photoUrl }) => liyaAPI.updateStatut(id, statut, { codeSaisi, photoUrl }),
     onSuccess: (res) => {
       qc.invalidateQueries(['livraisons']);
       qc.invalidateQueries(['stats-liya']);
       if (res?.avertissementsStock?.length > 0) {
         showToast(res.avertissementsStock.join(' '), 'error');
+      }
+      if (res?.prochaineCourse) {
+        showToast(`Course terminée — ${res.prochaineCourse.numero} attend ce livreur dans sa file`, 'success');
       }
     },
     onError: e => showToast(e?.response?.data?.error || 'Erreur changement de statut', 'error'),
@@ -290,21 +537,52 @@ export default function LivraisonsPage() {
         ))}
       </div>
 
+      {/* Barre d'actions en masse — visible seulement si sélection non vide */}
+      {selection.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#EEF3FB', borderRadius: 10, padding: '8px 14px', marginBottom: 10 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: '#1a3f6f' }}>{selection.length} sélectionnée(s)</span>
+          <button onClick={() => setShowAssignerMasse(true)} className="btn btn-sm" style={{ background: '#1a3f6f', color: 'white', border: 'none', fontSize: 11 }}>
+            <Users size={11} /> Assigner à un livreur
+          </button>
+          <button onClick={() => setSelection([])} style={{ fontSize: 11, color: '#888', background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto' }}>
+            Annuler la sélection
+          </button>
+        </div>
+      )}
+
       {/* Liste */}
       <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
         <table className="table-erp">
           <thead>
-            <tr><th>N° Livraison</th><th>Client</th><th>Itinéraire</th><th>Moto</th><th>Montant</th><th>Statut</th><th>Actions</th></tr>
+            <tr>
+              <th style={{ width: 30 }}>
+                <input type="checkbox" checked={selection.length > 0 && selection.length === livraisons.length}
+                  onChange={e => setSelection(e.target.checked ? livraisons.map(l => l.id) : [])} />
+              </th>
+              <th>N° Livraison</th><th>Expéditeur / Destinataire</th><th>Itinéraire</th><th>Moto</th><th>Montant</th><th>Statut</th><th>Actions</th>
+            </tr>
           </thead>
           <tbody>
             {livraisons.map(l => {
               const s = STATUT_MAP[l.statut] || STATUT_MAP.EN_ATTENTE;
               return (
                 <tr key={l.id}>
+                  <td>
+                    <input type="checkbox" checked={selection.includes(l.id)}
+                      onChange={e => setSelection(prev => e.target.checked ? [...prev, l.id] : prev.filter(id => id !== l.id))} />
+                  </td>
                   <td><span style={{ fontFamily: 'Syne', fontWeight: 700, fontSize: 13, color: '#E85D04' }}>{l.numero}</span></td>
                   <td>
-                    <div style={{ fontWeight: 500, fontSize: 13 }}>{l.clientNom}</div>
-                    <div style={{ fontSize: 11, color: '#888' }}>{l.clientTel}</div>
+                    <div style={{ fontSize: 12 }}>
+                      <span style={{ color: '#888' }}>📤</span> <span style={{ fontWeight: 500 }}>{l.expediteurNom || l.clientNom}</span>
+                      {l.expediteurPartenaire && <span style={{ fontSize: 10, color: '#1a3f6f' }}> · Partenaire</span>}
+                      {l.expediteurClient && <span style={{ fontSize: 10, color: '#27500A' }}> · {l.expediteurClient.typeClient}</span>}
+                    </div>
+                    <div style={{ fontSize: 12, marginTop: 2 }}>
+                      <span style={{ color: '#888' }}>📥</span> <span style={{ fontWeight: 500 }}>{l.destinataireNom || '—'}</span>
+                      {l.destinatairePartenaire && <span style={{ fontSize: 10, color: '#1a3f6f' }}> · Partenaire</span>}
+                      {l.destinataireClient && <span style={{ fontSize: 10, color: '#27500A' }}> · {l.destinataireClient.typeClient}</span>}
+                    </div>
                     {l.lignesStock3PL?.length > 0 && (
                       <div style={{ fontSize: 10, color: '#E85D04', marginTop: 3 }}>
                         {l.lignesStock3PL.map((ln, i) => (
@@ -322,12 +600,24 @@ export default function LivraisonsPage() {
                   <td><span className={`badge ${s.badge}`}>{s.label}</span></td>
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
-                      {l.statut === 'EN_ATTENTE' && <button onClick={() => updateStatut.mutate({ id: l.id, statut: 'PRISE_EN_CHARGE' })} className="btn btn-sm" style={{ background: '#E6F1FB', color: '#042C53', border: 'none', fontSize: 10 }}>Prendre</button>}
+                      {l.statut === 'EN_ATTENTE' && <button onClick={() => setPhotoEtape({ livraison: l, etape: 'prise' })} className="btn btn-sm" style={{ background: '#E6F1FB', color: '#042C53', border: 'none', fontSize: 10 }}><Camera size={10} /> Prendre</button>}
                       {l.statut === 'PRISE_EN_CHARGE' && <button onClick={() => updateStatut.mutate({ id: l.id, statut: 'EN_ROUTE' })} className="btn btn-sm" style={{ background: '#FAEEDA', color: '#412402', border: 'none', fontSize: 10 }}>En route</button>}
                       {l.statut === 'EN_ROUTE' && (
                         <>
-                          <button onClick={() => updateStatut.mutate({ id: l.id, statut: 'LIVRE' })} className="btn btn-sm" style={{ background: '#EAF3DE', color: '#27500A', border: 'none', fontSize: 10 }}><CheckCircle size={10} /> Livré</button>
+                          <button onClick={() => { setErreurCode(null); setCodeLivraisonFor(l); }} className="btn btn-sm" style={{ background: '#EAF3DE', color: '#27500A', border: 'none', fontSize: 10 }}><CheckCircle size={10} /> Livré</button>
                           <button onClick={() => updateStatut.mutate({ id: l.id, statut: 'ECHEC' })} className="btn btn-sm" style={{ background: '#FCEBEB', color: '#A32D2D', border: 'none', fontSize: 10 }}>Échec</button>
+                        </>
+                      )}
+                      {!['LIVRE', 'ANNULE'].includes(l.statut) && (
+                        <>
+                          <button onClick={() => setEditLivraison(l)} title="Modifier"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888', padding: 4 }}>
+                            <Edit2 size={13} />
+                          </button>
+                          <button onClick={() => { if (window.confirm(`Annuler la livraison ${l.numero} ?`)) deleteMut.mutate(l.id); }} title="Annuler"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#A32D2D', padding: 4 }}>
+                            <Trash2 size={13} />
+                          </button>
                         </>
                       )}
                     </div>
@@ -335,12 +625,70 @@ export default function LivraisonsPage() {
                 </tr>
               );
             })}
-            {livraisons.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', color: '#ccc', padding: 40, fontSize: 13 }}><Truck size={28} style={{ marginBottom: 8 }} /><br />Aucune livraison</td></tr>}
+            {livraisons.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: '#ccc', padding: 40, fontSize: 13 }}><Truck size={28} style={{ marginBottom: 8 }} /><br />Aucune livraison</td></tr>}
           </tbody>
         </table>
       </div>
 
       {showCreate && <ModalCreateLivraison motos={Array.isArray(motos) ? motos : []} onClose={() => setShowCreate(false)} onSave={d => createMut.mutate(d)} />}
+
+      {photoEtape && (
+        <ModalPhotoEtape
+          livraison={photoEtape.livraison}
+          etape={photoEtape.etape}
+          onClose={() => setPhotoEtape(null)}
+          onValide={(photoUrl) => {
+            if (photoEtape.etape === 'prise') {
+              updateStatut.mutate({ id: photoEtape.livraison.id, statut: 'PRISE_EN_CHARGE', photoUrl });
+            } else {
+              // Le code a déjà été vérifié à l'étape précédente (ModalCodeLivraison) ;
+              // cet appel envoie la photo + reconfirme le même code déjà validé.
+              updateStatut.mutate({ id: photoEtape.livraison.id, statut: 'LIVRE', codeSaisi: photoEtape.codeDejaValide, photoUrl });
+            }
+            setPhotoEtape(null);
+          }}
+        />
+      )}
+
+      {codeLivraisonFor && (
+        <ModalCodeLivraison
+          livraison={codeLivraisonFor}
+          loading={updateStatut.isPending}
+          erreurServeur={erreurCode}
+          onClose={() => { setCodeLivraisonFor(null); setErreurCode(null); }}
+          onValide={(code) => {
+            // Vérification du code SANS encore marquer LIVRE — on confirme
+            // juste qu'il est correct, l'appel qui marque réellement la
+            // course terminée part de ModalPhotoEtape une fois la photo prise.
+            liyaAPI.verifierCode(codeLivraisonFor.id, code)
+              .then(() => {
+                setErreurCode(null);
+                setPhotoEtape({ livraison: codeLivraisonFor, etape: 'livraison', codeDejaValide: code });
+                setCodeLivraisonFor(null);
+              })
+              .catch((e) => setErreurCode(e?.response?.data?.error || 'Code incorrect'));
+          }}
+        />
+      )}
+
+      {editLivraison && (
+        <ModalEditLivraison
+          livraison={editLivraison}
+          motos={Array.isArray(motos) ? motos : []}
+          loading={editMut.isPending}
+          onClose={() => setEditLivraison(null)}
+          onSave={(data) => editMut.mutate({ id: editLivraison.id, data })}
+        />
+      )}
+
+      {showAssignerMasse && (
+        <ModalAssignerMasse
+          nbSelection={selection.length}
+          loading={assignerMasseMut.isPending}
+          onClose={() => setShowAssignerMasse(false)}
+          onSave={(chauffeurId, motoId) => assignerMasseMut.mutate({ chauffeurId, motoId })}
+        />
+      )}
     </div>
   );
 }
