@@ -130,6 +130,8 @@ function ModalCodeLivraison({ livraison, onClose, onValide, loading, erreurServe
 function ModalEditLivraison({ livraison, motos, onClose, onSave, loading }) {
   const [form, setForm] = useState({
     adressePrise: livraison.adressePrise || '', adresseLivraison: livraison.adresseLivraison || '',
+    latPrise: livraison.latPrise || null, lonPrise: livraison.lonPrise || null,
+    latDest: livraison.latDest || null, lonDest: livraison.lonDest || null,
     montant: livraison.montant || '', typePaiement: livraison.typePaiement || 'ORANGE_MONEY',
     motoId: livraison.motoId || '', notes: livraison.notes || '',
     expediteurNom: livraison.expediteurNom || livraison.clientNom || '', expediteurTel: livraison.expediteurTel || livraison.clientTel || '',
@@ -149,8 +151,16 @@ function ModalEditLivraison({ livraison, motos, onClose, onSave, loading }) {
           <div><label className="label">Tél. expéditeur</label><input className="input" value={form.expediteurTel} onChange={e => set('expediteurTel', e.target.value)} /></div>
           <div><label className="label">Destinataire</label><input className="input" value={form.destinataireNom} onChange={e => set('destinataireNom', e.target.value)} /></div>
           <div><label className="label">Tél. destinataire</label><input className="input" value={form.destinataireTel} onChange={e => set('destinataireTel', e.target.value)} /></div>
-          <div style={{ gridColumn: '1/-1' }}><label className="label">Adresse de prise en charge</label><input className="input" value={form.adressePrise} onChange={e => set('adressePrise', e.target.value)} /></div>
-          <div style={{ gridColumn: '1/-1' }}><label className="label">Adresse de livraison</label><input className="input" value={form.adresseLivraison} onChange={e => set('adresseLivraison', e.target.value)} /></div>
+          <div style={{ gridColumn: '1/-1' }}>
+            <SelecteurAdresse label="Adresse de prise en charge"
+              value={{ adresse: form.adressePrise, lat: form.latPrise, lon: form.lonPrise }}
+              onChange={({ adresse, lat, lon }) => setForm(f => ({ ...f, adressePrise: adresse, latPrise: lat, lonPrise: lon }))} />
+          </div>
+          <div style={{ gridColumn: '1/-1' }}>
+            <SelecteurAdresse label="Adresse de livraison"
+              value={{ adresse: form.adresseLivraison, lat: form.latDest, lon: form.lonDest }}
+              onChange={({ adresse, lat, lon }) => setForm(f => ({ ...f, adresseLivraison: adresse, latDest: lat, lonDest: lon }))} />
+          </div>
           <div><label className="label">Montant (FCFA)</label><input className="input" type="number" value={form.montant} onChange={e => set('montant', e.target.value)} /></div>
           <div><label className="label">Paiement</label>
             <select className="input" value={form.typePaiement} onChange={e => set('typePaiement', e.target.value)}>
@@ -448,7 +458,11 @@ export default function LivraisonsPage() {
       dateDebut: filtreDates?.debut?.toISOString(),
       dateFin: filtreDates?.fin?.toISOString(),
     }),
-    refetchInterval: 15000
+    // Le rafraîchissement automatique toutes les 15s recrée le tableau complet
+    // à chaque fois — avec une grosse liste (50-100+ lignes), ça interrompt
+    // la frappe dans une modal ouverte (édition, photo, code) et donne une
+    // sensation de lenteur perceptible. Suspendu tant qu'une modal est ouverte.
+    refetchInterval: (editLivraison || photoEtape || codeLivraisonFor) ? false : 15000,
   });
   const { data: stats } = useQuery({ queryKey: ['stats-liya'], queryFn: liyaAPI.stats, refetchInterval: 15000 });
   const { data: motos } = useQuery({ queryKey: ['motos'], queryFn: liyaAPI.motos });
