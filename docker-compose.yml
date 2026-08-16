@@ -1,0 +1,31 @@
+services:
+
+  backend:
+    build:
+      context: ./backend
+    container_name: erp-backend
+    restart: always
+    env_file:
+      - ./backend/.env
+    ports:
+      - "4000:4000"
+    networks:
+      - erp-network
+
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: erp-frontend
+    restart: always
+    ports:
+      - "80:80"
+    networks:
+      - erp-network
+    depends_on:
+      - backend
+
+
+networks:
+  erp-network:
+    external: true

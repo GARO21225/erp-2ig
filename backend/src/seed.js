@@ -32,7 +32,10 @@ async function runMigrations() {
     try {
       await prisma.$executeRawUnsafe(sql);
       console.log(`✅ Migration ${f}`);
-    } catch(e) { console.warn(`⚠ Migration ${f}: ${e.message?.slice(0,60)}`); }
+    } catch (e) {
+       console.error(`❌ Migration ${f}`);
+       console.error(e);
+    }
   }
 }
 
