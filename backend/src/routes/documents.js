@@ -21,7 +21,9 @@ const ALLOWED = {
   'video/mp4':'.mp4','video/quicktime':'.mov',
   'application/octet-stream':'.bin', // DWG et autres formats inconnus
 };
-const TYPES_GED = ['CNI','EXTRAIT_NAISSANCE','DIPLOME','FACTURE','CONTRAT','PLAN','PHOTO','PERMIS','ASSURANCE','JUSTIFICATIF','BULLETIN','AUTRE'];
+const TYPES_GED = ['CNI','EXTRAIT_NAISSANCE','DIPLOME','FACTURE','CONTRAT','PLAN','PHOTO','PERMIS','ASSURANCE','JUSTIFICATIF','BULLETIN','AUTRE',
+  // Dossier foncier TOPTELSIG
+  'PV_FAMILLE','PV_DELIMITATION','PV_PARTAGE_LOTS','EXTRAIT_TOPO','ENQUETE_COMMODO','AVIS_SERVITUDES','DECHARGE','PIECE_IDENTITE_ACTEUR'];
 const MAX_MB = process.env.STORAGE_PATH || process.env.CLOUDINARY_URL ? 15 : 2;
 
 const upload = multer({
