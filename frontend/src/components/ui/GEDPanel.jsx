@@ -7,7 +7,20 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { documentsAPI } from '../../lib/api';
 import { Upload, FileText, Image, Trash2, Eye, X } from 'lucide-react';
 
-const TYPES_GED = [
+const PDF_IMG = '.jpg,.jpeg,.png,.pdf,.doc,.docx';
+// Dossier foncier (projets TOPTELSIG)
+const TYPES_FONCIER = [
+  { key: 'PV_FAMILLE', label: 'PV de famille', accept: PDF_IMG },
+  { key: 'PV_DELIMITATION', label: 'PV de délimitation', accept: PDF_IMG },
+  { key: 'PV_PARTAGE_LOTS', label: 'PV de partage des lots', accept: PDF_IMG },
+  { key: 'EXTRAIT_TOPO', label: 'Extrait topographique', accept: '.jpg,.jpeg,.png,.pdf,.dwg' },
+  { key: 'ENQUETE_COMMODO', label: 'Enquête commodo et incommodo', accept: PDF_IMG },
+  { key: 'AVIS_SERVITUDES', label: 'Avis de servitudes', accept: PDF_IMG },
+  { key: 'DECHARGE', label: 'Décharge (remise de fonds aux propriétaires)', accept: PDF_IMG },
+  { key: 'PIECE_IDENTITE_ACTEUR', label: "Pièce d'identité d'un acteur du projet", accept: '.jpg,.jpeg,.png,.pdf' },
+];
+
+const TYPES_GED_BASE = [
   { key: 'CNI', label: "Carte Nationale d'Identité", accept: '.jpg,.jpeg,.png,.pdf' },
   { key: 'EXTRAIT_NAISSANCE', label: 'Extrait de naissance', accept: '.jpg,.jpeg,.png,.pdf' },
   { key: 'DIPLOME', label: 'Diplôme / Attestation', accept: '.jpg,.jpeg,.png,.pdf' },
@@ -19,6 +32,8 @@ const TYPES_GED = [
   { key: 'ASSURANCE', label: 'Assurance', accept: '.jpg,.jpeg,.png,.pdf' },
   { key: 'AUTRE', label: 'Autre document', accept: '.jpg,.jpeg,.png,.pdf,.doc,.docx' },
 ];
+
+const TYPES_GED = [...TYPES_FONCIER, ...TYPES_GED_BASE];
 
 const MIME_ICONS = {
   'application/pdf': '📄',
@@ -38,7 +53,8 @@ export default function GEDPanel({ entiteType, entiteId, compact = false }) {
   const qc = useQueryClient();
   const inputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
-  const [selectedType, setSelectedType] = useState('CNI');
+  const [selectedType, setSelectedType] = useState(entiteType === 'projet' ? 'PV_FAMILLE' : 'CNI');
+  const [filtre, setFiltre] = useState('');
   const [selectedNom, setSelectedNom] = useState('');
   const [error, setError] = useState('');
   const [preview, setPreview] = useState(null);
@@ -97,7 +113,10 @@ export default function GEDPanel({ entiteType, entiteId, compact = false }) {
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
           <select value={selectedType} onChange={e => setSelectedType(e.target.value)}
             style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, border: '0.5px solid #ddd', background: 'white' }}>
-            {TYPES_GED.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+            {entiteType === 'projet' ? (<>
+              <optgroup label="Dossier foncier">{TYPES_FONCIER.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}</optgroup>
+              <optgroup label="Autres">{TYPES_GED_BASE.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}</optgroup>
+            </>) : TYPES_GED_BASE.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
           </select>
           {!compact && (
             <input placeholder="Nom (optionnel)" value={selectedNom} onChange={e => setSelectedNom(e.target.value)}
@@ -115,6 +134,18 @@ export default function GEDPanel({ entiteType, entiteId, compact = false }) {
 
       {error && <div style={{ padding: '6px 16px', background: '#FCEBEB', color: '#A32D2D', fontSize: 12 }}>{error}</div>}
 
+      {/* Filtre par type */}
+      {entiteType === 'projet' && docs.length > 0 && (
+        <div style={{ display:'flex', gap:4, flexWrap:'wrap', padding:'8px 12px 0' }}>
+          <button onClick={() => setFiltre('')} style={{ fontSize:10, padding:'2px 8px', borderRadius:10, border:'0.5px solid #ddd', background: !filtre ? '#1a3f6f' : 'white', color: !filtre ? 'white' : '#555', cursor:'pointer' }}>Tous ({docs.length})</button>
+          {TYPES_GED.filter(t => docs.some(d => d.type === t.key)).map(t => (
+            <button key={t.key} onClick={() => setFiltre(t.key)} style={{ fontSize:10, padding:'2px 8px', borderRadius:10, border:'0.5px solid #ddd', background: filtre === t.key ? '#1a3f6f' : 'white', color: filtre === t.key ? 'white' : '#555', cursor:'pointer' }}>
+              {t.label.split(' (')[0]} ({docs.filter(d => d.type === t.key).length})
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Liste documents */}
       {docs.length === 0 ? (
         <div style={{ padding: '24px 16px', textAlign: 'center', color: '#aaa', fontSize: 12 }}>
@@ -122,7 +153,7 @@ export default function GEDPanel({ entiteType, entiteId, compact = false }) {
         </div>
       ) : (
         <div style={{ padding: 8 }}>
-          {docs.map(doc => (
+          {docs.filter(d => !filtre || d.type === filtre).map(doc => (
             <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, border: '0.5px solid #e8e7e1', marginBottom: 4, background: 'white' }}>
               <span style={{ fontSize: 18 }}>{MIME_ICONS[doc.mimeType] || '📄'}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
