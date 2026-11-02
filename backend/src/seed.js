@@ -11,6 +11,20 @@ const { execSync } = require('child_process');
 const prisma = new PrismaClient();
 const Y = require('./lib/yakro-resto');
 
+// Découpe un script SQL en instructions (respecte les blocs $$...$$ et les chaînes '...')
+function splitSql(sql) {
+  const out = []; let cur = ''; let dollar = false; let quote = false;
+  for (let i = 0; i < sql.length; i++) {
+    const c = sql[i];
+    if (!quote && c === '$' && sql[i + 1] === '$') { dollar = !dollar; cur += '$$'; i++; continue; }
+    if (!dollar && c === "'") quote = !quote;
+    if (!dollar && !quote && c === ';') { if (cur.trim()) out.push(cur.trim()); cur = ''; continue; }
+    cur += c;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out.filter(st => st.replace(/--.*$/gm, '').trim());
+}
+
 async function runMigrations() {
   // D'abord appliquer le schema via db push
   console.log('📐 db push...');
@@ -31,7 +45,7 @@ async function runMigrations() {
   for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort()) {
     const sql = fs.readFileSync(path.join(dir, f), 'utf8');
     try {
-      await prisma.$executeRawUnsafe(sql);
+      for (const st of splitSql(sql)) await prisma.$executeRawUnsafe(st);
       console.log(`✅ Migration ${f}`);
     } catch (e) {
        console.error(`❌ Migration ${f}`);

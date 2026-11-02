@@ -82,12 +82,12 @@ BEGIN
   );
 
   -- Insérer paramètres par défaut pour chaque filiale
-  INSERT INTO "parametres_entreprise" ("id","filiale","nomLegal","sigle","adresse","telephone","email","couleurPrimaire")
+  INSERT INTO "parametres_entreprise" ("id","filiale","nomLegal","sigle","adresse","telephone","email","couleurPrimaire","updatedAt")
   VALUES
-    (gen_random_uuid()::text,'TOPTELSIG','TOPTELSIG Sarl','TOPTELSIG','Abidjan, Côte d''Ivoire','+225 00 00 00 00','contact@toptelsig.ci','#1a3f6f'),
-    (gen_random_uuid()::text,'YAKRO_GRILL','Yakro Grill Sarl','YAKRO GRILL','Yamoussoukro, Côte d''Ivoire','+225 00 00 00 00','contact@yakrogrill.ci','#8B1A1A'),
-    (gen_random_uuid()::text,'LIYA','LiYA Sarl','LiYA','Abidjan, Côte d''Ivoire','+225 00 00 00 00','contact@liya.ci','#E85D04'),
-    (gen_random_uuid()::text,'GROUPE','Groupe 2IG Holding','2IG','Abidjan, Côte d''Ivoire','+225 00 00 00 00','contact@2ig.ci','#1a1a1a')
+    (gen_random_uuid()::text,'TOPTELSIG','TOPTELSIG Sarl','TOPTELSIG','Abidjan, Côte d''Ivoire','+225 00 00 00 00','contact@toptelsig.ci','#1a3f6f',NOW()),
+    (gen_random_uuid()::text,'YAKRO_GRILL','Yakro Grill Sarl','YAKRO GRILL','Yamoussoukro, Côte d''Ivoire','+225 00 00 00 00','contact@yakrogrill.ci','#8B1A1A',NOW()),
+    (gen_random_uuid()::text,'LIYA','LiYA Sarl','LiYA','Abidjan, Côte d''Ivoire','+225 00 00 00 00','contact@liya.ci','#E85D04',NOW()),
+    (gen_random_uuid()::text,'GROUPE','Groupe 2IG Holding','2IG','Abidjan, Côte d''Ivoire','+225 00 00 00 00','contact@2ig.ci','#1a1a1a',NOW())
   ON CONFLICT ("filiale") DO NOTHING;
 
   RAISE NOTICE 'Migration 007 : Facturation OK';
