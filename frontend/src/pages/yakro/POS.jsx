@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { exportTicketYakro } from '../../lib/export';
 import { yakroAPI, employesAPI } from '../../lib/api';
 import DocumentViewer from '../../components/ui/DocumentViewer';
+import { useYakro } from '../../lib/useYakro';
 import { Plus, X, Minus, ShoppingBag, Banknote, Smartphone, CreditCard, CheckCircle, Users, RefreshCw, ArrowRight } from 'lucide-react';
 
 const STATUT_TABLE = {
@@ -23,6 +24,8 @@ const MOYENS_PMT = [
   { key:'WAVE',         label:'Wave',         icon:Smartphone, color:'#1A73E8' },
   { key:'BANQUE',       label:'Banque/TPE',   icon:CreditCard, color:'#5F5E5A' },
 ];
+
+const MODE_PARAM = { ESPECES:'paiement_especes', ORANGE_MONEY:'paiement_om', MTN_MONEY:'paiement_mtn', MOOV_MONEY:'paiement_moov', WAVE:'paiement_wave', BANQUE:'paiement_banque' };
 
 // ─── Panel commande ────────────────────────────────────────────────────────────
 function PanelCommande({ table, menu, onClose, onSave, loading, listeServeurs }) {
@@ -177,8 +180,10 @@ function PanelCommande({ table, menu, onClose, onSave, loading, listeServeurs })
 }
 
 // ─── Modal paiement ─────────────────────────────────────────────────────────
-function ModalPaiement({ commande, loading, onClose, onPay }) {
-  const [lignesPmt, setLignesPmt] = useState([{ typePaiement:'ESPECES', montant:commande.total, reference:'' }]);
+function ModalPaiement({ commande, loading, onClose, onPay, modes }) {
+  // Seuls les modes acceptés par le restaurant sont proposés
+  const moyens = modes?.length ? MOYENS_PMT.filter(m=>modes.includes(m.key)) : MOYENS_PMT;
+  const [lignesPmt, setLignesPmt] = useState([{ typePaiement:moyens[0].key, montant:commande.total, reference:'' }]);
   const [especesRecues, setEspecesRecues] = useState('');
   const total = commande.total || 0;
   const totalSaisi = lignesPmt.reduce((s,l)=>s+Number(l.montant||0),0);
@@ -188,7 +193,7 @@ function ModalPaiement({ commande, loading, onClose, onPay }) {
 
   const addLigne = () => {
     if (resteASaisir<=0) return;
-    setLignesPmt(prev=>[...prev,{typePaiement:'ORANGE_MONEY',montant:resteASaisir.toFixed(0),reference:''}]);
+    setLignesPmt(prev=>[...prev,{typePaiement:(moyens[1]||moyens[0]).key,montant:resteASaisir.toFixed(0),reference:''}]);
   };
   const removeLigne = (i) => setLignesPmt(prev=>prev.filter((_,idx)=>idx!==i));
   const updateLigne = (i,field,value) => setLignesPmt(prev=>prev.map((l,idx)=>idx===i?{...l,[field]:value}:l));
@@ -211,7 +216,7 @@ function ModalPaiement({ commande, loading, onClose, onPay }) {
             <div key={i} style={{ background:'#F7F7F5',borderRadius:10,padding:12,marginBottom:8 }}>
               <div style={{ display:'flex',gap:8,marginBottom:needRef?8:0 }}>
                 <select className="input" style={{ flex:2,fontSize:12 }} value={ligne.typePaiement} onChange={e=>updateLigne(i,'typePaiement',e.target.value)}>
-                  {MOYENS_PMT.map(m=><option key={m.key} value={m.key}>{m.label}</option>)}
+                  {moyens.map(m=><option key={m.key} value={m.key}>{m.label}</option>)}
                 </select>
                 <input className="input" style={{ flex:1,fontSize:13,fontWeight:600 }} type="number"
                   value={ligne.montant} onChange={e=>updateLigne(i,'montant',e.target.value)} placeholder="Montant"/>
@@ -469,6 +474,9 @@ function ModalRetourArticle({ commande, onClose, onSave }) {
 // ─── POS Principal ──────────────────────────────────────────────────────────
 export default function POS() {
   const qc = useQueryClient();
+  const { courant } = useYakro();
+  const { data: paramsResto } = useQuery({ queryKey:['yakro-params', courant?.id], queryFn:()=>yakroAPI.parametres(courant.id), enabled:!!courant, staleTime:60000 });
+  const modesAcceptes = paramsResto ? MOYENS_PMT.filter(m=>paramsResto[MODE_PARAM[m.key]]==='1').map(m=>m.key) : null;
   const [zone, setZone] = useState('TOUTES');
   const [filtreServeur, setFiltreServeur] = useState('');
   const [filtreStatut, setFiltreStatut] = useState('');
@@ -479,7 +487,7 @@ export default function POS() {
   const [retourFor, setRetourFor] = useState(null); // commande pour retour article
 
   const { data: tables = [] } = useQuery({ queryKey:['tables'], queryFn:yakroAPI.tables, refetchInterval:15000 });
-  const { data: menu } = useQuery({ queryKey:['menu'], queryFn:()=>yakroAPI.menu({ disponible:'true' }) });
+  const { data: menu } = useQuery({ queryKey:['menu', courant?.id], queryFn:()=>yakroAPI.menu({ disponible:'true' }) });
   const { data: serveursRaw } = useQuery({ queryKey:['serveurs-yakro'], queryFn:()=>employesAPI.list({ filiale:'YAKRO_GRILL', statut:'ACTIF', limit:50 }), staleTime:60000 });
   const listeServeurs = Array.isArray(serveursRaw) ? serveursRaw : (serveursRaw?.data || []);
 
@@ -696,6 +704,7 @@ export default function POS() {
       {paiementCommande && (
         <ModalPaiement
           commande={paiementCommande}
+          modes={modesAcceptes}
           loading={payerCmd.isPending}
           onClose={()=>setPaiementCommande(null)}
           onPay={data=>payerCmd.mutate({ id:paiementCommande.id, data })}

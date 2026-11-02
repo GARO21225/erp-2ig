@@ -27,6 +27,8 @@ import DashboardYakro from './pages/yakro/DashboardYakro';
 import DepensesYakroPage from './pages/yakro/DepensesYakroPage';
 import GestionCaissePage from './pages/yakro/GestionCaissePage';
 import CaisseYakro from './pages/yakro/CaisseYakro';
+import RestaurantsPage from './pages/yakro/RestaurantsPage';
+import ParametrageRestaurantPage from './pages/yakro/ParametrageRestaurantPage';
 import ProjetsPage from './pages/toptelsig/ProjetsPage';
 import SouscripteursPage from './pages/toptelsig/SouscripteursPage';
 import ProspectDetailPage from './pages/toptelsig/ProspectDetailPage';
@@ -110,6 +112,8 @@ export default function App() {
             <Route path="yakro/assignations" element={<AssignationsPage />} />
             <Route path="yakro/reservations" element={<ReservationsYakro />} />
             <Route path="yakro/caisse" element={<CaisseYakro />} />
+            <Route path="yakro/restaurants" element={<RestaurantsPage />} />
+            <Route path="yakro/parametrage" element={<ParametrageRestaurantPage />} />
             <Route path="toptelsig/gestion-projet" element={<GestionProjetPage />} />
             <Route path="toptelsig/prospects" element={<CRMPage />} />
             <Route path="toptelsig/dashboard" element={<DashboardToptelsig />} />

@@ -1,32 +1,39 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { yakroAPI } from '../../lib/api';
+import { useYakro } from '../../lib/useYakro';
 import { Plus, X, Download, Edit2 } from 'lucide-react';
 
 export default function MenuPage() {
   const qc = useQueryClient();
+  const { courant, peut } = useYakro();
   const [cat, setCat] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [form, setForm] = useState({ nom: '', categorie: 'GARNITURE', prix: '', description: '', disponible: true });
 
-  const { data: menu, isLoading } = useQuery({ queryKey: ['menu'], queryFn: () => yakroAPI.menu() });
+  const { data: menu, isLoading } = useQuery({ queryKey: ['menu', courant?.id], queryFn: () => yakroAPI.menu() });
   const seedMut = useMutation({ mutationFn: yakroAPI.seedMenu, onSuccess: () => qc.invalidateQueries(['menu']) });
   const createMut = useMutation({ mutationFn: yakroAPI.createMenu, onSuccess: () => { qc.invalidateQueries(['menu']); setShowCreate(false); } });
   const updateMut = useMutation({ mutationFn: ({ id, data }) => yakroAPI.updateMenu(id, data), onSuccess: () => { qc.invalidateQueries(['menu']); setEditItem(null); } });
+  // Disponibilité propre au restaurant courant (le menu reste commun)
+  const dispoMut = useMutation({
+    mutationFn: ({ item, disponible }) => yakroAPI.majPrix(courant.id, [{ menuId: item.id, prix: item.prixBase !== undefined && item.prix !== item.prixBase ? item.prix : null, disponible }]),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['menu', courant?.id] }),
+  });
   const deleteMut = useMutation({ mutationFn: yakroAPI.deleteMenu, onSuccess: () => qc.invalidateQueries(['menu']) });
 
   const categories = Object.keys(menu?.grouped || {});
   const items = cat ? (menu?.grouped?.[cat] || []) : (menu?.items || []);
 
-  const openEdit = (item) => { setEditItem(item); setForm({ nom: item.nom, categorie: item.categorie, prix: item.prix, description: item.description || '', disponible: item.disponible }); };
+  const openEdit = (item) => { setEditItem(item); setForm({ nom: item.nom, categorie: item.categorie, prix: item.prixBase ?? item.prix, description: item.description || '', disponible: item.disponible }); };
 
   return (
     <div className="page-enter">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 20, fontFamily: 'Syne', fontWeight: 800 }}>Menu & Carte</h1>
-          <div style={{ fontSize: 12, color: '#888', marginTop: 3 }}>{menu?.items?.length || 0} articles · Yakro Grill 2026</div>
+          <div style={{ fontSize: 12, color: '#888', marginTop: 3 }}>{menu?.items?.length || 0} articles · prix de {courant?.nom || 'Yakro Grill'}</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {(menu?.items?.length || 0) === 0 && (
@@ -34,7 +41,7 @@ export default function MenuPage() {
               <Download size={13} /> {seedMut.isPending ? 'Import...' : 'Importer menu PDF'}
             </button>
           )}
-          <button className="btn btn-sm" style={{ background: '#8B1A1A', color: 'white', border: 'none' }} onClick={() => setShowCreate(true)}><Plus size={13} /> Article</button>
+          {peut('menu.gerer') && <button className="btn btn-sm" style={{ background: '#8B1A1A', color: 'white', border: 'none' }} onClick={() => setShowCreate(true)}><Plus size={13} /> Article</button>}
         </div>
       </div>
 
@@ -59,17 +66,20 @@ export default function MenuPage() {
                     {item.description && <div style={{ fontSize: 11, color: '#888' }}>{item.description}</div>}
                   </td>
                   <td><span style={{ fontSize: 11, background: '#FDF2F2', color: '#8B1A1A', padding: '2px 8px', borderRadius: 10 }}>{item.categorie.replace(/_/g, ' ')}</span></td>
-                  <td style={{ fontWeight: 600, color: '#8B1A1A' }}>{item.prix?.toLocaleString('fr')} F</td>
+                  <td style={{ fontWeight: 600, color: '#8B1A1A' }}>
+                    {item.prix?.toLocaleString('fr')} F
+                    {item.prixBase !== undefined && item.prixBase !== item.prix && <div style={{ fontSize: 10, fontWeight: 400, color: '#999' }}>commun : {item.prixBase.toLocaleString('fr')} F</div>}
+                  </td>
                   <td>
-                    <button onClick={() => updateMut.mutate({ id: item.id, data: { disponible: !item.disponible } })} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                    <button disabled={!peut('prix.gerer')} onClick={() => dispoMut.mutate({ item, disponible: !item.disponible })} style={{ background: 'none', border: 'none', cursor: peut('prix.gerer') ? 'pointer' : 'default', padding: 0 }}>
                       <span className={`badge ${item.disponible ? 'badge-green' : 'badge-gray'}`}>{item.disponible ? 'Oui' : 'Non'}</span>
                     </button>
                   </td>
                   <td>
-                    <div style={{ display: 'flex', gap: 6 }}>
+                    {peut('menu.gerer') && <div style={{ display: 'flex', gap: 6 }}>
                       <button onClick={() => openEdit(item)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888' }}><Edit2 size={13} /></button>
                       <button onClick={() => { if (window.confirm('Supprimer ?')) deleteMut.mutate(item.id); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#A32D2D' }}><X size={13} /></button>
-                    </div>
+                    </div>}
                   </td>
                 </tr>
               ))}

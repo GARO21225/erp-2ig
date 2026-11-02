@@ -1,12 +1,13 @@
 const router = require('express').Router();
 const prisma = require('../../lib/prisma');
 const { auth, requireFiliale } = require('../../middleware/auth');
+const { resto, can, sc } = require('../../lib/yakro-resto');
 const yakro = requireFiliale('YAKRO_GRILL');
 
-router.get('/', auth, yakro, async (req, res) => {
+router.get('/', auth, yakro, resto, async (req, res) => {
   try {
     const { date, statut } = req.query;
-    const where = {};
+    const where = req.restaurantId ? { table: { restaurantId: req.restaurantId } } : {};
     if (statut) where.statut = statut;
     if (date) {
       const d = new Date(date);
@@ -26,12 +27,13 @@ router.get('/', auth, yakro, async (req, res) => {
   }
 });
 
-router.post('/', auth, yakro, async (req, res) => {
+router.post('/', auth, yakro, resto, async (req, res) => {
   try {
     const { tableId, nomClient, telephone, dateHeure, nbPersonnes, statut, notes } = req.body;
     if (!tableId || !nomClient || !telephone || !dateHeure) {
       return res.status(400).json({ error: 'Table, nom client, téléphone et date/heure requis' });
     }
+    if (!await prisma.tableRestaurant.findFirst({ where: { id: tableId, ...sc(req) }, select: { id: true } })) return res.status(400).json({ error: 'Table introuvable dans ce restaurant' });
     const resa = await prisma.reservationYakro.create({
       data: {
         tableId, nomClient, telephone,
@@ -48,7 +50,7 @@ router.post('/', auth, yakro, async (req, res) => {
   }
 });
 
-router.put('/:id/statut', auth, yakro, async (req, res) => {
+router.put('/:id/statut', auth, yakro, resto, async (req, res) => {
   try {
     const resa = await prisma.reservationYakro.update({
       where: { id: req.params.id },

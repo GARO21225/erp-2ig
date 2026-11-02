@@ -2,11 +2,13 @@
 const router = require('express').Router();
 const prisma = require('../../lib/prisma');
 const { auth, requireFiliale } = require('../../middleware/auth');
+const { resto, can, sc } = require('../../lib/yakro-resto');
 const yakro = requireFiliale('YAKRO_GRILL');
 
-router.get('/', auth, yakro, async (req, res) => {
+router.get('/', auth, yakro, resto, async (req, res) => {
   try {
     const tables = await prisma.tableRestaurant.findMany({
+      where: sc(req),
       orderBy: { numero: 'asc' },
       include: {
         commandes: {
@@ -32,12 +34,13 @@ router.get('/', auth, yakro, async (req, res) => {
   }
 });
 
-router.post('/', auth, yakro, async (req, res) => {
+router.post('/', auth, yakro, resto, can('tables.gerer'), async (req, res) => {
   try {
     const { numero, nom, capacite, zone } = req.body;
     if (!numero || isNaN(Number(numero))) return res.status(400).json({ error: 'Numéro de table requis (nombre)' });
     const table = await prisma.tableRestaurant.create({
       data: {
+        restaurantId: req.restaurantId,
         numero: Number(numero),
         nom: nom || null,
         capacite: capacite ? Number(capacite) : 4,
@@ -51,7 +54,7 @@ router.post('/', auth, yakro, async (req, res) => {
   }
 });
 
-router.put('/:id/statut', auth, yakro, async (req, res) => {
+router.put('/:id/statut', auth, yakro, resto, async (req, res) => {
   try {
     const table = await prisma.tableRestaurant.update({
       where: { id: req.params.id },
@@ -65,8 +68,9 @@ router.put('/:id/statut', auth, yakro, async (req, res) => {
 
 
 // PUT /:id — Modifier une table
-router.put('/:id', auth, yakro, async (req, res) => {
+router.put('/:id', auth, yakro, resto, can('tables.gerer'), async (req, res) => {
   try {
+    if (!await prisma.tableRestaurant.findFirst({ where: { id: req.params.id, ...sc(req) }, select: { id: true } })) return res.status(404).json({ error: 'Table introuvable' });
     const { numero, nom, capacite, zone } = req.body;
     const data = {};
     if (numero !== undefined) data.numero = Number(numero);
@@ -82,9 +86,9 @@ router.put('/:id', auth, yakro, async (req, res) => {
 });
 
 // DELETE /:id — Supprimer une table
-router.delete('/:id', auth, yakro, async (req, res) => {
+router.delete('/:id', auth, yakro, resto, can('tables.gerer'), async (req, res) => {
   try {
-    const t = await prisma.tableRestaurant.findUnique({ where: { id: req.params.id } });
+    const t = await prisma.tableRestaurant.findFirst({ where: { id: req.params.id, ...sc(req) } });
     if (!t) return res.status(404).json({ error: 'Table introuvable' });
     if (t.statut === 'OCCUPEE') return res.status(400).json({ error: 'Table occupée — impossible de la supprimer' });
     await prisma.tableRestaurant.delete({ where: { id: req.params.id } });
@@ -93,7 +97,7 @@ router.delete('/:id', auth, yakro, async (req, res) => {
 });
 
 // PUT /tables/:id/assigner-serveur
-router.put('/:id/assigner-serveur', auth, yakro, async (req, res) => {
+router.put('/:id/assigner-serveur', auth, yakro, resto, async (req, res) => {
   try {
     const { serveurId, serveurNom } = req.body;
     if (!serveurId) return res.status(400).json({ error: 'serveurId requis' });
@@ -126,7 +130,7 @@ router.put('/:id/assigner-serveur', auth, yakro, async (req, res) => {
 });
 
 // PUT /tables/:id/cloturer — Libérer une table
-router.put('/:id/cloturer', auth, yakro, async (req, res) => {
+router.put('/:id/cloturer', auth, yakro, resto, async (req, res) => {
   try {
     const table = await prisma.tableRestaurant.update({
       where: { id: req.params.id },
@@ -141,11 +145,11 @@ router.put('/:id/cloturer', auth, yakro, async (req, res) => {
 });
 
 // POST /tables/transferer — Transférer une commande vers une autre table
-router.post('/transferer', auth, yakro, async (req, res) => {
+router.post('/transferer', auth, yakro, resto, async (req, res) => {
   try {
     const { commandeId, tableSourceId, tableCibleId } = req.body;
     if (!commandeId || !tableCibleId) return res.status(400).json({ error: 'commandeId et tableCibleId requis' });
-    const tableCible = await prisma.tableRestaurant.findUnique({ where: { id: tableCibleId } });
+    const tableCible = await prisma.tableRestaurant.findFirst({ where: { id: tableCibleId, ...sc(req) } });
     if (!tableCible || tableCible.statut === 'OCCUPEE') return res.status(400).json({ error: 'Table cible indisponible' });
     await prisma.$transaction([
       prisma.commandeYakro.update({ where: { id: commandeId }, data: { tableId: tableCibleId } }),
@@ -157,7 +161,7 @@ router.post('/transferer', auth, yakro, async (req, res) => {
 });
 
 // GET /tables/historique-serveurs — Historique changements serveur
-router.get('/historique-serveurs', auth, yakro, async (req, res) => {
+router.get('/historique-serveurs', auth, yakro, resto, async (req, res) => {
   try {
     const historique = await prisma.changementServeurYakro.findMany({
       orderBy: { createdAt: 'desc' },

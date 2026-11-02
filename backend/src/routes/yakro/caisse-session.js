@@ -1,44 +1,45 @@
 const router = require('express').Router();
 const prisma = require('../../lib/prisma');
 const { auth, requireFiliale, requireRole } = require('../../middleware/auth');
+const { resto, can, sc } = require('../../lib/yakro-resto');
 const yakro = requireFiliale('YAKRO_GRILL');
 
 // GET /session-active — Session de caisse actuellement ouverte
-router.get('/session-active', auth, yakro, async (req, res) => {
+router.get('/session-active', auth, yakro, resto, async (req, res) => {
   try {
-    const session = await prisma.sessionCaisseYakro.findFirst({ where: { statut: 'OUVERTE' }, orderBy: { ouvertLe: 'desc' } });
+    const session = await prisma.sessionCaisseYakro.findFirst({ where: { statut: 'OUVERTE', ...sc(req) }, orderBy: { ouvertLe: 'desc' } });
     res.json(session);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // POST /ouvrir — Ouvrir une session de caisse
-router.post('/ouvrir', auth, yakro, async (req, res) => {
+router.post('/ouvrir', auth, yakro, resto, can('caisse.session'), async (req, res) => {
   try {
     const { montantOuverture = 0 } = req.body;
-    const active = await prisma.sessionCaisseYakro.findFirst({ where: { statut: 'OUVERTE' } });
+    const active = await prisma.sessionCaisseYakro.findFirst({ where: { statut: 'OUVERTE', ...sc(req) } });
     if (active) return res.status(400).json({ error: 'Une session est déjà ouverte' });
     const session = await prisma.sessionCaisseYakro.create({
-      data: { ouvertPar: req.user.id, ouvertParNom: `${req.user.prenom} ${req.user.nom}`, montantOuverture: Number(montantOuverture) }
+      data: { restaurantId: req.restaurantId, ouvertPar: req.user.id, ouvertParNom: `${req.user.prenom} ${req.user.nom}`, montantOuverture: Number(montantOuverture) }
     });
     res.status(201).json(session);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // POST /cloturer — Clôturer la session avec écart
-router.post('/cloturer', auth, requireRole('DG','DIRECTEUR','MANAGER','COMPTABLE'), async (req, res) => {
+router.post('/cloturer', auth, yakro, resto, can('caisse.session'), async (req, res) => {
   try {
     const { montantReel, notes } = req.body;
-    const session = await prisma.sessionCaisseYakro.findFirst({ where: { statut: 'OUVERTE' }, orderBy: { ouvertLe: 'desc' } });
+    const session = await prisma.sessionCaisseYakro.findFirst({ where: { statut: 'OUVERTE', ...sc(req) }, orderBy: { ouvertLe: 'desc' } });
     if (!session) return res.status(400).json({ error: 'Aucune session ouverte' });
 
     // Calculer montant théorique = entrées depuis ouverture
     const ca = await prisma.paiementYakro.aggregate({
       _sum: { montant: true },
-      where: { createdAt: { gte: session.ouvertLe } }
+      where: { createdAt: { gte: session.ouvertLe }, ...(req.restaurantId ? { commande: { restaurantId: req.restaurantId } } : {}) }
     });
     const depenses = await prisma.depenseYakro.aggregate({
       _sum: { montant: true },
-      where: { statut: 'PAYEE', createdAt: { gte: session.ouvertLe } }
+      where: { statut: 'PAYEE', createdAt: { gte: session.ouvertLe }, ...sc(req) }
     });
     const montantTheorique = session.montantOuverture + (ca._sum.montant||0) - (depenses._sum.montant||0);
     const ecart = Number(montantReel||0) - montantTheorique;
@@ -56,15 +57,15 @@ router.post('/cloturer', auth, requireRole('DG','DIRECTEUR','MANAGER','COMPTABLE
 });
 
 // GET /historique — Historique des clôtures
-router.get('/historique', auth, yakro, async (req, res) => {
+router.get('/historique', auth, yakro, resto, async (req, res) => {
   try {
-    const sessions = await prisma.sessionCaisseYakro.findMany({ orderBy: { createdAt: 'desc' }, take: 30 });
+    const sessions = await prisma.sessionCaisseYakro.findMany({ where: sc(req), orderBy: { createdAt: 'desc' }, take: 30 });
     res.json(sessions);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // Routes annulations
-router.get('/annulations', auth, yakro, async (req, res) => {
+router.get('/annulations', auth, yakro, resto, async (req, res) => {
   try {
     const { dateDebut } = req.query;
     const where = {};
@@ -75,7 +76,7 @@ router.get('/annulations', auth, yakro, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-router.post('/annulations', auth, yakro, async (req, res) => {
+router.post('/annulations', auth, yakro, resto, async (req, res) => {
   try {
     const { commandeId, menuNom, quantite, montant, motif, ligneId } = req.body;
     if (!commandeId || !menuNom || !motif || !montant) return res.status(400).json({ error: 'Champs requis manquants' });
@@ -87,7 +88,7 @@ router.post('/annulations', auth, yakro, async (req, res) => {
 });
 
 // Routes remises
-router.get('/remises', auth, yakro, async (req, res) => {
+router.get('/remises', auth, yakro, resto, async (req, res) => {
   try {
     const { dateDebut } = req.query;
     const where = {};
@@ -98,7 +99,7 @@ router.get('/remises', auth, yakro, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-router.post('/remises', auth, yakro, async (req, res) => {
+router.post('/remises', auth, yakro, resto, async (req, res) => {
   try {
     const { commandeId, montantAvant, montantRemise, motif } = req.body;
     if (!commandeId || !montantAvant || !montantRemise || !motif) return res.status(400).json({ error: 'Champs requis manquants' });

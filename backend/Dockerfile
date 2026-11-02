@@ -12,4 +12,5 @@ RUN npx prisma generate
 
 EXPOSE 4000
 
-CMD ["npm", "start"]
+# Applique le schéma Prisma (db push) + données de base idempotentes, puis démarre l'API
+CMD ["sh", "-c", "node src/seed.js; exec node src/index.js"]

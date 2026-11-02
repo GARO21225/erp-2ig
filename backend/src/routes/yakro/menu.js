@@ -1,19 +1,21 @@
 const router = require('express').Router();
 const prisma = require('../../lib/prisma');
 const { auth, requireFiliale, requireRole } = require('../../middleware/auth');
+const { resto, can, prixDe, appliquerPrix } = require('../../lib/yakro-resto');
 const yakro = requireFiliale('YAKRO_GRILL');
 
-router.get('/', auth, async (req, res) => {
+router.get('/', auth, resto, async (req, res) => {
   try {
     const { categorie, disponible } = req.query;
     const where = {};
     if (categorie) where.categorie = categorie;
-    if (disponible !== undefined) where.disponible = disponible === 'true';
 
-    const menu = await prisma.menuYakro.findMany({
+    // Menu commun, avec les prix et la disponibilité du restaurant courant
+    let menu = appliquerPrix(await prisma.menuYakro.findMany({
       where,
       orderBy: [{ categorie: 'asc' }, { nom: 'asc' }]
-    });
+    }), await prixDe(req.restaurantId));
+    if (disponible !== undefined) menu = menu.filter(i => i.disponible === (disponible === 'true'));
 
     // Grouper par catégorie
     const grouped = menu.reduce((acc, item) => {
@@ -28,7 +30,7 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-router.post('/', auth, yakro, requireRole('DG', 'MANAGER', 'DIRECTEUR'), async (req, res) => {
+router.post('/', auth, yakro, resto, can('menu.gerer'), async (req, res) => {
   try {
     const { nom, description, categorie, sousCategorie, prix, prixMini, prixMaxi, disponible, image, coutRevient } = req.body;
     if (!nom || !categorie || prix === undefined || prix === '') {
@@ -53,7 +55,7 @@ router.post('/', auth, yakro, requireRole('DG', 'MANAGER', 'DIRECTEUR'), async (
   }
 });
 
-router.put('/:id', auth, yakro, requireRole('DG', 'MANAGER', 'DIRECTEUR'), async (req, res) => {
+router.put('/:id', auth, yakro, resto, can('menu.gerer'), async (req, res) => {
   try {
     const { nom, description, categorie, sousCategorie, prix, prixMini, prixMaxi, disponible, image, coutRevient } = req.body;
     const data = {};
@@ -74,7 +76,7 @@ router.put('/:id', auth, yakro, requireRole('DG', 'MANAGER', 'DIRECTEUR'), async
   }
 });
 
-router.delete('/:id', auth, yakro, requireRole('DG', 'MANAGER', 'DIRECTEUR'), async (req, res) => {
+router.delete('/:id', auth, yakro, resto, can('menu.gerer'), async (req, res) => {
   try {
     await prisma.menuYakro.delete({ where: { id: req.params.id } });
     res.json({ message: 'Supprimé' });

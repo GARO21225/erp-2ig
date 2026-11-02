@@ -4,6 +4,7 @@
 const router = require('express').Router();
 const prisma = require('../../lib/prisma');
 const { auth, requireFiliale } = require('../../middleware/auth');
+const { resto, sc } = require('../../lib/yakro-resto');
 const yakro = requireFiliale('YAKRO_GRILL');
 
 const CATS_BAR = ['BIERE','VIN','CHAMPAGNE','COCKTAIL_ALCOOLISE','COCKTAIL_SANS_ALCOOL','SUCRERIE','TISANE','BOISSON'];
@@ -24,7 +25,7 @@ function getDateRange(periode) {
   return { debut, fin };
 }
 
-router.get('/', auth, yakro, async (req, res) => {
+router.get('/', auth, yakro, resto, async (req, res) => {
   try {
     const { periode = 'jour' } = req.query;
     const { debut, fin } = getDateRange(periode);
@@ -32,7 +33,8 @@ router.get('/', auth, yakro, async (req, res) => {
     const hierDebut = new Date(debutHier); hierDebut.setDate(hierDebut.getDate() - 1);
     const hierFin = new Date(debutHier);
 
-    const where = { createdAt: { gte: debut, lte: fin } };
+    const where = { createdAt: { gte: debut, lte: fin }, ...sc(req) };
+    const pc = req.restaurantId ? { commande: { restaurantId: req.restaurantId } } : {};
     const wherePayee = { ...where, statut: 'PAYEE' };
 
     const safe = async (fn) => { try { return await fn(); } catch { return null; } };
@@ -43,18 +45,18 @@ router.get('/', auth, yakro, async (req, res) => {
       caWeek, caMois,
       depenses,
     ] = await Promise.all([
-      safe(() => prisma.paiementYakro.aggregate({ _sum: { montant: true }, _count: { id: true }, where: { createdAt: { gte: debut, lte: fin } } })),
-      safe(() => prisma.paiementYakro.aggregate({ _sum: { montant: true }, where: { createdAt: { gte: hierDebut, lte: hierFin } } })),
+      safe(() => prisma.paiementYakro.aggregate({ _sum: { montant: true }, _count: { id: true }, where: { createdAt: { gte: debut, lte: fin }, ...pc } })),
+      safe(() => prisma.paiementYakro.aggregate({ _sum: { montant: true }, where: { createdAt: { gte: hierDebut, lte: hierFin }, ...pc } })),
       safe(() => prisma.commandeYakro.count({ where: wherePayee })),
       safe(() => prisma.commandeYakro.count({ where: { ...where, statut: 'ANNULEE' } })),
-      safe(() => prisma.paiementYakro.groupBy({ by: ['type'], _sum: { montant: true }, _count: { id: true }, where: { createdAt: { gte: debut } }, orderBy: { _sum: { montant: 'desc' } } })),
-      safe(() => prisma.tableRestaurant.findMany({ orderBy: { numero: 'asc' } })),
+      safe(() => prisma.paiementYakro.groupBy({ by: ['type'], _sum: { montant: true }, _count: { id: true }, where: { createdAt: { gte: debut }, ...pc }, orderBy: { _sum: { montant: 'desc' } } })),
+      safe(() => prisma.tableRestaurant.findMany({ where: sc(req), orderBy: { numero: 'asc' } })),
       prisma.ligneCommandeYakro.findMany({
         where: { commande: { statut: 'PAYEE', ...where } },
         include: { menu: { select: { nom:true, categorie:true, prix:true, coutRevient:true } } },
       }),
-      prisma.paiementYakro.aggregate({ _sum:{ montant:true }, where:{ createdAt:{ gte: new Date(new Date().setDate(new Date().getDate()-7)) } } }),
-      prisma.paiementYakro.aggregate({ _sum:{ montant:true }, where:{ createdAt:{ gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) } } }),
+      prisma.paiementYakro.aggregate({ _sum:{ montant:true }, where:{ createdAt:{ gte: new Date(new Date().setDate(new Date().getDate()-7)) }, ...pc } }),
+      prisma.paiementYakro.aggregate({ _sum:{ montant:true }, where:{ createdAt:{ gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) }, ...pc } }),
       prisma.commandeYakro.aggregate({ _sum:{ total:true }, where:{ statut:'PAYEE', ...where } }),
     ]);
 
@@ -75,7 +77,7 @@ router.get('/', auth, yakro, async (req, res) => {
 
     // Tables occupées
     const commandesOuvertes = await prisma.commandeYakro.findMany({
-      where: { statut: { in: ['EN_COURS','CUISINE','PRETE','SERVIE'] }, tableId: { not: null } },
+      where: { statut: { in: ['EN_COURS','CUISINE','PRETE','SERVIE'] }, tableId: { not: null }, ...sc(req) },
       select: { tableId: true }
     });
     const tablesOccupees = new Set(commandesOuvertes.map(c => c.tableId)).size;
@@ -138,7 +140,7 @@ router.get('/', auth, yakro, async (req, res) => {
     for (let i = 6; i >= 0; i--) {
       const d = new Date(); d.setDate(d.getDate()-i); d.setHours(0,0,0,0);
       const fin2 = new Date(d); fin2.setHours(23,59,59);
-      const ca = await prisma.paiementYakro.aggregate({ _sum:{ montant:true }, where:{ createdAt:{ gte:d, lte:fin2 } } });
+      const ca = await prisma.paiementYakro.aggregate({ _sum:{ montant:true }, where:{ createdAt:{ gte:d, lte:fin2 }, ...pc } });
       courbe.push({ label: d.toLocaleDateString('fr', { day:'2-digit', month:'short' }), ca: ca._sum.montant || 0 });
     }
 

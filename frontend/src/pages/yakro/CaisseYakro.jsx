@@ -188,7 +188,7 @@ export default function CaisseYakro() {
           </div>
 
           {/* Graphiques */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:16 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,280px),1fr))', gap:14, marginBottom:16 }}>
             {/* Bar vs Cuisine */}
             <div className="card">
               <div style={{ fontFamily:'Syne', fontWeight:700, fontSize:13, marginBottom:12 }}>Bar vs Cuisine</div>

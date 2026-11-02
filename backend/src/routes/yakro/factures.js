@@ -4,6 +4,7 @@
 const router = require('express').Router();
 const prisma = require('../../lib/prisma');
 const { auth, requireFiliale, requireRole } = require('../../middleware/auth');
+const { resto, can, sc } = require('../../lib/yakro-resto');
 const yakro = requireFiliale('YAKRO_GRILL');
 
 const fmtF = n => n ? Math.round(n).toLocaleString('fr') + ' FCFA' : '0 FCFA';
@@ -131,7 +132,7 @@ function genFactureHtml(params, commande, paiements, numero, retours = []) {
 }
 
 // ── POST /generer — Générer une facture après encaissement ────────────────────
-router.post('/generer', auth, yakro, async (req, res) => {
+router.post('/generer', auth, yakro, resto, async (req, res) => {
   try {
     const { commandeId } = req.body;
     if (!commandeId) return res.status(400).json({ error: 'commandeId requis' });
@@ -140,8 +141,8 @@ router.post('/generer', auth, yakro, async (req, res) => {
     const existing = await prisma.factureYakro.findUnique({ where: { commandeId } }).catch(() => null);
     if (existing) return res.json(existing);
 
-    const commande = await prisma.commandeYakro.findUnique({
-      where: { id: commandeId },
+    const commande = await prisma.commandeYakro.findFirst({
+      where: { id: commandeId, ...sc(req) },
       include: {
         table: { select: { numero: true } },
         lignes: { include: { menu: { select: { nom: true, categorie: true } } } },
@@ -166,6 +167,7 @@ router.post('/generer', auth, yakro, async (req, res) => {
     const facture = await prisma.factureYakro.create({
       data: {
         numero,
+        restaurantId: commande.restaurantId || req.restaurantId || null,
         commandeId,
         tableNumero: commande.table?.numero || null,
         serveurNom: commande.serveurNom || null,
@@ -188,7 +190,7 @@ router.post('/generer', auth, yakro, async (req, res) => {
 });
 
 // ── GET /:id — Récupérer une facture ─────────────────────────────────────────
-router.get('/:id', auth, yakro, async (req, res) => {
+router.get('/:id', auth, yakro, resto, async (req, res) => {
   try {
     const f = await prisma.factureYakro.findUnique({ where: { id: req.params.id } });
     if (!f) return res.status(404).json({ error: 'Facture introuvable' });
@@ -197,11 +199,11 @@ router.get('/:id', auth, yakro, async (req, res) => {
 });
 
 // ── GET / — Liste des factures ────────────────────────────────────────────────
-router.get('/', auth, yakro, async (req, res) => {
+router.get('/', auth, yakro, resto, async (req, res) => {
   try {
     const { dateDebut, limit = 100 } = req.query;
     const auj = new Date(); auj.setHours(0, 0, 0, 0);
-    const where = { createdAt: { gte: dateDebut ? new Date(dateDebut) : auj } };
+    const where = { createdAt: { gte: dateDebut ? new Date(dateDebut) : auj }, ...sc(req) };
     const factures = await prisma.factureYakro.findMany({
       where, orderBy: { createdAt: 'desc' }, take: Number(limit),
     });
@@ -210,7 +212,7 @@ router.get('/', auth, yakro, async (req, res) => {
 });
 
 // ── POST /retours — Retourner un article ──────────────────────────────────────
-router.post('/retours', auth, yakro, async (req, res) => {
+router.post('/retours', auth, yakro, resto, async (req, res) => {
   try {
     const { commandeId, ligneId, menuNom, menuId, quantite, prixUnitaire, motif, retourStock = false } = req.body;
     if (!commandeId || !menuNom || !quantite || !prixUnitaire || !motif) {
@@ -271,7 +273,7 @@ router.put('/retours/:id/valider', auth, requireRole('DG', 'DIRECTEUR', 'MANAGER
 });
 
 // ── GET /retours/liste — Liste des retours ─────────────────────────────────────
-router.get('/retours/liste', auth, yakro, async (req, res) => {
+router.get('/retours/liste', auth, yakro, resto, async (req, res) => {
   try {
     const { dateDebut } = req.query;
     const auj = new Date(); auj.setHours(0, 0, 0, 0);

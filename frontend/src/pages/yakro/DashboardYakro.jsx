@@ -112,7 +112,7 @@ export default function DashboardYakro() {
       </div>
 
       {/* Graphiques ligne 1 */}
-      <div style={{ display:'grid', gridTemplateColumns:'1.5fr 1fr', gap:14, marginBottom:20 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,280px),1fr))', gap:14, marginBottom:20 }}>
         <div className="card">
           <div style={{ fontFamily:'Syne', fontWeight:700, fontSize:14, marginBottom:12 }}>📈 Évolution CA</div>
           {courbe.length > 0 ? (
@@ -166,7 +166,7 @@ export default function DashboardYakro() {
       </div>
 
       {/* Ligne 2 : Serveurs + Tables + Produits */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:14, marginBottom:20 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,280px),1fr))', gap:14, marginBottom:20 }}>
         {/* Top serveurs */}
         <div className="card" style={{ padding:0, overflowX:'auto' }}>
           <div style={{ padding:'12px 16px', borderBottom:'0.5px solid #e8e7e1', fontFamily:'Syne', fontWeight:700, fontSize:13, color:'#8B1A1A' }}>🏆 Top Serveurs</div>

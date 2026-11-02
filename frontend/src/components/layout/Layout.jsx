@@ -1,5 +1,6 @@
 import NotifCentre from '../ui/NotifCentre';
 import AssistantERP from '../ui/AssistantERP';
+import SelecteurRestaurant from '../ui/SelecteurRestaurant';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '../../store';
@@ -10,7 +11,7 @@ import {
   ClipboardList, BookOpen, Calendar, Activity, ArrowDownLeft, ArrowUpRight,
   Building2, Map, Bike, Layers, FileText, TrendingUp, Home, Utensils,
   UserCheck, BarChart2, Archive, CheckSquare, Star, Receipt, Folder, Megaphone,
-  Briefcase, Award
+  Briefcase, Award, Store
 } from 'lucide-react';
 
 // ── Filiales ───────────────────────────────────────────────────────────────────
@@ -34,6 +35,8 @@ const PERMISSIONS = {
   'marges':            ['DG', 'DIRECTEUR'],
   'gestion-caisse':    ['DG', 'DIRECTEUR', 'MANAGER', 'COMPTABLE', 'CAISSIER'],
   'config-tables':     ['DG', 'DIRECTEUR', 'MANAGER'],
+  'restaurants':       ['DG', 'DIRECTEUR'],
+  'parametrage-resto': ['DG', 'DIRECTEUR', 'MANAGER'],
   'prescripteurs':     ['DG', 'DIRECTEUR', 'MANAGER', 'RESP_FONCIER'],
   'ventes':            ['DG', 'DIRECTEUR', 'MANAGER', 'RESP_FONCIER', 'COMPTABLE'],
   'depenses':          ['DG', 'DIRECTEUR', 'MANAGER', 'COMPTABLE', 'RESP_FONCIER', 'CAISSIER'],
@@ -66,6 +69,8 @@ const NAV = {
     { id: 'reservations',    label: 'Réservations',        to: '/yakro/reservations',     icon: Calendar },
     { id: 'depenses',        label: 'Dépenses',            to: '/yakro/depenses',         icon: ArrowDownLeft },
     { id: 'config-tables',   label: 'Config. Tables',      to: '/yakro/tables',           icon: Settings },
+    { id: 'parametrage-resto', label: 'Paramétrage restaurant', to: '/yakro/parametrage',   icon: Settings },
+    { id: 'restaurants',     label: 'Mes restaurants',     to: '/yakro/restaurants',      icon: Store },
   ],
   TOPTELSIG: [
     { id: 'toptelsig-dashboard', label: 'Dashboard',           to: '/toptelsig/dashboard',     icon: LayoutDashboard },
@@ -281,6 +286,8 @@ export default function Layout() {
             </>
           )}
         </div>
+
+        {filiale === 'YAKRO_GRILL' && <SelecteurRestaurant />}
 
         {/* Recherche */}
         <div className="topbar-search" style={{ position:'relative' }}>

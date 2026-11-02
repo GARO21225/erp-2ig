@@ -26,6 +26,17 @@ export const useAuthStore = create(
   )
 );
 
+// Restaurant Yakro Grill courant (envoyé en en-tête X-Restaurant-Id)
+export const useRestoStore = create(
+  persist(
+    (set) => ({
+      restaurantId: null,
+      setRestaurant: (restaurantId) => set({ restaurantId }),
+    }),
+    { name: '2ig-resto' }
+  )
+);
+
 export const useUIStore = create((set) => ({
   sidebarOpen: true,
   modalStack: [],

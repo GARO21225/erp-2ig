@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { useAuthStore } from '../store';
+import { useAuthStore, useRestoStore } from '../store';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:4000/api',
@@ -9,6 +9,11 @@ const api = axios.create({
 api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().token;
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  // Yakro Grill : toutes les requêtes portent le restaurant courant
+  if (config.url?.startsWith('/yakro')) {
+    const restaurantId = useRestoStore.getState().restaurantId;
+    if (restaurantId) config.headers['X-Restaurant-Id'] = restaurantId;
+  }
   return config;
 });
 
@@ -105,6 +110,26 @@ export const stocksAPI = {
 
 // ── YAKRO GRILL
 export const yakroAPI = {
+  // Restaurants, prix, paramètres, équipe & profils
+  moi: () => api.get('/yakro/restaurants/moi'),
+  catalogue: () => api.get('/yakro/restaurants/catalogue'),
+  restaurants: () => api.get('/yakro/restaurants'),
+  creerRestaurant: (data) => api.post('/yakro/restaurants', data),
+  majRestaurant: (id, data) => api.put(`/yakro/restaurants/${id}`, data),
+  desactiverRestaurant: (id) => api.delete(`/yakro/restaurants/${id}`),
+  prixRestaurant: (id) => api.get(`/yakro/restaurants/${id}/prix`),
+  majPrix: (id, items) => api.put(`/yakro/restaurants/${id}/prix`, { items }),
+  copierPrix: (id, data) => api.post(`/yakro/restaurants/${id}/prix/copier`, data),
+  parametres: (id) => api.get(`/yakro/restaurants/${id}/parametres`),
+  majParametres: (id, data) => api.put(`/yakro/restaurants/${id}/parametres`, data),
+  equipe: (id) => api.get(`/yakro/restaurants/${id}/equipe`),
+  majEquipe: (id, data) => api.put(`/yakro/restaurants/${id}/equipe`, data),
+  retirerEquipe: (id, utilisateurId) => api.delete(`/yakro/restaurants/${id}/equipe/${utilisateurId}`),
+  profils: () => api.get('/yakro/restaurants/profils/liste'),
+  creerProfil: (data) => api.post('/yakro/restaurants/profils', data),
+  majProfil: (id, data) => api.put(`/yakro/restaurants/profils/${id}`, data),
+  supprimerProfil: (id) => api.delete(`/yakro/restaurants/profils/${id}`),
+  utilisateursDispos: () => api.get('/yakro/restaurants/utilisateurs/disponibles'),
   tables: () => api.get('/yakro/tables'),
   updateTable: (id, statut) => api.put(`/yakro/tables/${id}/statut`, { statut }),
   createTable: (data) => api.post('/yakro/tables', data),

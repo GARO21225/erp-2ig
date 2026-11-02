@@ -9,6 +9,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 const prisma = new PrismaClient();
+const Y = require('./lib/yakro-resto');
 
 async function runMigrations() {
   // D'abord appliquer le schema via db push
@@ -40,9 +41,14 @@ async function runMigrations() {
 }
 
 async function seed() {
+  // Profils Yakro (Gérant, Caissier, Serveur…) et restaurant historique
+  await Y.assurerProfilsDefaut();
+  const resto = await Y.assurerRestaurantDefaut();
+  console.log(`✅ Restaurant ${resto.nom} + profils`);
+
   // Caisses
   for (const c of [
-    { nom:'Caisse Yakro Grill', filiale:'YAKRO_GRILL' },
+    { nom:'Caisse Yakro Grill', filiale:'YAKRO_GRILL', restaurantId: resto.id },
     { nom:'Caisse TOPTELSIG',   filiale:'TOPTELSIG' },
     { nom:'Caisse LiYA',        filiale:'LIYA' },
     { nom:'Caisse Groupe',      filiale:'GROUPE' },
@@ -54,10 +60,10 @@ async function seed() {
 
   // Tables restaurant
   for (let i = 1; i <= 12; i++) {
-    if (!await prisma.tableRestaurant.findUnique({ where:{ numero:i } })) {
+    if (!await prisma.tableRestaurant.findFirst({ where:{ restaurantId: resto.id, numero:i } })) {
       const zone = i<=7?'Salle':i<=10?'Terrasse':'VIP';
       const cap = i===7?8:[3,5,6].includes(i)?6:i>=11?6:4;
-      await prisma.tableRestaurant.create({ data:{ numero:i, capacite:cap, zone } });
+      await prisma.tableRestaurant.create({ data:{ restaurantId: resto.id, numero:i, capacite:cap, zone } });
     }
   }
   console.log(`✅ Tables`);
