@@ -3,13 +3,15 @@ const prisma = require('../../lib/prisma');
 const logger = require('../../lib/logger');
 const { auth, requireFiliale } = require('../../middleware/auth');
 const { VALIDATORS } = require('../../middleware/validate');
+const { resto, can, sc, prixDe, parametresDe, MODE_PARAM, TYPE_PARAM, ROLES_ADMIN } = require('../../lib/yakro-resto');
 const yakro = requireFiliale('YAKRO_GRILL');
+const pc = (req) => (req.restaurantId ? { commande: { restaurantId: req.restaurantId } } : {});
 
 // GET /api/yakro/commandes
-router.get('/', auth, yakro, async (req, res) => {
+router.get('/', auth, yakro, resto, async (req, res) => {
   try {
     const { statut, date, tableId, page = 1, limit = 50, dateDebut, dateFin } = req.query;
-    const where = {};
+    const where = { ...sc(req) };
     if (statut) where.statut = statut;
     if (tableId) where.tableId = tableId;
     if (date) {
@@ -33,22 +35,22 @@ router.get('/', auth, yakro, async (req, res) => {
 });
 
 // GET caisse du jour
-router.get('/caisse', auth, yakro, async (req, res) => {
+router.get('/caisse', auth, yakro, resto, async (req, res) => {
   try {
     const { dateDebut, dateFin } = req.query;
     const debut = dateDebut ? new Date(dateDebut) : new Date(new Date().setHours(0,0,0,0));
     const fin = dateFin ? new Date(dateFin) : new Date(new Date().setHours(23,59,59,999));
 
     const [caTotal, nbCommandes, parType, parStatut] = await Promise.all([
-      prisma.paiementYakro.aggregate({ _sum: { montant: true }, where: { createdAt: { gte: debut, lte: fin } } }),
-      prisma.commandeYakro.count({ where: { statut: 'PAYEE', createdAt: { gte: debut } } }),
-      prisma.paiementYakro.groupBy({ by: ['type'], _sum: { montant: true }, where: { createdAt: { gte: debut, lte: fin } } }),
-      prisma.commandeYakro.groupBy({ by: ['statut'], _count: { id: true }, where: { createdAt: { gte: debut, lte: fin } } }),
+      prisma.paiementYakro.aggregate({ _sum: { montant: true }, where: { createdAt: { gte: debut, lte: fin }, ...pc(req) } }),
+      prisma.commandeYakro.count({ where: { statut: 'PAYEE', createdAt: { gte: debut }, ...sc(req) } }),
+      prisma.paiementYakro.groupBy({ by: ['type'], _sum: { montant: true }, where: { createdAt: { gte: debut, lte: fin }, ...pc(req) } }),
+      prisma.commandeYakro.groupBy({ by: ['statut'], _count: { id: true }, where: { createdAt: { gte: debut, lte: fin }, ...sc(req) } }),
     ]);
 
     const ca = caTotal._sum.montant || 0;
     // Écart de caisse : différence entre CA théorique (commandes PAYEE) et paiements enregistrés
-    const caTheorique = await prisma.commandeYakro.aggregate({ _sum: { total: true }, where: { statut: 'PAYEE', createdAt: { gte: debut } } });
+    const caTheorique = await prisma.commandeYakro.aggregate({ _sum: { total: true }, where: { statut: 'PAYEE', createdAt: { gte: debut }, ...sc(req) } });
     const ecartCaisse = (caTheorique._sum.total || 0) - ca;
 
     res.json({
@@ -59,18 +61,28 @@ router.get('/caisse', auth, yakro, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/yakro/commandes — Nouvelle commande
-router.post('/', auth, yakro, VALIDATORS.commande, async (req, res) => {
+// POST /api/yakro/commandes — Nouvelle commande (prix et règles du restaurant courant)
+router.post('/', auth, yakro, resto, can('commande.creer'), VALIDATORS.commande, async (req, res) => {
   try {
     const { tableId, type, nbCouverts, lignes, notes, serveurId, serveurNom, remise = 0 } = req.body;
+    const params = await parametresDe(req.restaurantId);
+    const typeCmd = type || 'SUR_PLACE';
+    if (TYPE_PARAM[typeCmd] && params[TYPE_PARAM[typeCmd]] !== '1') return res.status(400).json({ error: `Le mode « ${typeCmd} » n'est pas activé dans ce restaurant` });
+    if (params.couverts_obligatoires === '1' && typeCmd === 'SUR_PLACE' && !(Number(nbCouverts) > 0)) return res.status(400).json({ error: 'Nombre de couverts obligatoire' });
+    if (tableId) {
+      const t = await prisma.tableRestaurant.findFirst({ where: { id: tableId, ...sc(req) } });
+      if (!t) return res.status(400).json({ error: 'Table introuvable dans ce restaurant' });
+    }
 
+    const prixResto = await prixDe(req.restaurantId);
     let sousTotal = 0;
     const lignesData = [];
     for (const l of lignes) {
       const item = await prisma.menuYakro.findUnique({ where: { id: l.menuId } });
       if (!item) continue;
-      if (!item.disponible) return res.status(400).json({ error: `Article "${item.nom}" indisponible (rupture ou hors menu)` });
-      const prix = l.prixUnitaire || item.prix;
+      const o = prixResto.get(item.id);
+      if (!item.disponible || (o && !o.disponible)) return res.status(400).json({ error: `Article "${item.nom}" indisponible (rupture ou hors menu)` });
+      const prix = l.prixUnitaire || (o ? o.prix : item.prix);
       sousTotal += prix * l.quantite;
       lignesData.push({ menuId: l.menuId, quantite: l.quantite, prixUnitaire: prix, notes: l.notes });
     }
@@ -78,11 +90,16 @@ router.post('/', auth, yakro, VALIDATORS.commande, async (req, res) => {
     if (lignesData.length === 0) return res.status(400).json({ error: 'Aucun article valide dans la commande' });
 
     const remiseMontant = Math.min(Number(remise) || 0, sousTotal);
+    if (remiseMontant > 0 && !req.permissions.has('commande.remise')) return res.status(403).json({ error: "Vous n'avez pas le droit d'accorder une remise" });
+    const maxPct = Number(params.remise_max_pct);
+    if (remiseMontant > 0 && !ROLES_ADMIN.includes(req.user.role) && maxPct >= 0 && remiseMontant > sousTotal * maxPct / 100) {
+      return res.status(400).json({ error: `Remise maximale autorisée : ${maxPct} %` });
+    }
     const total = sousTotal - remiseMontant;
 
-    const numero = `YG-${Date.now()}`;
+    const numero = `${req.restaurant?.code || 'YG'}-${Date.now()}`;
     const commande = await prisma.commandeYakro.create({
-      data: { numero, tableId, serveurId: serveurId || req.user.id, serveurNom: serveurNom || null, type: type || 'SUR_PLACE',
+      data: { numero, restaurantId: req.restaurantId, tableId, serveurId: serveurId || req.user.id, serveurNom: serveurNom || null, type: typeCmd,
               nbCouverts: nbCouverts || 1, sousTotal, remise: remiseMontant, total, notes,
               lignes: { create: lignesData } },
       include: { table: true, lignes: true }
@@ -90,14 +107,15 @@ router.post('/', auth, yakro, VALIDATORS.commande, async (req, res) => {
 
     if (tableId) await prisma.tableRestaurant.update({ where: { id: tableId }, data: { statut: 'OCCUPEE' } });
 
-    logger.info('Commande créée', { numero, total, serveurId: req.user.id });
+    logger.info('Commande créée', { numero, total, serveurId: req.user.id, restaurant: req.restaurant?.code });
     res.status(201).json(commande);
   } catch (e) { logger.error('POST /yakro/commandes', { error: e.message }); res.status(500).json({ error: e.message }); }
 });
 
 // PUT /:id/statut
-router.put('/:id/statut', auth, yakro, async (req, res) => {
+router.put('/:id/statut', auth, yakro, resto, async (req, res) => {
   try {
+    if (!await prisma.commandeYakro.findFirst({ where: { id: req.params.id, ...sc(req) }, select: { id: true } })) return res.status(404).json({ error: 'Commande introuvable' });
     const commande = await prisma.commandeYakro.update({
       where: { id: req.params.id }, data: { statut: req.body.statut }
     });
@@ -109,14 +127,22 @@ router.put('/:id/statut', auth, yakro, async (req, res) => {
 });
 
 // POST /:id/payer — Paiement mixte complet
-router.post('/:id/payer', auth, yakro, VALIDATORS.paiementMixte, async (req, res) => {
+router.post('/:id/payer', auth, yakro, resto, can('commande.encaisser'), VALIDATORS.paiementMixte, async (req, res) => {
   try {
     const { paiements, especesRecues, monnaieRendue } = req.body;
-    const commande = await prisma.commandeYakro.findUnique({ where: { id: req.params.id } });
+    const commande = await prisma.commandeYakro.findFirst({ where: { id: req.params.id, ...sc(req) } });
     if (!commande) return res.status(404).json({ error: 'Commande introuvable' });
     if (commande.statut === 'PAYEE') return res.status(400).json({ error: 'Commande déjà payée' });
     if (commande.statut === 'ANNULEE') return res.status(400).json({ error: 'Impossible de payer une commande annulée' });
 
+    const params = await parametresDe(req.restaurantId);
+    for (const p of paiements) {
+      const cle = MODE_PARAM[p.typePaiement];
+      if (cle && params[cle] !== '1') return res.status(400).json({ error: `Mode de paiement non accepté dans ce restaurant : ${p.typePaiement}` });
+    }
+    if (params.session_obligatoire === '1' && !await prisma.sessionCaisseYakro.findFirst({ where: { statut: 'OUVERTE', ...sc(req) } })) {
+      return res.status(400).json({ error: "Ouvrez d'abord la session de caisse" });
+    }
     const totalPaye = paiements.reduce((s, p) => s + Number(p.montant), 0);
     if (Math.abs(totalPaye - commande.total) > 1) {
       return res.status(400).json({ error: `Somme paiements (${totalPaye} F) ≠ total commande (${commande.total} F)` });
@@ -135,7 +161,7 @@ router.post('/:id/payer', auth, yakro, VALIDATORS.paiementMixte, async (req, res
                 especesRecues: Number(especesRecues || 0), monnaieRendue: Number(monnaieRendue || 0),
                 estMixte: paiements.length > 1 }
       });
-      const caisse = await tx.caisse.findFirst({ where: { filiale: 'YAKRO_GRILL', actif: true } });
+      const caisse = await tx.caisse.findFirst({ where: { filiale: 'YAKRO_GRILL', actif: true, ...sc(req) } });
       if (caisse) {
         await tx.caisse.update({ where: { id: caisse.id }, data: { solde: { increment: commande.total } } });
         await Promise.all(paiements.map(p => tx.encaissement.create({
@@ -154,14 +180,14 @@ router.post('/:id/payer', auth, yakro, VALIDATORS.paiementMixte, async (req, res
 });
 
 // PUT /:id/remise — Appliquer une remise commerciale
-router.put('/:id/remise', auth, yakro, async (req, res) => {
+router.put('/:id/remise', auth, yakro, resto, can('commande.remise'), async (req, res) => {
   try {
     const { remise, motif } = req.body;
     if (!motif) return res.status(400).json({ error: 'Motif de remise obligatoire' });
     const remiseMontant = Number(remise);
     if (isNaN(remiseMontant) || remiseMontant < 0) return res.status(400).json({ error: 'Montant remise invalide' });
 
-    const commande = await prisma.commandeYakro.findUnique({ where: { id: req.params.id } });
+    const commande = await prisma.commandeYakro.findFirst({ where: { id: req.params.id, ...sc(req) } });
     if (!commande) return res.status(404).json({ error: 'Commande introuvable' });
     if (commande.statut === 'PAYEE') return res.status(400).json({ error: 'Commande déjà payée — remise impossible' });
     if (remiseMontant > commande.sousTotal) return res.status(400).json({ error: `Remise (${remiseMontant} F) > sous-total (${commande.sousTotal} F)` });
@@ -176,13 +202,13 @@ router.put('/:id/remise', auth, yakro, async (req, res) => {
 });
 
 // POST /:id/offert — Marquer comme offert client (perte stock)
-router.post('/:id/offert', auth, requireFiliale('YAKRO_GRILL'), async (req, res) => {
+router.post('/:id/offert', auth, yakro, resto, can('commande.remise'), async (req, res) => {
   try {
     const { motif } = req.body;
     if (!motif) return res.status(400).json({ error: 'Motif obligatoire pour un offert client' });
     const updated = await prisma.commandeYakro.update({
       where: { id: req.params.id },
-      data: { remise: (await prisma.commandeYakro.findUnique({ where: { id: req.params.id } })).total, total: 0, statut: 'PAYEE', notes: `OFFERT CLIENT: ${motif}`, payeeLe: new Date() }
+      data: { remise: (await prisma.commandeYakro.findFirst({ where: { id: req.params.id, ...sc(req) } })).total, total: 0, statut: 'PAYEE', notes: `OFFERT CLIENT: ${motif}`, payeeLe: new Date() }
     });
     if (updated.tableId) await prisma.tableRestaurant.update({ where: { id: updated.tableId }, data: { statut: 'LIBRE' } });
     res.json(updated);
@@ -190,11 +216,11 @@ router.post('/:id/offert', auth, requireFiliale('YAKRO_GRILL'), async (req, res)
 });
 
 // DELETE /:id — Annulation avec motif obligatoire
-router.delete('/:id', auth, yakro, async (req, res) => {
+router.delete('/:id', auth, yakro, resto, can('commande.annuler'), async (req, res) => {
   try {
     const { motif } = req.body;
     if (!motif) return res.status(400).json({ error: 'Motif d\'annulation obligatoire' });
-    const commande = await prisma.commandeYakro.findUnique({ where: { id: req.params.id } });
+    const commande = await prisma.commandeYakro.findFirst({ where: { id: req.params.id, ...sc(req) } });
     if (!commande) return res.status(404).json({ error: 'Commande introuvable' });
     if (commande.statut === 'PAYEE') return res.status(400).json({ error: 'Commande payée — annulation impossible. Demander un remboursement.' });
 
@@ -206,16 +232,16 @@ router.delete('/:id', auth, yakro, async (req, res) => {
 });
 
 // POST /:id/rembourser — Remboursement après paiement (si erreur caisse)
-router.post('/:id/rembourser', auth, requireFiliale('YAKRO_GRILL'), async (req, res) => {
+router.post('/:id/rembourser', auth, yakro, resto, can('commande.rembourser'), async (req, res) => {
   try {
     const { motif, montant } = req.body;
     if (!motif) return res.status(400).json({ error: 'Motif de remboursement obligatoire' });
-    const commande = await prisma.commandeYakro.findUnique({ where: { id: req.params.id }, include: { paiements: true } });
+    const commande = await prisma.commandeYakro.findFirst({ where: { id: req.params.id, ...sc(req) }, include: { paiements: true } });
     if (!commande) return res.status(404).json({ error: 'Commande introuvable' });
     if (commande.statut !== 'PAYEE') return res.status(400).json({ error: 'Seule une commande payée peut être remboursée' });
 
     const montantRemboursement = Number(montant) || commande.total;
-    const caisse = await prisma.caisse.findFirst({ where: { filiale: 'YAKRO_GRILL', actif: true } });
+    const caisse = await prisma.caisse.findFirst({ where: { filiale: 'YAKRO_GRILL', actif: true, ...sc(req) } });
     if (caisse && caisse.solde < montantRemboursement) return res.status(400).json({ error: `Solde caisse insuffisant (${caisse.solde.toLocaleString('fr')} F) pour rembourser ${montantRemboursement.toLocaleString('fr')} F` });
 
     await prisma.$transaction(async (tx) => {
@@ -231,16 +257,16 @@ router.post('/:id/rembourser', auth, requireFiliale('YAKRO_GRILL'), async (req, 
 });
 
 // GET stats + KPI
-router.get('/stats', auth, yakro, async (req, res) => {
+router.get('/stats', auth, yakro, resto, async (req, res) => {
   try {
     const { dateDebut, dateFin } = req.query;
     const debut = dateDebut ? new Date(dateDebut) : new Date(new Date().setHours(0,0,0,0));
     const [total, payees, annulees, remises, ca] = await Promise.all([
-      prisma.commandeYakro.count({ where: { createdAt: { gte: debut } } }),
-      prisma.commandeYakro.count({ where: { statut: 'PAYEE', createdAt: { gte: debut } } }),
-      prisma.commandeYakro.count({ where: { statut: 'ANNULEE', createdAt: { gte: debut } } }),
-      prisma.commandeYakro.aggregate({ _sum: { remise: true }, where: { createdAt: { gte: debut } } }),
-      prisma.paiementYakro.aggregate({ _sum: { montant: true }, where: { createdAt: { gte: debut } } }),
+      prisma.commandeYakro.count({ where: { createdAt: { gte: debut }, ...sc(req) } }),
+      prisma.commandeYakro.count({ where: { statut: 'PAYEE', createdAt: { gte: debut }, ...sc(req) } }),
+      prisma.commandeYakro.count({ where: { statut: 'ANNULEE', createdAt: { gte: debut }, ...sc(req) } }),
+      prisma.commandeYakro.aggregate({ _sum: { remise: true }, where: { createdAt: { gte: debut }, ...sc(req) } }),
+      prisma.paiementYakro.aggregate({ _sum: { montant: true }, where: { createdAt: { gte: debut }, ...pc(req) } }),
     ]);
     res.json({ total, payees, annulees, remises: remises._sum.remise || 0, ca: ca._sum.montant || 0, tauxConversion: total > 0 ? Math.round(payees/total*100) : 0 });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -248,20 +274,22 @@ router.get('/stats', auth, yakro, async (req, res) => {
 
 
 // POST /:id/ajouter-lignes — Ajouter des articles à une commande EN_COURS
-router.post('/:id/ajouter-lignes', auth, yakro, async (req, res) => {
+router.post('/:id/ajouter-lignes', auth, yakro, resto, async (req, res) => {
   try {
     const { lignes, notes } = req.body;
-    const commande = await prisma.commandeYakro.findUnique({ where: { id: req.params.id } });
+    const commande = await prisma.commandeYakro.findFirst({ where: { id: req.params.id, ...sc(req) } });
     if (!commande) return res.status(404).json({ error: 'Commande introuvable' });
     if (commande.statut === 'PAYEE') return res.status(400).json({ error: 'Commande déjà payée' });
     if (commande.statut === 'ANNULEE') return res.status(400).json({ error: 'Commande annulée' });
 
     const lignesData = [];
     let ajout = 0;
+    const prixResto = await prixDe(req.restaurantId);
     for (const l of lignes) {
       const item = await prisma.menuYakro.findUnique({ where: { id: l.menuId || l.id } });
-      if (!item || !item.disponible) continue;
-      const prix = l.prixUnitaire || l.prix || item.prix;
+      const o = item && prixResto.get(item.id);
+      if (!item || !item.disponible || (o && !o.disponible)) continue;
+      const prix = l.prixUnitaire || l.prix || (o ? o.prix : item.prix);
       ajout += prix * (l.quantite || 1);
       lignesData.push({ commandeId: req.params.id, menuId: item.id, quantite: l.quantite || 1, prixUnitaire: prix, notes: l.notes });
     }
@@ -289,7 +317,7 @@ router.post('/:id/ajouter-lignes', auth, yakro, async (req, res) => {
 });
 
 // GET /yakro/caisse-detail — Caisse du jour avec départage Bar/Cuisine
-router.get('/caisse-detail', auth, yakro, async (req, res) => {
+router.get('/caisse-detail', auth, yakro, resto, async (req, res) => {
   try {
     const auj = new Date(); auj.setHours(0,0,0,0);
     const demain = new Date(auj); demain.setDate(demain.getDate()+1);
@@ -297,7 +325,7 @@ router.get('/caisse-detail', auth, yakro, async (req, res) => {
     const CATS_BAR = ['BIERE','VIN','CHAMPAGNE','COCKTAIL_ALCOOLISE','COCKTAIL_SANS_ALCOOL','SUCRERIE','TISANE'];
 
     const lignes = await prisma.ligneCommandeYakro.findMany({
-      where: { commande: { statut: 'PAYEE', createdAt: { gte: auj, lt: demain } } },
+      where: { commande: { statut: 'PAYEE', createdAt: { gte: auj, lt: demain }, ...sc(req) } },
       include: { menu: { select: { categorie: true, nom: true } } }
     });
 
@@ -317,10 +345,10 @@ router.get('/caisse-detail', auth, yakro, async (req, res) => {
     const paiements = await prisma.paiementYakro.groupBy({
       by: ['type'],
       _sum: { montant: true },
-      where: { createdAt: { gte: auj, lt: demain } }
+      where: { createdAt: { gte: auj, lt: demain }, ...pc(req) }
     });
 
-    const nbCommandes = await prisma.commandeYakro.count({ where: { statut: 'PAYEE', createdAt: { gte: auj, lt: demain } } });
+    const nbCommandes = await prisma.commandeYakro.count({ where: { statut: 'PAYEE', createdAt: { gte: auj, lt: demain }, ...sc(req) } });
 
     res.json({
       totalJour: totalBar + totalCuisine,
@@ -336,7 +364,7 @@ router.get('/caisse-detail', auth, yakro, async (req, res) => {
 });
 
 // GET /yakro/commandes/historique — Historique des passages caisse
-router.get('/historique', auth, yakro, async (req, res) => {
+router.get('/historique', auth, yakro, resto, async (req, res) => {
   try {
     const { dateDebut, dateFin, limit = 100 } = req.query;
     const auj = new Date(); auj.setHours(0,0,0,0);
@@ -344,7 +372,7 @@ router.get('/historique', auth, yakro, async (req, res) => {
     const fin = dateFin ? new Date(dateFin) : new Date();
 
     const commandes = await prisma.commandeYakro.findMany({
-      where: { statut: 'PAYEE', createdAt: { gte: debut, lte: fin } },
+      where: { statut: 'PAYEE', createdAt: { gte: debut, lte: fin }, ...sc(req) },
       include: {
         table: { select: { numero: true, zone: true } },
         lignes: { include: { menu: { select: { nom: true, categorie: true } } } },

@@ -296,6 +296,7 @@ model FichePaie {
 
 model Caisse {
   id          String   @id @default(cuid())
+  restaurantId String?
   nom         String
   filiale     Filiale
   solde       Float    @default(0)
@@ -491,7 +492,8 @@ model Document {
 
 model TableRestaurant {
   id              String   @id @default(cuid())
-  numero          Int      @unique
+  restaurantId    String?
+  numero          Int
   nom             String?
   capacite        Int      @default(4)
   zone            String   @default("Salle") // Salle, Terrasse, VIP, Bar
@@ -504,6 +506,8 @@ model TableRestaurant {
   commandes    CommandeYakro[]
   reservations ReservationYakro[]
 
+  @@unique([restaurantId, numero])
+  @@index([restaurantId])
   @@map("tables_restaurant")
 }
 
@@ -524,6 +528,7 @@ model ChangementServeurYakro {
 
 model CommandeYakro {
   id          String   @id @default(cuid())
+  restaurantId String?
   numero      String   @unique
   tableId     String?
   table       TableRestaurant? @relation(fields: [tableId], references: [id])
@@ -1447,6 +1452,7 @@ model RemiseYakro {
 
 // ── YAKRO GRILL — DÉPENSES RESTAURANT ───────────────────────────────────────
 model DepenseYakro {
+  restaurantId String?
   id             String   @id @default(cuid())
   categorie      String   // Achats marchandises, Boissons, Viandes, etc.
   description    String
@@ -1472,6 +1478,7 @@ model DepenseYakro {
 // Session de caisse
 model SessionCaisseYakro {
   id              String   @id @default(cuid())
+  restaurantId    String?
   ouvertPar       String
   ouvertParNom    String
   ouvertLe        DateTime @default(now())
@@ -1533,6 +1540,7 @@ model PropositionFoncier {
 
 model FactureYakro {
   id              String   @id @default(cuid())
+  restaurantId    String?
   numero          String   @unique   // FAC-YG-2026-000001
   commandeId      String   @unique
   tableNumero     Int?
@@ -1614,4 +1622,89 @@ model MissionExpert {
   updatedAt   DateTime  @updatedAt
 
   @@map("missions_expert")
+}
+
+// ─────────────────────────────────────────────
+// YAKRO GRILL MULTI-RESTAURANTS — paramétrable (même logique que RZI-camp)
+// Menu commun, prix et paramètres propres à chaque restaurant
+// ─────────────────────────────────────────────
+
+model RestaurantYakro {
+  id            String   @id @default(cuid())
+  code          String   @unique            // ex: YAKRO, ABJ-COCODY
+  nom           String
+  ville         String?
+  adresse       String?
+  telephone     String?
+  devise        String   @default("FCFA")
+  tvaTaux       Float    @default(0)        // % appliqué aux tickets/factures (0 = pas de TVA)
+  ouverture     String   @default("08:00")
+  fermeture     String   @default("23:00")
+  enteteTicket  String?
+  piedTicket    String?
+  actif         Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  prix          PrixRestaurantYakro[]
+  parametres    ParametreRestaurantYakro[]
+  acces         AccesRestaurantYakro[]
+
+  @@map("restaurants_yakro")
+}
+
+// Prix (et disponibilité) d'un plat dans un restaurant. Absent = prix du menu commun.
+model PrixRestaurantYakro {
+  id            String   @id @default(cuid())
+  restaurantId  String
+  restaurant    RestaurantYakro @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  menuId        String
+  prix          Float
+  disponible    Boolean  @default(true)
+
+  @@unique([restaurantId, menuId])
+  @@map("prix_restaurant_yakro")
+}
+
+// Paramètres clé/valeur par restaurant (modes de paiement, remise max, ticket, etc.)
+model ParametreRestaurantYakro {
+  id            String   @id @default(cuid())
+  restaurantId  String
+  restaurant    RestaurantYakro @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  cle           String
+  valeur        String   @default("")
+  updatedAt     DateTime @updatedAt
+
+  @@unique([restaurantId, cle])
+  @@map("parametres_restaurant_yakro")
+}
+
+// Profil = ensemble de permissions nommé et modifiable (ex: Gérant, Caissier, Serveur)
+model ProfilYakro {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  nom           String
+  description   String?
+  permissions   String[]
+  systeme       Boolean  @default(false)    // profils par défaut non supprimables
+  createdAt     DateTime @default(now())
+
+  acces         AccesRestaurantYakro[]
+
+  @@map("profils_yakro")
+}
+
+// Affectation d'un utilisateur à un restaurant avec un profil
+model AccesRestaurantYakro {
+  id            String   @id @default(cuid())
+  utilisateurId String
+  restaurantId  String
+  restaurant    RestaurantYakro @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  profilId      String
+  profil        ProfilYakro @relation(fields: [profilId], references: [id])
+  createdAt     DateTime @default(now())
+
+  @@unique([utilisateurId, restaurantId])
+  @@index([utilisateurId])
+  @@map("acces_restaurant_yakro")
 }
