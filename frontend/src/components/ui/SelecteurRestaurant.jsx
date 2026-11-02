@@ -7,8 +7,12 @@ import { useYakro } from '../../lib/useYakro';
 export default function SelecteurRestaurant() {
   const qc = useQueryClient();
   const setRestaurant = useRestoStore(s => s.setRestaurant);
-  const { restaurants, courant } = useYakro();
-  if (restaurants.length < 2) return null;
+  const { restaurants, courant, isLoading } = useYakro();
+  const pastille = { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, flexShrink: 0, fontSize: 12, fontWeight: 600, maxWidth: 170 };
+  if (isLoading) return null;
+  if (restaurants.length === 0) return <span style={{ ...pastille, background: '#FCEBEB', color: '#A32D2D' }}>Aucun restaurant affecté</span>;
+  // Un seul restaurant (cas d'un employé affecté) : on l'affiche, sans choix possible
+  if (restaurants.length === 1) return <span style={{ ...pastille, background: '#FDF2F2', color: '#8B1A1A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><Store size={13} style={{ flexShrink: 0 }} />{courant?.nom}</span>;
 
   const changer = (id) => {
     setRestaurant(id);

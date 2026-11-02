@@ -88,6 +88,12 @@ async function assurerRestaurantDefaut() {
   let resto = await prisma.restaurantYakro.findFirst({ orderBy: { createdAt: 'asc' } });
   if (!resto) {
     resto = await prisma.restaurantYakro.create({ data: { code: 'YAKRO', nom: 'Yakro Grill', ville: 'Yamoussoukro' } });
+    // Une seule fois : les comptes Yakro existants sont affectés au restaurant historique avec le profil de leur rôle
+    const users = await prisma.utilisateur.findMany({ where: { actif: true, filiale: 'YAKRO_GRILL', role: { notIn: ROLES_ADMIN } }, select: { id: true, role: true } });
+    for (const u of users) {
+      const profil = await prisma.profilYakro.findUnique({ where: { code: ROLE_PROFIL[u.role] || 'SERVEUR' } });
+      if (profil) await prisma.accesRestaurantYakro.create({ data: { utilisateurId: u.id, restaurantId: resto.id, profilId: profil.id } }).catch(() => {});
+    }
   }
   const sansResto = { where: { restaurantId: null }, data: { restaurantId: resto.id } };
   await Promise.all([
@@ -112,10 +118,8 @@ async function accesDe(user) {
     return acces.filter(a => parId.has(a.restaurantId))
       .map(a => ({ restaurant: parId.get(a.restaurantId), permissions: new Set(a.profil.permissions), profil: a.profil.code }));
   }
-  // Pas d'affectation : accès à tous les restaurants avec le profil lié à son rôle ERP
-  const code = ROLE_PROFIL[user.role];
-  const profil = PROFILS_DEFAUT.find(p => p.code === code) || PROFILS_DEFAUT.find(p => p.code === 'SERVEUR');
-  return restaurants.map(r => ({ restaurant: r, permissions: new Set(profil.permissions), profil: profil.code }));
+  // Non affecté : aucun accès. Seul un administrateur (DG / Directeur / Groupe) affecte un utilisateur à un restaurant.
+  return [];
 }
 
 /** Middleware (après auth) : renseigne req.restaurantId, req.restaurant, req.permissions. */
@@ -124,9 +128,12 @@ const resto = async (req, res, next) => {
     const demande = req.headers['x-restaurant-id'] || req.query.restaurantId || req.body?.restaurantId;
     const liste = await accesDe(req.user);
     if (!liste.length) {
-      // Aucun restaurant configuré : mode historique non cloisonné
-      req.restaurantId = null; req.restaurant = null; req.permissions = new Set(TOUTES);
-      return next();
+      if (await prisma.restaurantYakro.count() === 0) {
+        // Aucun restaurant configuré : mode historique non cloisonné
+        req.restaurantId = null; req.restaurant = null; req.permissions = new Set(TOUTES);
+        return next();
+      }
+      return res.status(403).json({ error: "Aucun restaurant ne vous est affecté — contactez l'administrateur" });
     }
     const choisi = demande ? liste.find(a => a.restaurant.id === demande) : liste[0];
     if (!choisi) return res.status(403).json({ error: "Accès refusé à ce restaurant" });
