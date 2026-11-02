@@ -16,6 +16,8 @@ function splitSql(sql) {
   const out = []; let cur = ''; let dollar = false; let quote = false;
   for (let i = 0; i < sql.length; i++) {
     const c = sql[i];
+    // Commentaire de ligne (hors bloc $$ et hors chaîne) : ignoré, une apostrophe y serait prise pour une chaîne
+    if (!dollar && !quote && c === '-' && sql[i + 1] === '-') { while (i < sql.length && sql[i] !== '\n') i++; cur += '\n'; continue; }
     if (!quote && c === '$' && sql[i + 1] === '$') { dollar = !dollar; cur += '$$'; i++; continue; }
     if (!dollar && c === "'") quote = !quote;
     if (!dollar && !quote && c === ';') { if (cur.trim()) out.push(cur.trim()); cur = ''; continue; }
