@@ -11,7 +11,7 @@ import {
   ClipboardList, BookOpen, Calendar, Activity, ArrowDownLeft, ArrowUpRight,
   Building2, Map, Bike, Layers, FileText, TrendingUp, Home, Utensils,
   UserCheck, BarChart2, Archive, CheckSquare, Star, Receipt, Folder, Megaphone,
-  Briefcase, Award, Store
+  Briefcase, Award, Store, MoreHorizontal
 } from 'lucide-react';
 
 // ── Filiales ───────────────────────────────────────────────────────────────────
@@ -102,6 +102,14 @@ const NAV_COMMUNS = [
   { id: 'rh-c',     label: 'RH & Équipes',      to: '/rh',     icon: Users },
 ];
 
+// Onglets du bas sur phone (Yakro Grill) ; le reste passe par « Plus »
+const TABBAR = [
+  { id: 'pos', court: 'Salle' },
+  { id: 'commandes', court: 'Commandes' },
+  { id: 'caisse', court: 'Caisse' },
+  { id: 'yakro-dashboard', court: 'Tableau' },
+];
+
 const ENTITE_LABELS = {
   employes:'👥 Employé', souscripteurs:'🏠 Souscripteur', prescripteurs:'🤝 Prescripteur',
   lots:'📍 Lot', projets:'🏗 Projet', livraisons:'🛵 Livraison', motos:'🏍 Moto', produits:'📦 Produit',
@@ -190,36 +198,36 @@ export default function Layout() {
       {/* En-tête filiale */}
       <div style={{ padding:'12px 16px 6px', display:'flex', alignItems:'center', gap:6 }}>
         <span style={{ fontSize:16 }}>{filInfo.icon}</span>
-        <span style={{ fontSize:10, fontWeight:700, letterSpacing:1.5, textTransform:'uppercase', color }}>{filInfo.label}</span>
+        <span className="nav-label" style={{ fontSize:10, fontWeight:700, letterSpacing:1.5, textTransform:'uppercase', color }}>{filInfo.label}</span>
       </div>
 
       {/* Items de navigation filtrés par rôle */}
       {navItems.map(item => (
-        <NavLink key={item.to} to={item.to} onClick={onItemClick}
+        <NavLink key={item.to} to={item.to} onClick={onItemClick} title={item.label} aria-label={item.label}
           style={({ isActive }) => ({
             display:'flex', alignItems:'center', gap:10, padding:'9px 16px',
             fontSize:13, color:isActive?'#1a1a1a':'#888780', textDecoration:'none',
             background:isActive?'#F1EFE8':'transparent', fontWeight:isActive?600:400,
-            borderLeft:`2px solid ${isActive?color:'transparent'}`, transition:'all 0.1s',
+            borderLeft:`2px solid ${isActive?color:'transparent'}`, transition:'background-color 0.1s, color 0.1s',
           })}>
           <item.icon size={15}/>
-          <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.label}</span>
+          <span className="nav-label" style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.label}</span>
         </NavLink>
       ))}
 
       {/* Section Communs (hors GROUPE) */}
       {filiale !== 'GROUPE' && (
         <>
-          <div style={{ padding:'12px 16px 4px', fontSize:9, fontWeight:600, letterSpacing:2, textTransform:'uppercase', color:'#aaa' }}>Communs</div>
+          <div className="nav-head-label" style={{ padding:'12px 16px 4px', fontSize:9, fontWeight:600, letterSpacing:2, textTransform:'uppercase', color:'#aaa' }}>Communs</div>
           {NAV_COMMUNS.map(item => (
-            <NavLink key={item.to} to={item.to} onClick={onItemClick}
+            <NavLink key={item.to} to={item.to} onClick={onItemClick} title={item.label} aria-label={item.label}
               style={({ isActive }) => ({
                 display:'flex', alignItems:'center', gap:10, padding:'9px 16px',
                 fontSize:13, color:isActive?'#1a1a1a':'#888780', textDecoration:'none',
                 background:isActive?'#F1EFE8':'transparent', fontWeight:isActive?600:400,
                 borderLeft:`2px solid ${isActive?color:'transparent'}`,
               })}>
-              <item.icon size={15}/>{item.label}
+              <item.icon size={15}/><span className="nav-label">{item.label}</span>
             </NavLink>
           ))}
         </>
@@ -227,19 +235,19 @@ export default function Layout() {
 
       {/* Portail en bas */}
       <div style={{ height:1, background:'#e8e7e1', margin:'8px 16px' }}/>
-      <button onClick={()=>{ navigate('/portail'); setSidebarOpen(false); }}
+      <button onClick={()=>{ navigate('/portail'); setSidebarOpen(false); }} title="Changer d'espace" aria-label="Changer d'espace"
         style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 16px', fontSize:13, color:'#888', background:'transparent', border:'none', cursor:'pointer', width:'100%', textAlign:'left' }}>
-        <Home size={15}/> Changer d'espace
+        <Home size={15}/><span className="nav-label">Changer d'espace</span>
       </button>
     </>
   );
 
   return (
-    <div className="app-layout">
+    <div className={`app-layout${filiale === 'YAKRO_GRILL' ? ' yk-theme' : ''}`}>
       {/* ── TOPBAR ──────────────────────────────────────── */}
       <header className="app-topbar" style={{ borderBottom:`2px solid ${color}20` }}>
         <button className="hamburger-btn" onClick={()=>setSidebarOpen(!sidebarOpen)}
-          style={{ background:'none', border:'none', cursor:'pointer', padding:6, color:'#555', display:'flex', alignItems:'center' }}>
+          aria-label="Menu" style={{ background:'none', border:'none', cursor:'pointer', padding:10, color:'#555', display:'flex', alignItems:'center' }}>
           {sidebarOpen ? <X size={20}/> : <Menu size={20}/>}
         </button>
 
@@ -359,6 +367,24 @@ export default function Layout() {
       <main className="app-main">
         <Outlet/>
       </main>
+
+      {/* ── BARRE D'ONGLETS (phone, Yakro Grill) ───────── */}
+      {filiale === 'YAKRO_GRILL' && (
+        <nav className="yk-tabbar" aria-label="Navigation principale">
+          {TABBAR.map(t => {
+            const item = navItems.find(n => n.id === t.id);
+            if (!item) return null;
+            return (
+              <NavLink key={t.id} to={item.to} className="yk-tab" onClick={()=>setSidebarOpen(false)}>
+                <item.icon size={20}/><span>{t.court}</span>
+              </NavLink>
+            );
+          })}
+          <button type="button" className="yk-tab" onClick={()=>setSidebarOpen(o=>!o)} aria-label="Plus de pages" aria-expanded={sidebarOpen}>
+            <MoreHorizontal size={20}/><span>Plus</span>
+          </button>
+        </nav>
+      )}
     </div>
   );
 }

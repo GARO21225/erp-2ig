@@ -2,13 +2,13 @@
  * YAKRO GRILL — Plan de Salle (POS)
  * Assignation serveur obligatoire, panneau table complet, transfert, clôture
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { exportTicketYakro } from '../../lib/export';
 import { yakroAPI, employesAPI } from '../../lib/api';
 import DocumentViewer from '../../components/ui/DocumentViewer';
 import { useYakro } from '../../lib/useYakro';
-import { Plus, X, Minus, ShoppingBag, Banknote, Smartphone, CreditCard, CheckCircle, Users, RefreshCw, ArrowRight } from 'lucide-react';
+import { Plus, X, Minus, ShoppingBag, Banknote, Smartphone, CreditCard, CheckCircle, Users, RefreshCw, ArrowRight, Search } from 'lucide-react';
 
 const STATUT_TABLE = {
   LIBRE:    { label:'Libre',     color:'#639922', bg:'#F4FAE8', border:'#C0DD97' },
@@ -35,6 +35,13 @@ function PanelCommande({ table, menu, onClose, onSave, loading, listeServeurs })
   const [cat, setCat] = useState(Object.keys(menu?.grouped || {})[0] || '');
   const [searchMenu, setSearchMenu] = useState('');
   const [serveurId, setServeurId] = useState(table?.serveurId || '');
+  const [recapOuvert, setRecapOuvert] = useState(false); // phone : feuille du panier
+
+  useEffect(() => {
+    const h = (e) => { if (e.key === 'Escape') { recapOuvert ? setRecapOuvert(false) : onClose(); } };
+    document.addEventListener('keydown', h);
+    return () => document.removeEventListener('keydown', h);
+  }, [recapOuvert, onClose]);
 
   const addArticle = (item) => setLignes(prev => {
     const ex = prev.find(l => l.menuId === item.id);
@@ -45,136 +52,117 @@ function PanelCommande({ table, menu, onClose, onSave, loading, listeServeurs })
     prev.map(l => l.menuId===menuId ? {...l,quantite:Math.max(0,l.quantite-1)} : l).filter(l=>l.quantite>0)
   );
   const total = lignes.reduce((s,l)=>s+l.prixUnitaire*l.quantite,0);
+  const nbArticles = lignes.reduce((s,l)=>s+l.quantite,0);
   const grouped = menu?.grouped || {};
   const cats = Object.keys(grouped);
   const serveurChoisi = listeServeurs.find(s=>s.id===serveurId);
+  const serveurManquant = !serveurId && !table?.commandeExistante;
+  const bloque = lignes.length===0 || serveurManquant || loading;
+  const articles = (searchMenu
+    ? Object.values(grouped).flat().filter(item=>item.disponible && item.nom.toLowerCase().includes(searchMenu.toLowerCase()))
+    : (grouped[cat]||[]).filter(item=>item.disponible));
 
   return (
-    <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:1000,display:'flex' }}>
-      {/* Carte menu */}
-      <div style={{ width:'55%',background:'#F7F7F5',display:'flex',flexDirection:'column',overflow:'hidden' }}>
-        <div style={{ background:'#8B1A1A',padding:'14px 20px',color:'white',display:'flex',justifyContent:'space-between',alignItems:'center' }}>
-          <div>
-            <div style={{ fontFamily:'Syne',fontWeight:700,fontSize:15 }}>Table {table?.numero} — {table?.commandeExistante ? 'Ajouter des articles' : 'Nouvelle commande'}</div>
-            <div style={{ fontSize:11,opacity:0.8 }}>{table?.zone} · {table?.capacite} places</div>
+    <div className="yk-order" role="dialog" aria-modal="true" aria-label={`Commande table ${table?.numero}`}>
+      <div className="yk-order-menu">
+        <div className="yk-order-bar">
+          <button className="yk-iconbtn" onClick={onClose} aria-label="Fermer la commande"><X size={20}/></button>
+          <div style={{ minWidth:0 }}>
+            <h2>Table {table?.numero}</h2>
+            <p>{table?.commandeExistante ? 'Ajouter des articles' : 'Nouvelle commande'} · {table?.zone} · {table?.capacite} places</p>
           </div>
-          <button onClick={onClose} style={{ background:'rgba(255,255,255,0.2)',border:'none',color:'white',borderRadius:8,padding:'6px 12px',cursor:'pointer' }}><X size={16}/></button>
         </div>
 
-        {/* Assignation serveur OBLIGATOIRE */}
-        {!table?.commandeExistante && (
-          <div style={{ padding:'10px 16px',background:'#FEF6F6',borderBottom:'1px solid #F7C1C1' }}>
-            <label style={{ fontSize:11,fontWeight:600,display:'block',marginBottom:5,color:'#8B1A1A' }}>
-              👤 Serveur assigné *
-            </label>
-            <select className="input" style={{ fontSize:12 }} value={serveurId} onChange={e=>setServeurId(e.target.value)}>
-              <option value="">— Sélectionner un serveur (obligatoire)</option>
-              {listeServeurs.map(s=>(
-                <option key={s.id} value={s.id}>{s.prenom} {s.nom} — {s.poste}</option>
-              ))}
+        <div className="yk-order-opts">
+          {!table?.commandeExistante && (
+            <select value={serveurId} onChange={e=>setServeurId(e.target.value)} data-missing={!serveurId || undefined} aria-label="Serveur assigné">
+              <option value="">Serveur assigné (obligatoire)</option>
+              {listeServeurs.map(s=>(<option key={s.id} value={s.id}>{s.prenom} {s.nom} — {s.poste}</option>))}
             </select>
-            {!serveurId && <div style={{ fontSize:10,color:'#A32D2D',marginTop:3 }}>⚠ Un serveur doit être assigné avant de commander</div>}
-          </div>
-        )}
-
-        {/* Couverts */}
-        <div style={{ padding:'8px 16px',borderBottom:'1px solid #e8e7e1',display:'flex',alignItems:'center',gap:12 }}>
-          <span style={{ fontSize:12,color:'#888' }}>Couverts :</span>
-          <button onClick={()=>setNbCouverts(v=>Math.max(1,v-1))} style={{ width:24,height:24,borderRadius:6,border:'1px solid #ddd',background:'white',cursor:'pointer',fontSize:14 }}>−</button>
-          <span style={{ fontFamily:'Syne',fontWeight:700,fontSize:16,minWidth:24,textAlign:'center' }}>{nbCouverts}</span>
-          <button onClick={()=>setNbCouverts(v=>v+1)} style={{ width:24,height:24,borderRadius:6,border:'1px solid #ddd',background:'white',cursor:'pointer',fontSize:14 }}>+</button>
-        </div>
-
-        {/* Recherche + Catégories */}
-        <div style={{ borderBottom:'1px solid #e8e7e1', flexShrink:0 }}>
-          <div style={{ padding:'8px 12px', display:'flex', gap:6, alignItems:'center' }}>
-            <div style={{ flex:1, display:'flex', alignItems:'center', gap:6, background:'white', border:'0.5px solid #e8e7e1', borderRadius:16, padding:'5px 10px' }}>
-              <span style={{ fontSize:12, color:'#888' }}>🔍</span>
-              <input
-                value={searchMenu} onChange={e=>setSearchMenu(e.target.value)}
-                placeholder="Chercher un article..."
-                style={{ border:'none', outline:'none', fontSize:12, flex:1, background:'transparent' }}
-              />
-              {searchMenu && <button onClick={()=>setSearchMenu('')} style={{ background:'none', border:'none', cursor:'pointer', color:'#888', padding:0, fontSize:11 }}>✕</button>}
-            </div>
-          </div>
-          {!searchMenu && (
-            <div style={{ display:'flex',gap:4,padding:'0 12px 8px',overflowX:'auto' }}>
-              {cats.map(c=>(
-                <button key={c} onClick={()=>setCat(c)}
-                  style={{ padding:'4px 12px',borderRadius:20,border:'none',cursor:'pointer',fontSize:11,fontWeight:500,whiteSpace:'nowrap',background:cat===c?'#8B1A1A':'#F1EFE8',color:cat===c?'white':'#666' }}>
-                  {c}
-                </button>
-              ))}
-            </div>
           )}
+          <div className="yk-stepper" role="group" aria-label="Couverts">
+            <button onClick={()=>setNbCouverts(v=>Math.max(1,v-1))} aria-label="Moins de couverts"><Minus size={16}/></button>
+            <output aria-live="polite">{nbCouverts}</output>
+            <button onClick={()=>setNbCouverts(v=>v+1)} aria-label="Plus de couverts"><Plus size={16}/></button>
+            <span style={{ fontSize:12, color:'var(--yk-ink-2)', marginLeft:2 }}>couverts</span>
+          </div>
         </div>
 
-        {/* Articles */}
-        <div style={{ flex:1,overflowY:'auto',padding:'10px 12px',display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))',gap:8,alignContent:'start' }}>
-          {(searchMenu
-            ? Object.values(grouped).flat().filter(item=>item.disponible && item.nom.toLowerCase().includes(searchMenu.toLowerCase()))
-            : (grouped[cat]||[]).filter(item=>item.disponible)
-          ).map(item=>{
+        <div className="yk-order-cats">
+          <div className="yk-toolbar" style={{ marginBottom:0 }}>
+            <label className="yk-search">
+              <Search size={16}/>
+              <input type="search" value={searchMenu} onChange={e=>setSearchMenu(e.target.value)} placeholder="Chercher un article" aria-label="Chercher un article"/>
+            </label>
+            {!searchMenu && (
+              <div className="yk-chips" role="tablist" aria-label="Catégories">
+                {cats.map(c=>(
+                  <button key={c} className="yk-chip" aria-pressed={cat===c} onClick={()=>setCat(c)} style={{ textTransform:'capitalize' }}>{c.replace(/_/g,' ').toLowerCase()}</button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="yk-items">
+          {articles.map(item=>{
             const inLignes = lignes.find(l=>l.menuId===item.id);
             return (
-              <div key={item.id} onClick={()=>addArticle(item)}
-                style={{ background:'white',border:`1.5px solid ${inLignes?'#8B1A1A':'#e8e7e1'}`,borderRadius:10,padding:'10px 8px',cursor:'pointer',transition:'border-color 0.15s',textAlign:'center' }}>
-                <div style={{ fontSize:12,fontWeight:inLignes?700:500,marginBottom:4,color:inLignes?'#8B1A1A':'#1a1a1a',lineHeight:1.3 }}>{item.nom}</div>
-                <div style={{ fontFamily:'Syne',fontWeight:700,fontSize:13,color:'#8B1A1A' }}>{item.prix.toLocaleString('fr')} F</div>
-                {inLignes && <div style={{ fontSize:10,background:'#8B1A1A',color:'white',borderRadius:10,padding:'1px 6px',marginTop:4,display:'inline-block' }}>×{inLignes.quantite}</div>}
-              </div>
+              <button key={item.id} type="button" className="yk-item" data-in={inLignes || undefined} onClick={()=>addArticle(item)}>
+                <span className="yk-item-name">{item.nom}</span>
+                <span className="yk-item-foot">
+                  <span className="yk-price">{item.prix.toLocaleString('fr')} F</span>
+                  {inLignes && <span className="yk-item-qty">×{inLignes.quantite}</span>}
+                </span>
+              </button>
             );
           })}
+          {articles.length===0 && <div className="yk-recap-empty" style={{ gridColumn:'1/-1' }}>Aucun article disponible</div>}
         </div>
       </div>
 
-      {/* Récapitulatif */}
-      <div style={{ flex:1,background:'white',display:'flex',flexDirection:'column',borderLeft:'1px solid #e8e7e1' }}>
-        <div style={{ padding:'14px 16px',borderBottom:'1px solid #e8e7e1',fontFamily:'Syne',fontWeight:700,fontSize:15 }}>Récapitulatif</div>
-        <div style={{ flex:1,overflowY:'auto',padding:'10px 16px' }}>
+      {recapOuvert && <div className="yk-sheet-scrim" onClick={()=>setRecapOuvert(false)}/>}
+      <button className="yk-cartbar" data-vide={nbArticles===0 || undefined} onClick={()=>setRecapOuvert(true)} aria-label="Ouvrir le récapitulatif">
+        <span style={{ display:'inline-flex', alignItems:'center', gap:8 }}><ShoppingBag size={20}/> {nbArticles} article{nbArticles>1?'s':''}</span>
+        <b>{total.toLocaleString('fr')} F</b>
+      </button>
+
+      <aside className="yk-recap" data-open={recapOuvert} aria-label="Récapitulatif">
+        <div className="yk-recap-head">
+          <h3>Récapitulatif</h3>
+          <button className="yk-iconbtn" data-light onClick={()=>setRecapOuvert(false)} aria-label="Fermer le récapitulatif" style={{ width:40, height:40 }}><X size={18}/></button>
+        </div>
+        <div className="yk-recap-lines">
           {lignes.length === 0 ? (
-            <div style={{ textAlign:'center',color:'#ccc',padding:20,fontSize:12 }}>
-              <ShoppingBag size={32} style={{ display:'block',margin:'0 auto 8px' }}/>
-              Aucun article sélectionné
-            </div>
+            <div className="yk-recap-empty"><ShoppingBag size={32}/>Touchez un article pour l'ajouter</div>
           ) : lignes.map(l=>(
-            <div key={l.menuId} style={{ display:'flex',alignItems:'center',gap:8,padding:'8px 0',borderBottom:'0.5px solid #f0efe9' }}>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:13,fontWeight:500 }}>{l.nom}</div>
-                <div style={{ fontSize:11,color:'#888' }}>{l.prixUnitaire.toLocaleString('fr')} F</div>
+            <div key={l.menuId} className="yk-line">
+              <div>
+                <div className="yk-line-name">{l.nom}</div>
+                <div className="yk-line-unit">{l.prixUnitaire.toLocaleString('fr')} F</div>
               </div>
-              <div style={{ display:'flex',alignItems:'center',gap:6 }}>
-                <button onClick={()=>removeArticle(l.menuId)} style={{ width:22,height:22,borderRadius:5,border:'1px solid #ddd',background:'white',cursor:'pointer',fontSize:12 }}>−</button>
-                <span style={{ fontWeight:700,minWidth:16,textAlign:'center' }}>{l.quantite}</span>
-                <button onClick={()=>addArticle({id:l.menuId,nom:l.nom,prix:l.prixUnitaire})} style={{ width:22,height:22,borderRadius:5,border:'1px solid #ddd',background:'white',cursor:'pointer',fontSize:12 }}>+</button>
-              </div>
-              <div style={{ fontFamily:'Syne',fontWeight:700,fontSize:13,color:'#8B1A1A',minWidth:60,textAlign:'right' }}>
-                {(l.prixUnitaire*l.quantite).toLocaleString('fr')} F
+              <div className="yk-line-total">{(l.prixUnitaire*l.quantite).toLocaleString('fr')} F</div>
+              <div className="yk-stepper" data-sm style={{ gridColumn:'1/-1' }}>
+                <button onClick={()=>removeArticle(l.menuId)} aria-label={`Retirer ${l.nom}`}><Minus size={14}/></button>
+                <output>{l.quantite}</output>
+                <button onClick={()=>addArticle({id:l.menuId,nom:l.nom,prix:l.prixUnitaire})} aria-label={`Ajouter ${l.nom}`}><Plus size={14}/></button>
               </div>
             </div>
           ))}
         </div>
-        <div style={{ padding:'12px 16px',borderTop:'1px solid #e8e7e1' }}>
-          <input className="input" style={{ marginBottom:10,fontSize:12 }} placeholder="Notes de commande..."
-            value={notes} onChange={e=>setNotes(e.target.value)}/>
-          <div style={{ display:'flex',justifyContent:'space-between',marginBottom:10 }}>
-            <span style={{ fontSize:13,color:'#888' }}>Total</span>
-            <span style={{ fontFamily:'Syne',fontWeight:800,fontSize:22,color:'#8B1A1A' }}>{total.toLocaleString('fr')} F</span>
-          </div>
-          <button disabled={lignes.length===0||(!serveurId&&!table?.commandeExistante)||loading}
+        <div className="yk-recap-foot">
+          <input placeholder="Notes de commande…" value={notes} onChange={e=>setNotes(e.target.value)} aria-label="Notes de commande"/>
+          <div className="yk-total"><span>Total</span><b>{total.toLocaleString('fr')} F</b></div>
+          <button className="yk-cta" disabled={bloque}
             onClick={()=>{
               const servNom = serveurChoisi ? `${serveurChoisi.prenom} ${serveurChoisi.nom}` : null;
               onSave({ tableId:table.id, lignes, notes, nbCouverts, serveurId:serveurId||null, serveurNom:servNom });
-            }}
-            style={{ width:'100%',padding:12,background:lignes.length===0||(!serveurId&&!table?.commandeExistante)?'#ddd':'#8B1A1A',color:'white',border:'none',borderRadius:10,fontFamily:'Syne',fontWeight:700,fontSize:15,cursor:lignes.length===0||(!serveurId&&!table?.commandeExistante)?'not-allowed':'pointer' }}>
-            {loading?'Envoi...':'🍳 Envoyer en cuisine'}
+            }}>
+            {loading ? 'Envoi…' : '🍳 Envoyer en cuisine'}
           </button>
-          {!serveurId && !table?.commandeExistante && (
-            <div style={{ fontSize:11,color:'#A32D2D',textAlign:'center',marginTop:4 }}>Sélectionner un serveur pour continuer</div>
-          )}
+          {serveurManquant && <p className="yk-hint" role="alert">Choisissez un serveur pour continuer</p>}
         </div>
-      </div>
+      </aside>
     </div>
   );
 }
@@ -571,107 +559,80 @@ export default function POS() {
 
   return (
     <div className="page-enter">
-      {/* Header */}
-      <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14 }}>
+      {/* En-tête */}
+      <div className="yk-head">
         <div>
-          <h1 style={{ margin:0,fontSize:20,fontFamily:'Syne',fontWeight:800 }}>🍽️ Plan de Salle</h1>
-          <div style={{ fontSize:12,color:'#888',marginTop:3 }}>
-            <span style={{ color:'#A32D2D',fontWeight:500 }}>{occupees}</span> table(s) occupée(s) · {tables.length-occupees} libre(s)
-          </div>
+          <h1 className="yk-title">Plan de salle</h1>
+          <div className="yk-sub">{courant?.nom ? `${courant.nom} · ` : ''}mis à jour en direct</div>
         </div>
-        <div style={{ display:'flex',gap:10,fontSize:11,color:'#888' }}>
-          {Object.entries(STATUT_TABLE).map(([k,v])=>(
-            <div key={k} style={{ display:'flex',alignItems:'center',gap:4 }}>
-              <div style={{ width:10,height:10,borderRadius:2,background:v.bg,border:`1.5px solid ${v.border}` }}/>
-              {v.label}
-            </div>
+        <div className="yk-stats" aria-label="Résumé des tables">
+          <div className="yk-stat" style={{ '--c':'var(--yk-ember)' }}><b>{occupees}</b><span>occupée{occupees>1?'s':''}</span></div>
+          <div className="yk-stat" style={{ '--c':'var(--yk-leaf)' }}><b>{tables.length-occupees}</b><span>libre{tables.length-occupees>1?'s':''}</span></div>
+        </div>
+      </div>
+
+      {/* Filtres */}
+      <div className="yk-toolbar">
+        <label className="yk-search">
+          <Search size={16}/>
+          <input type="search" inputMode="numeric" value={searchTable} onChange={e=>setSearchTable(e.target.value)} placeholder="N° de table" aria-label="Rechercher une table"/>
+        </label>
+        <div className="yk-chips" aria-label="Filtres">
+          <button className="yk-chip" aria-pressed={zone==='TOUTES' && !filtreStatut} onClick={()=>{setZone('TOUTES');setFiltreStatut('');}}>Toutes<small>{tables.length}</small></button>
+          {zonesDisponibles.map(z=>(
+            <button key={z} className="yk-chip" aria-pressed={zone===z} onClick={()=>setZone(zone===z?'TOUTES':z)}>{z}<small>{tables.filter(t=>t.zone===z).length}</small></button>
+          ))}
+          {[['LIBRE','Libres'],['OCCUPEE','Occupées']].map(([v,l])=>(
+            <button key={v} className="yk-chip" aria-pressed={filtreStatut===v} onClick={()=>setFiltreStatut(v===filtreStatut?'':v)}>{l}</button>
           ))}
         </div>
       </div>
 
-      {/* Filtres zones dynamiques + statut + serveur + recherche */}
-      <div style={{ display:'flex',gap:6,marginBottom:10,flexWrap:'wrap',alignItems:'center' }}>
-        <button onClick={()=>setZone('TOUTES')}
-          style={{ padding:'4px 12px',borderRadius:16,border:'none',cursor:'pointer',fontSize:11,fontWeight:500,background:zone==='TOUTES'?'#8B1A1A':'#F1EFE8',color:zone==='TOUTES'?'white':'#666',whiteSpace:'nowrap' }}>
-          Toutes ({tables.length})
-        </button>
-        {zonesDisponibles.map(z=>(
-          <button key={z} onClick={()=>setZone(zone===z?'TOUTES':z)}
-            style={{ padding:'4px 12px',borderRadius:16,border:'none',cursor:'pointer',fontSize:11,fontWeight:500,background:zone===z?'#8B1A1A':'#F1EFE8',color:zone===z?'white':'#666',whiteSpace:'nowrap' }}>
-            {z} ({tables.filter(t=>t.zone===z).length})
-          </button>
-        ))}
-        {[
-          ['LIBRE','🟢 Libres'],['OCCUPEE','🔴 Occ.'],['EN_COURS','🟡 EnCours'],
-        ].map(([v,l])=>(
-          <button key={v} onClick={()=>setFiltreStatut(v===filtreStatut?'':v)}
-            style={{ padding:'4px 10px',borderRadius:16,border:`1px solid ${filtreStatut===v?'#BA7517':'#e8e7e1'}`,cursor:'pointer',fontSize:10,background:filtreStatut===v?'#FAEEDA':'white',color:filtreStatut===v?'#BA7517':'#888',whiteSpace:'nowrap' }}>
-            {l}
-          </button>
-        ))}
-        <input value={searchTable} onChange={e=>setSearchTable(e.target.value)}
-          placeholder="N° table..." style={{ border:'0.5px solid #e8e7e1',borderRadius:16,padding:'4px 10px',fontSize:11,width:75,outline:'none' }}/>
-        {filtreServeur || filtreStatut || searchTable ? (
-          <button onClick={()=>{setFiltreServeur('');setFiltreStatut('');setSearchTable('');setZone('TOUTES');}}
-            style={{ padding:'3px 8px',borderRadius:16,border:'1px solid #A32D2D',background:'#FCEBEB',color:'#A32D2D',fontSize:10,cursor:'pointer' }}>
-            ✕ Reset
-          </button>
-        ) : null}
-      </div>
-
       {/* Grille tables */}
-      <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(145px,1fr))',gap:10 }}>
+      <div className="yk-tables">
         {tablesFiltrees.map(t=>{
           const s = STATUT_TABLE[t.statut] || STATUT_TABLE.LIBRE;
           const commande = t.commandes?.[0];
           const resa = t.reservations?.[0];
           const heureOuv = t.heureOuverture ? new Date(t.heureOuverture) : null;
           const dureeMin = heureOuv ? Math.round((new Date()-heureOuv)/60000) : null;
+          const enCours = commande && (commande.statut==='EN_COURS'||commande.statut==='CUISINE');
 
           return (
-            <div key={t.id} onClick={()=>handleClickTable(t)}
-              style={{ border:`1.5px solid ${s.border}`,background:s.bg,borderRadius:12,padding:14,cursor:'pointer',minHeight:130,transition:'box-shadow 0.2s' }}
-              onMouseEnter={e=>e.currentTarget.style.boxShadow='0 4px 16px rgba(0,0,0,0.1)'}
-              onMouseLeave={e=>e.currentTarget.style.boxShadow='none'}>
-              <div style={{ display:'flex',justifyContent:'space-between',marginBottom:4 }}>
-                <div style={{ fontFamily:'Syne',fontWeight:800,fontSize:18,color:s.color }}>T{t.numero}</div>
-                <span style={{ fontSize:9,fontWeight:500,color:s.color,background:s.border+'40',padding:'2px 5px',borderRadius:6 }}>{s.label}</span>
+            <div key={t.id} className="yk-table" data-s={t.statut} role="button" tabIndex={0}
+              aria-label={`Table ${t.numero}, ${s.label}`}
+              onClick={()=>handleClickTable(t)}
+              onKeyDown={e=>{ if(e.target===e.currentTarget && (e.key==='Enter'||e.key===' ')){ e.preventDefault(); handleClickTable(t); } }}>
+              <div className="yk-table-top">
+                <span className="yk-table-num">{t.numero}</span>
+                <span className="yk-pill">{s.label}</span>
               </div>
-              <div style={{ fontSize:10,color:'#888',marginBottom:6 }}>{t.zone} · {t.capacite} pl.</div>
+              <div className="yk-table-meta">{t.zone} · {t.capacite} places</div>
 
               {commande ? (
-                <div>
-                  {t.serveurNom && <div style={{ fontSize:10,color:'#1a3f6f',fontWeight:500,marginBottom:2 }}>👤 {t.serveurNom}</div>}
-                  <div style={{ fontSize:12,fontWeight:700,color:'#8B1A1A' }}>{(commande.total||0).toLocaleString('fr')} F</div>
-                  {dureeMin !== null && <div style={{ fontSize:9,color:'#888' }}>⏱ {dureeMin} min</div>}
-                  <div style={{ display:'flex',gap:3,flexWrap:'wrap',marginTop:4 }}>
-                    {(commande.statut==='EN_COURS'||commande.statut==='CUISINE') && (
-                      <button onClick={e=>{e.stopPropagation();setCommandeTable({...t,commandeExistante:commande});}}
-                        style={{ flex:1,minWidth:40,padding:'3px 2px',fontSize:9,fontWeight:600,border:'none',borderRadius:5,background:'#EEF3FB',color:'#1a3f6f',cursor:'pointer' }}>➕</button>
-                    )}
-                    {(commande.statut==='EN_COURS'||commande.statut==='CUISINE') && (
-                      <button onClick={e=>{e.stopPropagation();updateStatut.mutate({id:commande.id,statut:'PRETE'});}}
-                        style={{ flex:1,minWidth:40,padding:'3px 2px',fontSize:9,fontWeight:600,border:'none',borderRadius:5,background:'#EAF3DE',color:'#27500A',cursor:'pointer' }}>✅ Prêt</button>
-                    )}
-                    <button onClick={e=>{e.stopPropagation();setPaiementCommande(commande);}}
-                      style={{ flex:1,minWidth:40,padding:'3px 2px',fontSize:9,fontWeight:700,border:'none',borderRadius:5,background:'#8B1A1A',color:'white',cursor:'pointer' }}>💳</button>
+                <>
+                  <div>
+                    <div className="yk-table-total">{(commande.total||0).toLocaleString('fr')} F</div>
+                    <div className="yk-table-meta">{[t.serveurNom, dureeMin!==null && `${dureeMin} min`].filter(Boolean).join(' · ')}</div>
                   </div>
-                </div>
+                  <div className="yk-table-actions">
+                    {enCours && <button className="yk-mini" aria-label="Ajouter des articles" onClick={e=>{e.stopPropagation();setCommandeTable({...t,commandeExistante:commande});}}><Plus size={16}/></button>}
+                    {enCours && <button className="yk-mini" data-ok aria-label="Marquer prête" onClick={e=>{e.stopPropagation();updateStatut.mutate({id:commande.id,statut:'PRETE'});}}><CheckCircle size={16}/></button>}
+                    <button className="yk-mini" data-primary aria-label="Encaisser" onClick={e=>{e.stopPropagation();setPaiementCommande(commande);}}><Banknote size={16}/></button>
+                  </div>
+                </>
               ) : resa ? (
-                <div style={{ fontSize:11,color:'#BA7517' }}>
-                  📅 {resa.nomClient}
-                  <div style={{ fontSize:10,color:'#888' }}>{new Date(resa.dateHeure).toLocaleTimeString('fr',{hour:'2-digit',minute:'2-digit'})}</div>
+                <div className="yk-table-meta" style={{ color:'var(--yk-gold)', fontWeight:600 }}>
+                  {resa.nomClient} · {new Date(resa.dateHeure).toLocaleTimeString('fr',{hour:'2-digit',minute:'2-digit'})}
                 </div>
               ) : (
-                <div style={{ fontSize:11,color:'#888',display:'flex',alignItems:'center',gap:4,marginTop:4 }}>
-                  <Plus size={11}/> Nouvelle commande
-                </div>
+                <div className="yk-table-free"><Plus size={14}/> Nouvelle commande</div>
               )}
             </div>
           );
         })}
         {tablesFiltrees.length===0 && (
-          <div style={{ gridColumn:'1/-1',textAlign:'center',padding:60,color:'#ccc',fontSize:13 }}>Aucune table dans cette zone</div>
+          <div style={{ gridColumn:'1/-1', textAlign:'center', padding:60, color:'var(--yk-ink-3)', fontSize:13 }}>Aucune table ne correspond</div>
         )}
       </div>
 
@@ -712,9 +673,7 @@ export default function POS() {
       )}
 
       {toast && (
-        <div style={{ position:'fixed',bottom:20,right:16,background:toast.type==='error'?'#A32D2D':'#27500A',color:'white',padding:'10px 18px',borderRadius:10,fontSize:13,zIndex:9999 }}>
-          {toast.msg}
-        </div>
+        <div className="yk-toast" data-error={toast.type==='error' || undefined} role="status" aria-live="polite">{toast.msg}</div>
       )}
 
       {/* Visionneuse facture après encaissement */}
