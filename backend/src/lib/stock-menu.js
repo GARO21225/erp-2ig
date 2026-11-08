@@ -26,6 +26,11 @@ async function lierMenuStock() {
     await prisma.menuYakro.update({ where: { id: m.id }, data: { produitId: p.id, ...(!m.image && p.imageUrl ? { image: p.imageUrl } : {}) } });
     prise.add(p.id); lies++;
   }
+  // 1 bis) boisson liée dont le menu n'a pas de prix → prix de vente du stock
+  for (const m of menu.filter(x => x.produitId && !(x.prix > 0))) {
+    const p = produits.find(x => x.id === m.produitId);
+    if (p?.prixVente > 0) await prisma.menuYakro.update({ where: { id: m.id }, data: { prix: p.prixVente } });
+  }
   // 2) articles de stock absents du menu → créés au menu (prix = prix de vente du stock)
   for (const p of produits.filter(x => !prise.has(x.id))) {
     await prisma.menuYakro.create({ data: { nom: p.nom, categorie: CAT_MENU[p.categorie] || 'BOISSON', prix: p.prixVente || 0, coutRevient: p.prixAchat || null, image: p.imageUrl || null, produitId: p.id, disponible: true } });

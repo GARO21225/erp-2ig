@@ -340,6 +340,7 @@ export default function StocksPage() {
                         <td>
                           <div style={{ fontWeight:600, fontSize:13 }}>{p.nom}</div>
                           <div style={{ fontSize:10, color:'#888' }}>{p.reference}</div>
+                          {typeTab==='BOISSON' && !(p.prixVente>0) && <div style={{ fontSize:10, color:'#B97A18', fontWeight:600 }}>⚠ Sans prix de vente : absent du POS</div>}
                         </td>
                         <td><span style={{ fontSize:10, background:'#F7F7F5', borderRadius:6, padding:'2px 6px' }}>{CATS_LABELS[p.categorie]?.split(' ').slice(1).join(' ')||p.categorie}</span></td>
                         <td style={{ textAlign:'right', fontFamily:'Syne', fontWeight:800, fontSize:14, color:n.color }}>

@@ -105,7 +105,10 @@ router.put('/produits/:id', auth, async (req, res) => {
     if (b.imageUrl !== undefined) { if (!IMAGE_OK(b.imageUrl)) return res.status(400).json({ error: 'Image invalide (URL http(s) ou PNG/JPEG/WebP de 300 Ko max)' }); data.imageUrl = b.imageUrl || null; }
     if (b.lien !== undefined) { if (!LIEN_OK(b.lien)) return res.status(400).json({ error: 'Le lien doit commencer par http:// ou https://' }); data.lien = b.lien || null; }
     if (data.categorie) data.type = CATS_BOISSON.includes(data.categorie) ? 'BOISSON' : (b.type || p.type);
-    res.json(await prisma.produit.update({ where: { id: p.id }, data }));
+    const maj = await prisma.produit.update({ where: { id: p.id }, data, omit: { imageData: true } });
+    // Le prix de vente du stock est aussi celui du POS (boisson liée au menu)
+    if (data.prixVente !== undefined) await prisma.menuYakro.updateMany({ where: { produitId: p.id }, data: { prix: data.prixVente } });
+    res.json(maj);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -281,6 +284,7 @@ router.post('/maj-masse', auth, async (req, res) => {
           parId.set(p.id, p); parNom.set(norm(p.nom), p); res_.crees++;
         } else if (Object.keys(champs).length) {
           await prisma.produit.update({ where: { id: p.id }, data: champs }); res_.majs++;
+          if (champs.prixVente !== undefined) await prisma.menuYakro.updateMany({ where: { produitId: p.id }, data: { prix: champs.prixVente } });
         }
         const entree = num(l.entree), stock = num(l.stock);
         if (entree != null && entree < 0) throw new Error('entrée négative');
