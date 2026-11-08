@@ -111,11 +111,12 @@ router.get('/', auth, yakro, portee, async (req, res) => {
     });
     const commandesPayees = await prisma.commandeYakro.findMany({
       where: { statut:'PAYEE', ...where },
-      select: { serveurId:true, serveurNom:true, total:true, nbCouverts:true }
+      select: { serveurId:true, serveurNom:true, restaurantId:true, total:true, nbCouverts:true }
     });
+    const nomsResto = new Map((req.restos || (req.restaurant ? [req.restaurant] : [])).map(r => [r.id, r.nom]));
     commandesPayees.forEach(c => {
-      const key = c.serveurId || 'inconnu';
-      if (!serveurStats[key]) serveurStats[key] = { id:key, nom:c.serveurNom||'Inconnu', ca:0, nbCommandes:0, nbClients:0 };
+      const key = `${c.serveurId || 'inconnu'}|${c.restaurantId || ''}`; // un serveur par restaurant
+      if (!serveurStats[key]) serveurStats[key] = { id:key, nom:c.serveurNom||'Inconnu', restaurant: nomsResto.get(c.restaurantId) || '', ca:0, nbCommandes:0, nbClients:0 };
       serveurStats[key].ca += c.total || 0;
       serveurStats[key].nbCommandes++;
       serveurStats[key].nbClients += c.nbCouverts || 0;
@@ -165,6 +166,12 @@ router.get('/', auth, yakro, portee, async (req, res) => {
 
     // Alertes
     const alertes = [];
+    const boissons = await safe(() => prisma.produit.findMany({ where: { filiale: 'YAKRO_GRILL', type: 'BOISSON', actif: true }, include: { stocks: true }, omit: { imageData: true } })) || [];
+    const totalStock = (p) => p.stocks.reduce((s, x) => s + x.quantite, 0);
+    const ruptures = boissons.filter(p => totalStock(p) <= 0).map(p => p.nom);
+    const basses = boissons.filter(p => totalStock(p) > 0 && totalStock(p) <= (p.stockMinimum ?? 3)).map(p => `${p.nom} (${totalStock(p)})`);
+    if (ruptures.length) alertes.push({ type:'RUPTURE_STOCK', gravite:'CRITIQUE', msg:`Rupture de stock — ${ruptures.length} boisson(s) retirée(s) du POS : ${ruptures.slice(0,6).join(', ')}${ruptures.length>6?'…':''}` });
+    if (basses.length) alertes.push({ type:'STOCK_BAS', gravite:'ATTENTION', msg:`Stock critique — ${basses.length} boisson(s) bientôt épuisée(s) : ${basses.slice(0,6).join(', ')}${basses.length>6?'…':''}` });
     if (nbAnnulees > 5) alertes.push({ type:'ANNULATIONS', gravite:'ATTENTION', msg:`${nbAnnulees} annulation(s) aujourd'hui` });
     if (trendCA < -20) alertes.push({ type:'BAISSE_CA', gravite:'ATTENTION', msg:`CA en baisse de ${Math.abs(trendCA)}% vs hier` });
 

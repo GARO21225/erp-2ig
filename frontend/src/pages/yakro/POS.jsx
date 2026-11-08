@@ -43,11 +43,20 @@ function PanelCommande({ table, menu, onClose, onSave, loading, listeServeurs })
     return () => document.removeEventListener('keydown', h);
   }, [recapOuvert, onClose]);
 
-  const addArticle = (item) => setLignes(prev => {
-    const ex = prev.find(l => l.menuId === item.id);
-    if (ex) return prev.map(l => l.menuId===item.id ? {...l,quantite:l.quantite+1} : l);
-    return [...prev, { menuId:item.id, nom:item.nom, prixUnitaire:item.prix, quantite:1 }];
-  });
+  const [alerteStock, setAlerteStock] = useState('');
+  useEffect(() => { if (!alerteStock) return; const t = setTimeout(() => setAlerteStock(''), 4000); return () => clearTimeout(t); }, [alerteStock]);
+  const addArticle = (item) => {
+    const deja = lignes.find(l => l.menuId === item.id)?.quantite || 0;
+    // Boisson suivie en stock : on s'arrête à la quantité disponible
+    if (item.stock != null && deja + 1 > item.stock) {
+      return setAlerteStock(`Stock épuisé : il ne reste que ${item.stock} « ${item.nom} » — impossible d'en ajouter davantage.`);
+    }
+    setLignes(prev => {
+      const ex = prev.find(l => l.menuId === item.id);
+      if (ex) return prev.map(l => l.menuId===item.id ? {...l,quantite:l.quantite+1} : l);
+      return [...prev, { menuId:item.id, nom:item.nom, prixUnitaire:item.prix, quantite:1 }];
+    });
+  };
   const removeArticle = (menuId) => setLignes(prev =>
     prev.map(l => l.menuId===menuId ? {...l,quantite:Math.max(0,l.quantite-1)} : l).filter(l=>l.quantite>0)
   );
@@ -104,6 +113,7 @@ function PanelCommande({ table, menu, onClose, onSave, loading, listeServeurs })
           </div>
         </div>
 
+        {alerteStock && <div role="alert" style={{ margin:'0 12px 8px', padding:'10px 14px', borderRadius:12, background:'#FCEBEB', color:'#A32D2D', fontWeight:600, fontSize:13, border:'1px solid #F7C1C1' }}>⛔ {alerteStock}</div>}
         <div className="yk-items">
           {articles.map(item=>{
             const inLignes = lignes.find(l=>l.menuId===item.id);
@@ -112,6 +122,7 @@ function PanelCommande({ table, menu, onClose, onSave, loading, listeServeurs })
                 <span className="yk-item-name">{item.nom}</span>
                 <span className="yk-item-foot">
                   <span className="yk-price">{item.prix.toLocaleString('fr')} F</span>
+                  {item.stock != null && item.stock <= 5 && <span style={{ fontSize:10, fontWeight:700, color:item.stock - (inLignes?.quantite||0) <= 0 ? '#A32D2D' : '#B97A18' }}>{item.stock - (inLignes?.quantite||0) <= 0 ? 'Dernières prises' : `Plus que ${item.stock - (inLignes?.quantite||0)}`}</span>}
                   {inLignes && <span className="yk-item-qty">×{inLignes.quantite}</span>}
                 </span>
               </button>

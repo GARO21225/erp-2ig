@@ -225,7 +225,7 @@ export default function DashboardYakro() {
               {serveurs.slice(0,8).map((s,i)=>(
                 <tr key={i}>
                   <td style={{ fontWeight:700, color:i<3?'#8B1A1A':'#888', fontSize:13 }}>{i+1}</td>
-                  <td style={{ fontWeight:500, fontSize:12 }}>{s.nom}</td>
+                  <td style={{ fontWeight:500, fontSize:12 }}>{s.nom}{s.restaurant && <div style={{ fontSize:10, color:'#8B1A1A', fontWeight:400 }}>{s.restaurant}</div>}</td>
                   <td style={{ fontWeight:700, color:'#8B1A1A', fontSize:11 }}>{fmtF(s.ca)}</td>
                   <td style={{ fontSize:11, color:'#888' }}>{s.nbCommandes}</td>
                   <td style={{ fontSize:11, color:'#888' }}>{fmtF(s.ticketMoyen)}</td>
