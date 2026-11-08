@@ -21,6 +21,8 @@ const PERMISSIONS = [
   { cle: 'depenses.saisir',    groupe: 'Dépenses',  label: 'Saisir une dépense' },
   { cle: 'depenses.valider',   groupe: 'Dépenses',  label: 'Valider / payer une dépense' },
   { cle: 'rapports.voir',      groupe: 'Pilotage',  label: 'Voir tableaux de bord et rapports' },
+  { cle: 'pointage.voir',      groupe: 'Personnel', label: 'Voir les pointages du personnel' },
+  { cle: 'pointage.gerer',     groupe: 'Personnel', label: 'Afficher le QR de pointage et corriger les pointages' },
   { cle: 'parametres.gerer',   groupe: 'Administration', label: 'Paramétrer le restaurant' },
   { cle: 'equipe.gerer',       groupe: 'Administration', label: "Gérer l'équipe et les accès" },
   { cle: 'restaurants.gerer',  groupe: 'Administration', label: 'Créer / désactiver des restaurants' },
@@ -84,6 +86,13 @@ async function assurerProfilsDefaut() {
       update: {},
       create: { ...p, systeme: true },
     });
+  }
+  // Nouvelles permissions du catalogue : le profil Gérant (système) les reçoit automatiquement
+  const gerant = await prisma.profilYakro.findUnique({ where: { code: 'GERANT' } });
+  const defaut = PROFILS_DEFAUT.find(x => x.code === 'GERANT').permissions;
+  const manque = defaut.filter(c => !gerant.permissions.includes(c));
+  if (gerant.systeme && manque.length) {
+    await prisma.profilYakro.update({ where: { id: gerant.id }, data: { permissions: [...gerant.permissions, ...manque] } });
   }
 }
 

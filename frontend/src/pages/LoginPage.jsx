@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { authAPI } from '../lib/api';
 import { useAuthStore } from '../store';
 
@@ -10,6 +10,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const { setAuth } = useAuthStore();
   const navigate = useNavigate();
+  const from = useLocation().state?.from;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -18,7 +19,7 @@ export default function LoginPage() {
     try {
       const res = await authAPI.login({ email, motDePasse: password });
       setAuth(res.user, res.token);
-      navigate('/portail');
+      navigate(from && from.startsWith('/yakro/pointer') ? from : '/portail');
     } catch (err) {
       setError(err.error || 'Identifiants invalides');
     } finally {

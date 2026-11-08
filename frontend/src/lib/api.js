@@ -113,6 +113,14 @@ export const stocksAPI = {
 
 // ── YAKRO GRILL
 export const yakroAPI = {
+  // Pointage du personnel
+  pointageBorne: () => api.get('/yakro/pointage/borne'),
+  pointageScan: (data) => api.post('/yakro/pointage/scan', data),
+  pointageMoi: () => api.get('/yakro/pointage/moi'),
+  pointagePresences: () => api.get('/yakro/pointage/presences'),
+  pointageHistorique: (params) => api.get('/yakro/pointage', { params }),
+  pointageManuel: (data) => api.post('/yakro/pointage/manuel', data),
+  pointageSortie: (id, data) => api.put(`/yakro/pointage/${id}/sortie`, data),
   // Restaurants, prix, paramètres, équipe & profils
   moi: () => api.get('/yakro/restaurants/moi'),
   catalogue: () => api.get('/yakro/restaurants/catalogue'),

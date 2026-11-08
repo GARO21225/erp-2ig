@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
@@ -6,6 +6,8 @@ import { useAuthStore } from './store';
 import OfflineIndicator from './components/ui/OfflineIndicator';
 import Layout from './components/layout/Layout';
 import LoginPage from './pages/LoginPage';
+import PointerPage from './pages/yakro/PointerPage';
+import PointagePage from './pages/yakro/PointagePage';
 import PortailPage from './pages/PortailPage';
 import GestionProjetPage from './pages/toptelsig/GestionProjetPage';
 import CRMPage from './pages/toptelsig/CRMPage';
@@ -67,7 +69,9 @@ const persister = createSyncStoragePersister({
 
 function PrivateRoute({ children }) {
   const isAuth = useAuthStore(s => s.isAuth());
-  return isAuth ? children : <Navigate to="/login" replace />;
+  const location = useLocation();
+  // On mémorise la page demandée (ex. lien d'un QR de pointage) pour y revenir après connexion
+  return isAuth ? children : <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
 }
 
 export default function App() {
@@ -92,6 +96,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/yakro/pointer" element={<PrivateRoute><PointerPage /></PrivateRoute>} />
           <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="portail" element={<PortailPage />} />
@@ -106,6 +111,7 @@ export default function App() {
             <Route path="yakro/depenses" element={<DepensesYakroPage />} />
             <Route path="yakro/gestion-caisse" element={<GestionCaissePage />} />
             <Route path="yakro/pos" element={<POS />} />
+            <Route path="yakro/pointage" element={<PointagePage />} />
             <Route path="yakro/commandes" element={<CommandesYakro />} />
             <Route path="yakro/menu" element={<MenuPage />} />
             <Route path="yakro/tables" element={<TablesPage />} />

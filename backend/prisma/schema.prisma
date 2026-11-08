@@ -1711,3 +1711,23 @@ model AccesRestaurantYakro {
   @@index([utilisateurId])
   @@map("acces_restaurant_yakro")
 }
+
+
+// Pointage du personnel Yakro Grill (scan QR entrée / sortie)
+model PointageYakro {
+  id            String    @id @default(cuid())
+  utilisateurId String
+  nom           String    // nom de l'agent au moment du pointage (lien avec les commandes prises)
+  restaurantId  String
+  entreeLe      DateTime  @default(now())
+  sortieLe      DateTime?
+  modeEntree    String    @default("QR")   // QR | MANUEL
+  modeSortie    String?
+  note          String?
+  corrigePar    String?
+  createdAt     DateTime  @default(now())
+
+  @@index([restaurantId, entreeLe])
+  @@index([utilisateurId, sortieLe])
+  @@map("pointages_yakro")
+}

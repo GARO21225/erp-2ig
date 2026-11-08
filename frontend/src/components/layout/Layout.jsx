@@ -62,6 +62,7 @@ const NAV = {
   YAKRO_GRILL: [
     { id: 'yakro-dashboard', label: 'Dashboard',           to: '/yakro/dashboard',        icon: Activity },
     { id: 'pos',             label: 'Plan de Salle (POS)', to: '/yakro/pos',              icon: Layers },
+    { id: 'pointage',        label: 'Pointage du personnel', to: '/yakro/pointage',       icon: Clock },
     { id: 'menu',            label: 'Menu & Carte',        to: '/yakro/menu',             icon: BookOpen },
     { id: 'commandes',       label: 'Historique commandes',to: '/yakro/commandes',        icon: ClipboardList },
     { id: 'caisse',          label: 'Caisse du jour',      to: '/yakro/caisse',           icon: Wallet },
