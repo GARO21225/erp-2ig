@@ -7,7 +7,7 @@ const yakro = requireFiliale('YAKRO_GRILL');
 router.get('/', auth, yakro, resto, async (req, res) => {
   try {
     const { date, statut } = req.query;
-    const where = req.restaurantId ? { table: { restaurantId: req.restaurantId } } : {};
+    const where = req.scopeIds ? { table: { restaurantId: { in: req.scopeIds } } } : req.restaurantId ? { table: { restaurantId: req.restaurantId } } : {};
     if (statut) where.statut = statut;
     if (date) {
       const d = new Date(date);

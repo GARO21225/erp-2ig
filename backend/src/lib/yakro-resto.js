@@ -162,6 +162,13 @@ const resto = async (req, res, next) => {
       }
       return res.status(403).json({ error: "Aucun restaurant ne vous est affecté — contactez l'administrateur" });
     }
+    // Vue « tous les restaurants » : lecture seule, sur l'ensemble des restaurants accessibles
+    if (req.headers['x-portee'] === 'TOUS' && liste.length > 1) {
+      if (req.method !== 'GET') return res.status(400).json({ error: 'Vue « tous les restaurants » en lecture seule : choisissez un restaurant pour enregistrer' });
+      req.restaurantId = null; req.restaurant = null; req.scopeIds = liste.map(a => a.restaurant.id);
+      req.permissions = new Set(liste.flatMap(a => [...a.permissions]));
+      return next();
+    }
     // Restaurant demandé non accessible (ex. mémorisé par un autre compte) : un employé retombe sur le sien.
     // Un administrateur qui demande un restaurant inexistant/désactivé reçoit aussi le premier accessible.
     const choisi = (demande && liste.find(a => a.restaurant.id === demande)) || liste[0];
@@ -179,7 +186,7 @@ const can = (...perms) => (req, res, next) => {
 };
 
 /** Filtre Prisma de cloisonnement ({} si aucun restaurant configuré). */
-const sc = (req) => (req.restaurantId ? { restaurantId: req.restaurantId } : {});
+const sc = (req) => (req.scopeIds ? { restaurantId: { in: req.scopeIds } } : req.restaurantId ? { restaurantId: req.restaurantId } : {});
 
 /** Prix et disponibilité par plat pour un restaurant : Map(menuId → {prix, disponible}). */
 async function prixDe(restaurantId) {

@@ -35,7 +35,7 @@ router.post('/cloturer', auth, yakro, resto, can('caisse.session'), async (req, 
     // Calculer montant théorique = entrées depuis ouverture
     const ca = await prisma.paiementYakro.aggregate({
       _sum: { montant: true },
-      where: { createdAt: { gte: session.ouvertLe }, ...(req.restaurantId ? { commande: { restaurantId: req.restaurantId } } : {}) }
+      where: { createdAt: { gte: session.ouvertLe }, ...(req.scopeIds ? { commande: { restaurantId: { in: req.scopeIds } } } : req.restaurantId ? { commande: { restaurantId: req.restaurantId } } : {}) }
     });
     const depenses = await prisma.depenseYakro.aggregate({
       _sum: { montant: true },

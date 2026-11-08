@@ -1,22 +1,28 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'react-router-dom';
 import { Store } from 'lucide-react';
-import { useRestoStore } from '../../store';
+import { useRestoStore, porteeGlobale, pageOperationnelle } from '../../store';
+import { useEffect } from 'react';
 import { useYakro } from '../../lib/useYakro';
 
 /** Choix du restaurant Yakro Grill dans la barre du haut (masqué s'il n'y en a qu'un). */
 export default function SelecteurRestaurant() {
   const qc = useQueryClient();
   const { setRestaurant, setGlobal, global } = useRestoStore();
-  const surDashboard = useLocation().pathname.startsWith('/yakro/dashboard');
+  const pathname = useLocation().pathname;
   const { restaurants, courant, isLoading } = useYakro();
+  const nb = restaurants.length;
+  useEffect(() => { useRestoStore.getState().setNbResto(nb); }, [nb]);
+  const actifNow = nb > 1 && !pageOperationnelle(pathname) && porteeGlobale(pathname);
+  useEffect(() => { qc.invalidateQueries({ predicate: q => q.queryKey[0] !== 'yakro-moi' }); }, [actifNow]); // eslint-disable-line
   const pastille = { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, flexShrink: 0, fontSize: 12, fontWeight: 600, maxWidth: 170 };
   if (isLoading) return null;
   if (restaurants.length === 0) return <span style={{ ...pastille, background: '#FCEBEB', color: '#A32D2D' }}>Aucun restaurant affecté</span>;
   // Un seul restaurant (cas d'un employé affecté) : on l'affiche, sans choix possible
   if (restaurants.length === 1) return <span style={{ ...pastille, background: '#FDF2F2', color: '#8B1A1A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><Store size={13} style={{ flexShrink: 0 }} />{courant?.nom}</span>;
 
-  const globalActif = surDashboard && (global ?? restaurants.length > 1);
+  const choixGlobalPossible = !pageOperationnelle(pathname);
+  const globalActif = choixGlobalPossible && porteeGlobale(pathname);
   const changer = (id) => {
     if (id === 'TOUS') setGlobal(); else setRestaurant(id);
     // Toutes les données affichées dépendent du restaurant : on recharge tout
@@ -29,7 +35,7 @@ export default function SelecteurRestaurant() {
       <select value={globalActif ? 'TOUS' : (courant?.id || '')} onChange={e => changer(e.target.value)}
         aria-label="Restaurant"
         style={{ border: 'none', background: 'transparent', fontSize: 12, fontWeight: 600, color: '#8B1A1A', outline: 'none', cursor: 'pointer', maxWidth: 150, textOverflow: 'ellipsis' }}>
-        {surDashboard && <option value="TOUS">Tous les restaurants</option>}
+        {choixGlobalPossible && <option value="TOUS">Tous les restaurants</option>}
         {restaurants.map(r => <option key={r.id} value={r.id}>{r.nom}</option>)}
       </select>
     </label>

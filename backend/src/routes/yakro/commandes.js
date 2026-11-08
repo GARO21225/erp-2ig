@@ -6,7 +6,7 @@ const { VALIDATORS } = require('../../middleware/validate');
 const { resto, can, sc, prixDe, parametresDe, MODE_PARAM, TYPE_PARAM, ROLES_ADMIN } = require('../../lib/yakro-resto');
 const { deduireStock, restituerStock } = require('../../lib/stock-menu');
 const yakro = requireFiliale('YAKRO_GRILL');
-const pc = (req) => (req.restaurantId ? { commande: { restaurantId: req.restaurantId } } : {});
+const pc = (req) => (req.scopeIds ? { commande: { restaurantId: { in: req.scopeIds } } } : req.restaurantId ? { commande: { restaurantId: req.restaurantId } } : {});
 
 // GET /api/yakro/commandes
 router.get('/', auth, yakro, resto, async (req, res) => {

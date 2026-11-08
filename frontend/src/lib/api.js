@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { useAuthStore, useRestoStore } from '../store';
+import { useAuthStore, useRestoStore, porteeGlobale } from '../store';
 
 // En HTTPS (domaine + certificat) l'API passe par le même domaine (/api) ; en HTTP, adresse directe du serveur.
 export const API_URL = (typeof location !== 'undefined' && location.protocol === 'https:') ? '/api' : (import.meta.env.VITE_API_URL || 'http://localhost:4000/api');
@@ -16,6 +16,7 @@ api.interceptors.request.use((config) => {
   if (config.url?.startsWith('/yakro')) {
     const restaurantId = useRestoStore.getState().restaurantId;
     if (restaurantId) config.headers['X-Restaurant-Id'] = restaurantId;
+    if (porteeGlobale()) config.headers['X-Portee'] = 'TOUS';
   }
   return config;
 });

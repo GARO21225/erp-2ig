@@ -37,6 +37,7 @@ const portee = async (req, res, next) => {
       req.scopeIds = req.restos.map(r => r.id);
       return next();
     }
+    delete req.headers['x-portee']; // la portée de ce tableau de bord vient du paramètre
     if (p) req.headers['x-restaurant-id'] = p;
     return resto(req, res, next);
   } catch (e) { res.status(500).json({ error: e.message }); }

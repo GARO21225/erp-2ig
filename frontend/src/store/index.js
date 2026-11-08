@@ -31,9 +31,11 @@ export const useRestoStore = create(
   persist(
     (set) => ({
       restaurantId: null,
-      global: null, // dashboard : true = tous les restaurants, false = un seul, null = par défaut (global si plusieurs)
+      global: null, // true = tous les restaurants, false = un seul, null = par défaut (global sur dashboard et historiques si plusieurs)
+      nbResto: 0,
       setRestaurant: (restaurantId) => set({ restaurantId, global: false }),
       setGlobal: () => set({ global: true }),
+      setNbResto: (nbResto) => set({ nbResto }),
     }),
     { name: '2ig-resto' }
   )
@@ -57,3 +59,15 @@ if (typeof window !== 'undefined') {
     useAuthStore.subscribe(state => { window.__authStore = state; });
   }, 0);
 }
+
+// Pages d'exploitation (prise de commande, cuisine, pointage) : toujours sur UN restaurant
+const OPERATIONNEL = ['/yakro/pos', '/yakro/cuisine', '/yakro/pointer'];
+const LECTURE_PAR_DEFAUT = ['/yakro/dashboard', '/yakro/historiques'];
+/** Vue « tous les restaurants » active pour cette page ? */
+export function porteeGlobale(pathname = (typeof window !== 'undefined' ? window.location.pathname : '')) {
+  const { global, nbResto } = useRestoStore.getState();
+  if (nbResto < 2 || OPERATIONNEL.some(p => pathname.startsWith(p))) return false;
+  if (global === true) return true;
+  return global === null && LECTURE_PAR_DEFAUT.some(p => pathname.startsWith(p));
+}
+export const pageOperationnelle = (pathname) => OPERATIONNEL.some(p => pathname.startsWith(p));
