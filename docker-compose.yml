@@ -38,6 +38,30 @@ services:
     depends_on:
       - backend
 
+  # HTTPS : certificat Let's Encrypt automatique (ports 80 et 443 du serveur à ouvrir)
+  caddy:
+    build:
+      context: ./caddy
+    container_name: erp-caddy
+    restart: always
+    environment:
+      DOMAIN: ${DOMAIN:-204-168-229-74.sslip.io}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - erp-network
+    depends_on:
+      - backend
+      - frontend
+
+volumes:
+  caddy_data:
+  caddy_config:
+
 networks:
   erp-network:
     external: true

@@ -5,7 +5,7 @@
  */
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { toptelsigAPI } from '../../lib/api';
+import { toptelsigAPI, API_URL } from '../../lib/api';
 import { useAuthStore } from '../../store';
 import {
   BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell,
@@ -242,7 +242,7 @@ function OngletLots({ lots = [], projetId, onRefresh }) {
             onClick={async () => {
               try {
                 const token = JSON.parse(localStorage.getItem('2ig-auth')||'{}')?.state?.token||'';
-                const base = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+                const base = API_URL;
                 const r = await fetch(`${base}/toptelsig/lots/template?projetId=${projetId}`,
                   { headers: { Authorization: `Bearer ${token}` } });
                 const blob = await r.blob();

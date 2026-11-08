@@ -1,6 +1,7 @@
 /**
  * TemplateButton — Bouton de téléchargement de template authentifié
  */
+import { API_URL } from '../../lib/api';
 export default function TemplateButton({ url, label = 'Template', color = '#1a3f6f' }) {
   const handleDownload = () => {
     // Récupérer le token depuis le store Zustand persisté
@@ -10,7 +11,7 @@ export default function TemplateButton({ url, label = 'Template', color = '#1a3f
       if (stored) token = JSON.parse(stored)?.state?.token;
     } catch {}
 
-    const base = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+    const base = API_URL;
     const fullUrl = `${base}${url.startsWith('/') ? url : '/' + url}`;
 
     fetch(fullUrl, {

@@ -1,0 +1,11 @@
+# HTTPS automatique (certificat Let's Encrypt reconnu par les navigateurs, aucun avertissement).
+# {$DOMAIN} = nom de domaine ; par défaut 204-168-229-74.sslip.io, qui pointe vers l'IP du serveur sans rien acheter.
+{$DOMAIN} {
+	encode gzip
+	handle /api/* {
+		reverse_proxy erp-backend:4000
+	}
+	handle {
+		reverse_proxy erp-frontend:80
+	}
+}

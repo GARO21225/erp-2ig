@@ -1,8 +1,11 @@
 import axios from 'axios';
 import { useAuthStore, useRestoStore } from '../store';
 
+// En HTTPS (domaine + certificat) l'API passe par le même domaine (/api) ; en HTTP, adresse directe du serveur.
+export const API_URL = (typeof location !== 'undefined' && location.protocol === 'https:') ? '/api' : (import.meta.env.VITE_API_URL || 'http://localhost:4000/api');
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:4000/api',
+  baseURL: API_URL,
   timeout: 15000,
 });
 

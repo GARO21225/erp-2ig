@@ -5,7 +5,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { exportTicketYakro } from '../../lib/export';
-import { yakroAPI, employesAPI } from '../../lib/api';
+import { yakroAPI, employesAPI, API_URL } from '../../lib/api';
 import DocumentViewer from '../../components/ui/DocumentViewer';
 import { useYakro } from '../../lib/useYakro';
 import { Plus, X, Minus, ShoppingBag, Banknote, Smartphone, CreditCard, CheckCircle, Users, RefreshCw, ArrowRight, Search } from 'lucide-react';
@@ -639,7 +639,7 @@ export default function POS() {
     if (table.commandeExistante) {
       const cmd = table.commandeExistante;
       const token = JSON.parse(localStorage.getItem('2ig-auth')||'{}')?.state?.token;
-      fetch(`${import.meta.env.VITE_API_URL||'http://localhost:4000/api'}/yakro/commandes/${cmd.id}/ajouter-lignes`, {
+      fetch(`${API_URL}/yakro/commandes/${cmd.id}/ajouter-lignes`, {
         method:'POST',
         headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
         body:JSON.stringify({ lignes:data.lignes, notes:data.notes })
