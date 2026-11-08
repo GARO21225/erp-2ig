@@ -77,6 +77,13 @@ router.post('/scan', auth, yakro, async (req, res) => {
       const [e] = await enrichir([p], restaurantId);
       return res.json({ action: 'SORTIE', at: maintenant, nom, restaurant: acces.restaurant.nom, entreeLe: p.entreeLe, dureeMin: e.dureeMin, activite: e.activite });
     }
+    // Un seul pointage (entrée + sortie) par agent et par jour
+    const debutJour = new Date(maintenant); debutJour.setUTCHours(0, 0, 0, 0);
+    const dejaAuj = await prisma.pointageYakro.findFirst({ where: { utilisateurId: req.user.id, entreeLe: { gte: debutJour }, id: ouverte ? { not: ouverte.id } : undefined }, orderBy: { entreeLe: 'desc' } });
+    if (dejaAuj) {
+      const h = (d) => new Date(d).toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+      return res.status(409).json({ error: `Vous avez déjà pointé aujourd'hui (entrée ${h(dejaAuj.entreeLe)}${dejaAuj.sortieLe ? `, sortie ${h(dejaAuj.sortieLe)}` : ''}). Un seul pointage par jour.` });
+    }
     // Entrée (une session ancienne restée ouverte reste signalée « oubli » pour correction par le gérant)
     const p = await prisma.pointageYakro.create({ data: { utilisateurId: req.user.id, nom, restaurantId, entreeLe: maintenant, modeEntree: 'QR' } });
     res.json({ action: 'ENTREE', at: p.entreeLe, nom, restaurant: acces.restaurant.nom, oubliPrecedent: !!ouverte });
@@ -141,6 +148,8 @@ router.post('/manuel', auth, yakro, Y.resto, Y.can('pointage.gerer'), async (req
     const acces = await prisma.accesRestaurantYakro.findFirst({ where: { utilisateurId, restaurantId: req.restaurantId } });
     const u = await prisma.utilisateur.findUnique({ where: { id: utilisateurId }, select: { prenom: true, nom: true, role: true } });
     if (!u || (!acces && !Y.ROLES_ADMIN.includes(u.role))) return res.status(400).json({ error: 'Cet agent n’est pas affecté à ce restaurant' });
+    const j0 = new Date(e); j0.setUTCHours(0, 0, 0, 0); const j1 = new Date(j0.getTime() + 86400000);
+    if (await prisma.pointageYakro.findFirst({ where: { utilisateurId, entreeLe: { gte: j0, lt: j1 } } })) return res.status(409).json({ error: 'Cet agent a déjà un pointage ce jour-là : corrigez-le au lieu d’en créer un second' });
     const p = await prisma.pointageYakro.create({ data: { utilisateurId, nom: nomDe(u), restaurantId: req.restaurantId, entreeLe: e, sortieLe: s, modeEntree: 'MANUEL', modeSortie: s ? 'MANUEL' : null, note: note || null, corrigePar: nomDe(req.user) } });
     res.status(201).json(p);
   } catch (e) { res.status(500).json({ error: e.message }); }
