@@ -11,11 +11,11 @@ async function rapatrierImages() {
   const produits = await prisma.produit.findMany({ where: { filiale: 'YAKRO_GRILL', imageData: null, imageUrl: { startsWith: 'http' } }, select: { id: true, imageUrl: true } });
   const cache = new Map(); // une même image n'est téléchargée qu'une fois
   let ok = 0, echec = 0;
-  for (const p of produits) {
+  const telecharger = async (p) => {
     try {
       let img = cache.get(p.imageUrl);
       if (!img) {
-        const r = await fetch(p.imageUrl, { signal: AbortSignal.timeout(15000), headers: { 'User-Agent': 'Mozilla/5.0 (compatible; YakroGrill/1.0)' } });
+        const r = await fetch(p.imageUrl, { signal: AbortSignal.timeout(8000), headers: { 'User-Agent': 'Mozilla/5.0 (compatible; YakroGrill/1.0)' } });
         const type = (r.headers.get('content-type') || '').split(';')[0];
         if (!r.ok || !/^image\/(png|jpeg|webp|gif)$/.test(type)) throw new Error(`HTTP ${r.status} ${type}`);
         const buf = Buffer.from(await r.arrayBuffer());
@@ -25,7 +25,10 @@ async function rapatrierImages() {
       await prisma.produit.update({ where: { id: p.id }, data: { imageData: img.buf, imageType: img.type, imageUrl: `/api/stocks/image/${p.id}` } });
       ok++;
     } catch (e) { echec++; }
-  }
+  };
+  // 6 téléchargements en parallèle
+  const file = [...produits];
+  await Promise.all(Array.from({ length: 6 }, async () => { while (file.length) await telecharger(file.shift()); }));
   return { ok, echec, total: produits.length };
 }
 

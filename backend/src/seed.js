@@ -143,11 +143,10 @@ async function seed() {
   // Photos : copie unique dans la base Yakro, puis liaison avec le menu
   try {
     const I = require('./lib/images-boissons');
-    const a = await I.rapatrierImages();
     const b = await I.lierImagesMenu();
     const L = await require('./lib/stock-menu').lierMenuStock();
     console.log(`✅ Menu ↔ stock : ${L.lies} lié(s), ${L.crees} boisson(s) ajoutée(s) au menu`);
-    console.log(`✅ Photos boissons : ${a.ok} copiée(s), ${a.echec} échec(s) · menu : ${b.lies}/${b.boissonsMenu} liée(s)`);
+    console.log(`✅ Photos du menu : ${b.lies}/${b.boissonsMenu} liée(s) (la copie des photos se fait en arrière-plan après le démarrage de l'API)`);
   } catch (e) { console.error('⚠ Photos boissons :', e.message); }
 
   console.log('🎉 Init terminée');

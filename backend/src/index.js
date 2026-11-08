@@ -88,4 +88,15 @@ cron.schedule('0 3 * * *', async () => {
 }, { timezone: 'Africa/Abidjan' });
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, '0.0.0.0', () => logger.info(`🚀 ERP 2IG API v2.0 → port ${PORT} [${process.env.NODE_ENV}]`));
+app.listen(PORT, '0.0.0.0', () => {
+  logger.info(`🚀 ERP 2IG API v2.0 → port ${PORT} [${process.env.NODE_ENV}]`);
+  // Copie des photos de boissons dans la base : en arrière-plan, sans retarder ni bloquer l'API
+  setTimeout(async () => {
+    try {
+      const I = require('./lib/images-boissons');
+      const a = await I.rapatrierImages();
+      if (a.total) { await I.lierImagesMenu(); await require('./lib/stock-menu').lierMenuStock(); }
+      logger.info(`Photos boissons : ${a.ok} copiée(s), ${a.echec} échec(s) sur ${a.total}`);
+    } catch (e) { logger.error('Photos boissons', { error: e.message }); }
+  }, 5000);
+});
