@@ -15,7 +15,11 @@ router.get('/', auth, resto, async (req, res) => {
       where,
       orderBy: [{ categorie: 'asc' }, { nom: 'asc' }]
     }), await prixDe(req.restaurantId));
+    // Boissons liées au stock : quantité restante ; le POS (disponible=true) ne propose que ce qui est en stock
+    const stocks = await require('../../lib/stock-menu').stockParMenu(menu);
+    menu = menu.map(i => ({ ...i, stock: stocks.has(i.id) ? stocks.get(i.id) : null }));
     if (disponible !== undefined) menu = menu.filter(i => i.disponible === (disponible === 'true'));
+    if (disponible === 'true') menu = menu.filter(i => (i.stock === null || i.stock > 0) && i.prix > 0);
 
     // Grouper par catégorie
     const grouped = menu.reduce((acc, item) => {

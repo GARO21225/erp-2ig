@@ -638,6 +638,7 @@ model MenuYakro {
   disponible  Boolean  @default(true)
   image       String?
   coutRevient Float?   // pour calcul marge
+  produitId   String?  // boisson liée au stock (déduit à chaque vente)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

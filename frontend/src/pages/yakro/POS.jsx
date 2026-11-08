@@ -503,7 +503,7 @@ export default function POS() {
   const [toast, setToast] = useState(null);
   const showToast = (msg,type='success') => { setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
 
-  const createCmd = useMutation({ mutationFn:yakroAPI.createCommande, onSuccess:()=>{ qc.invalidateQueries(['tables']); setCommandeTable(null); setPanneauTable(null); showToast('Commande créée ✓'); }, onError:e=>showToast(e?.error||'Erreur','error') });
+  const createCmd = useMutation({ mutationFn:yakroAPI.createCommande, onSuccess:()=>{ qc.invalidateQueries(['tables']); qc.invalidateQueries(['menu']); setCommandeTable(null); setPanneauTable(null); showToast('Commande créée ✓'); }, onError:e=>showToast(e?.error||'Erreur','error') });
   const updateStatut = useMutation({ mutationFn:({id,statut})=>yakroAPI.updateStatut(id,statut), onSuccess:()=>{ qc.invalidateQueries(['tables']); showToast('Statut mis à jour'); } });
   const payerCmd = useMutation({
     mutationFn: ({ id, data }) => yakroAPI.payer(id, data),
@@ -571,7 +571,7 @@ export default function POS() {
         method:'POST',
         headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
         body:JSON.stringify({ lignes:data.lignes, notes:data.notes })
-      }).then(r=>r.json()).then(()=>{ qc.invalidateQueries(['tables']); setCommandeTable(null); showToast('Articles ajoutés ✓'); })
+      }).then(async r=>{ const j=await r.json(); if(!r.ok) throw new Error(j?.error||'Erreur'); return j; }).then(()=>{ qc.invalidateQueries(['tables']); qc.invalidateQueries(['menu']); setCommandeTable(null); showToast('Articles ajoutés ✓'); })
         .catch(e=>showToast(e.message,'error'));
     } else {
       createCmd.mutate(data);

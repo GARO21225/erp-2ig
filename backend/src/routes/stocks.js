@@ -86,6 +86,7 @@ router.post('/produits', auth, async (req, res) => {
         actif: actif !== undefined ? !!actif : true,
       }
     });
+    if (produit.filiale === 'YAKRO_GRILL' && produit.type === 'BOISSON') await require('../lib/stock-menu').lierMenuStock().catch(() => {}); // la boisson apparaît aussitôt au POS
     res.status(201).json(produit);
   } catch (e) {
     if (e.code === 'P2002') return res.status(400).json({ error: 'Cette référence existe déjà' });
@@ -166,7 +167,8 @@ router.post('/sync-menu', auth, async (req, res) => {
       await prisma.stock.create({ data: { produitId: prod.id, filiale, quantite: 0, depot: 'Principal' } });
       noms.add(n); crees++;
     }
-    res.json({ crees, images, totalMenu: menu.length });
+    const L = await require('../lib/stock-menu').lierMenuStock();
+    res.json({ crees, images, totalMenu: menu.length, liees: L.lies, ajoutesAuMenu: L.crees });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

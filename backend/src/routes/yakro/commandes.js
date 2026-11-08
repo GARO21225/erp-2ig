@@ -4,6 +4,7 @@ const logger = require('../../lib/logger');
 const { auth, requireFiliale } = require('../../middleware/auth');
 const { VALIDATORS } = require('../../middleware/validate');
 const { resto, can, sc, prixDe, parametresDe, MODE_PARAM, TYPE_PARAM, ROLES_ADMIN } = require('../../lib/yakro-resto');
+const { deduireStock, restituerStock } = require('../../lib/stock-menu');
 const yakro = requireFiliale('YAKRO_GRILL');
 const pc = (req) => (req.restaurantId ? { commande: { restaurantId: req.restaurantId } } : {});
 
@@ -98,18 +99,22 @@ router.post('/', auth, yakro, resto, can('commande.creer'), VALIDATORS.commande,
     const total = sousTotal - remiseMontant;
 
     const numero = `${req.restaurant?.code || 'YG'}-${Date.now()}`;
-    const commande = await prisma.commandeYakro.create({
-      data: { numero, restaurantId: req.restaurantId, tableId, serveurId: serveurId || req.user.id, serveurNom: serveurNom || null, type: typeCmd,
-              nbCouverts: nbCouverts || 1, sousTotal, remise: remiseMontant, total, notes,
-              lignes: { create: lignesData } },
-      include: { table: true, lignes: true }
+    // Création + déduction du stock des boissons dans la même transaction
+    const commande = await prisma.$transaction(async (tx) => {
+      await deduireStock(tx, lignesData, numero);
+      return tx.commandeYakro.create({
+        data: { numero, restaurantId: req.restaurantId, tableId, serveurId: serveurId || req.user.id, serveurNom: serveurNom || null, type: typeCmd,
+                nbCouverts: nbCouverts || 1, sousTotal, remise: remiseMontant, total, notes,
+                lignes: { create: lignesData } },
+        include: { table: true, lignes: true }
+      });
     });
 
     if (tableId) await prisma.tableRestaurant.update({ where: { id: tableId }, data: { statut: 'OCCUPEE' } });
 
     logger.info('Commande créée', { numero, total, serveurId: req.user.id, restaurant: req.restaurant?.code });
     res.status(201).json(commande);
-  } catch (e) { logger.error('POST /yakro/commandes', { error: e.message }); res.status(500).json({ error: e.message }); }
+  } catch (e) { logger.error('POST /yakro/commandes', { error: e.message }); res.status(e.statut || 500).json({ error: e.message }); }
 });
 
 // PUT /:id/statut
@@ -234,7 +239,10 @@ router.delete('/:id', auth, yakro, resto, can('commande.annuler'), async (req, r
     if (!commande) return res.status(404).json({ error: 'Commande introuvable' });
     if (commande.statut === 'PAYEE') return res.status(400).json({ error: 'Commande payée — annulation impossible. Demander un remboursement.' });
 
-    await prisma.commandeYakro.update({ where: { id: req.params.id }, data: { statut: 'ANNULEE', notes: `${commande.notes || ''} | ANNULATION: ${motif}` } });
+    await prisma.$transaction(async (tx) => {
+      if (commande.statut !== 'ANNULEE') await restituerStock(tx, commande.id, commande.numero);
+      await tx.commandeYakro.update({ where: { id: req.params.id }, data: { statut: 'ANNULEE', notes: `${commande.notes || ''} | ANNULATION: ${motif}` } });
+    });
     if (commande.tableId) await prisma.tableRestaurant.update({ where: { id: commande.tableId }, data: { statut: 'LIBRE' } });
     await prisma.auditLog.create({ data: { utilisateurId: req.user.id, utilisateurNom: `${req.user.prenom} ${req.user.nom}`, filiale: 'YAKRO_GRILL', action: 'DELETE', entite: 'CommandeYakro', entiteId: commande.id, entiteLabel: `Annulation: ${motif}`, avant: { statut: commande.statut } } });
     res.json({ message: 'Commande annulée', motif });
@@ -306,24 +314,25 @@ router.post('/:id/ajouter-lignes', auth, yakro, resto, async (req, res) => {
 
     if (lignesData.length === 0) return res.status(400).json({ error: 'Aucun article valide' });
 
-    await prisma.$transaction([
-      prisma.ligneCommandeYakro.createMany({ data: lignesData }),
-      prisma.commandeYakro.update({
+    await prisma.$transaction(async (tx) => {
+      await deduireStock(tx, lignesData, commande.numero);
+      await tx.ligneCommandeYakro.createMany({ data: lignesData });
+      await tx.commandeYakro.update({
         where: { id: req.params.id },
         data: {
           sousTotal: { increment: ajout },
           total: { increment: ajout },
           notes: notes ? `${commande.notes || ''} | ${notes}` : commande.notes,
         }
-      })
-    ]);
+      });
+    });
 
     const updated = await prisma.commandeYakro.findUnique({
       where: { id: req.params.id },
       include: { lignes: { include: { menu: true } }, table: true }
     });
     res.json(updated);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { res.status(e.statut || 500).json({ error: e.message }); }
 });
 
 // GET /yakro/caisse-detail — Caisse du jour avec départage Bar/Cuisine

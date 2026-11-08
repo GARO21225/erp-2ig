@@ -1,0 +1,1 @@
+ALTER TABLE menu_yakro ADD COLUMN IF NOT EXISTS "produitId" TEXT;

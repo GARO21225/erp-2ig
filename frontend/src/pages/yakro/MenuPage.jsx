@@ -57,7 +57,7 @@ export default function MenuPage() {
       <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
         {isLoading ? <div style={{ padding: 40, textAlign: 'center', color: '#888', fontSize: 13 }}>Chargement...</div> : (
           <table className="table-erp">
-            <thead><tr><th style={{ width: 56 }}></th><th>Article</th><th>Catégorie</th><th>Prix</th><th>Disponible</th><th></th></tr></thead>
+            <thead><tr><th style={{ width: 56 }}></th><th>Article</th><th>Catégorie</th><th>Prix</th><th>Stock</th><th>Disponible</th><th></th></tr></thead>
             <tbody>
               {items.map(item => (
                 <tr key={item.id}>
@@ -75,6 +75,7 @@ export default function MenuPage() {
                     {item.prix?.toLocaleString('fr')} F
                     {item.prixBase !== undefined && item.prixBase !== item.prix && <div style={{ fontSize: 10, fontWeight: 400, color: '#999' }}>commun : {item.prixBase.toLocaleString('fr')} F</div>}
                   </td>
+                  <td style={{ fontSize: 12 }}>{item.stock == null ? <span style={{ color: '#bbb' }}>—</span> : <span className={`badge ${item.stock > 0 ? 'badge-green' : 'badge-red'}`}>{item.stock > 0 ? item.stock : 'Rupture'}</span>}</td>
                   <td>
                     <button disabled={!peut('prix.gerer')} onClick={() => dispoMut.mutate({ item, disponible: !item.disponible })} style={{ background: 'none', border: 'none', cursor: peut('prix.gerer') ? 'pointer' : 'default', padding: 0 }}>
                       <span className={`badge ${item.disponible ? 'badge-green' : 'badge-gray'}`}>{item.disponible ? 'Oui' : 'Non'}</span>
@@ -88,7 +89,7 @@ export default function MenuPage() {
                   </td>
                 </tr>
               ))}
-              {items.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: '#ccc', padding: 40, fontSize: 13 }}>Menu vide. Importez depuis le PDF ou créez des articles.</td></tr>}
+              {items.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', color: '#ccc', padding: 40, fontSize: 13 }}>Menu vide. Importez depuis le PDF ou créez des articles.</td></tr>}
             </tbody>
           </table>
         )}
