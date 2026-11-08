@@ -6,7 +6,7 @@ import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { stocksAPI } from '../../lib/api';
 import { useAuthStore } from '../../store';
-import { Plus, AlertTriangle, X, Upload, Download, RefreshCw, BarChart2, Package } from 'lucide-react';
+import { Plus, AlertTriangle, X, Upload, Download, RefreshCw, BarChart2, Package, Pencil, ExternalLink, ImagePlus } from 'lucide-react';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmtF = n => n >= 1000000 ? `${(n/1000000).toFixed(1)}M F` : n >= 1000 ? `${Math.round(n/1000)}k F` : `${Math.round(n||0)} F`;
@@ -20,13 +20,33 @@ function getNiveau(p) {
   return { code:'NORMAL', label:'Normal', color:'#27500A', bg:'#EAF3DE', icon:'🟢' };
 }
 
+// Segmentation du stock : boissons / ingrédients
+const CATS_BOISSON = {
+  BOISSONS:'🥤 Softs & eaux', BIERES:'🍺 Bières', VINS:'🍷 Vins', SPIRITUEUX:'🥃 Spiritueux', ALCOOLS_BAR:'🍾 Bar & Alcools',
+};
 const CATS_LABELS = {
+  ...CATS_BOISSON,
   VIANDES_PROTEINES:'🥩 Viandes & Protéines', FECULENTS:'🌾 Féculents',
   LEGUMES_CONDIMENTS:'🥬 Légumes', LAITIERS_SAUCES:'🧈 Laitiers & Sauces',
-  PIZZA_CHAWARMA:'🍕 Pizza & Chawarma', BOISSONS:'🥤 Boissons',
-  ALCOOLS_BAR:'🍾 Bar & Alcools', EPICERIE:'🧂 Épicerie',
+  PIZZA_CHAWARMA:'🍕 Pizza & Chawarma', EPICERIE:'🧂 Épicerie',
   GAZ_ENERGIE:'🔥 Gaz & Énergie', AUTRE:'📦 Autre',
 };
+
+/** Réduit une image choisie (400 px max, JPEG) en data URI pour l'enregistrer avec l'article. */
+function lireImage(file, cb, erreur) {
+  if (!file?.type?.startsWith('image/')) return erreur('Choisissez une image');
+  const img = new Image();
+  img.onload = () => {
+    const k = Math.min(1, 400 / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(img.src);
+    cb(c.toDataURL('image/jpeg', 0.82));
+  };
+  img.onerror = () => erreur('Image illisible');
+  img.src = URL.createObjectURL(file);
+}
 
 // ── Composant principal ────────────────────────────────────────────────────────
 export default function StocksPage() {
@@ -34,6 +54,10 @@ export default function StocksPage() {
   const qc = useQueryClient();
   const [filialeFilter, setFilialeFilter] = useState(filiale === 'GROUPE' ? 'YAKRO_GRILL' : filiale);
   const [view, setView] = useState('liste'); // liste | dashboard
+  const [typeTab, setTypeTab] = useState('BOISSON'); // BOISSON | INGREDIENT
+  const [vue, setVue] = useState(null); // article affiché en grand
+  const [edition, setEdition] = useState(null); // produit en cours de modification
+  const importRzi = useRef(null);
   const [catFilter, setCatFilter] = useState('');
   const [niveauFilter, setNiveauFilter] = useState('');
   const [search, setSearch] = useState('');
@@ -44,11 +68,12 @@ export default function StocksPage() {
   const importRef = useRef(null);
   const showToast = (msg, t='success') => { setToast({msg,t}); setTimeout(()=>setToast(null),3500); };
 
-  const [form, setForm] = useState({
-    nom:'', categorie:'VIANDES_PROTEINES', unite:'kg',
-    prixAchat:'', prixVente:'', stockAlert:10, stockMinimum:5, stockMaximum:'',
+  const FORM_VIDE = (type) => ({
+    nom:'', categorie: type==='BOISSON' ? 'BOISSONS' : 'VIANDES_PROTEINES', unite: type==='BOISSON' ? 'casier' : 'kg', type,
+    prixAchat:'', prixVente:'', stockAlert:10, stockMinimum:5, stockMaximum:'', imageUrl:'', lien:'',
     filiale: filialeFilter || 'YAKRO_GRILL',
   });
+  const [form, setForm] = useState(FORM_VIDE('BOISSON'));
   const [mvtForm, setMvtForm] = useState({ type:'ENTREE', quantite:'', motif:'', typeMotif:'' });
 
   const { data: produits = [], isLoading } = useQuery({
@@ -57,7 +82,10 @@ export default function StocksPage() {
     staleTime: 15000,
   });
 
-  const list = Array.isArray(produits) ? produits : [];
+  const tous = Array.isArray(produits) ? produits : [];
+  const nbParType = { BOISSON: tous.filter(p=>p.type==='BOISSON').length, INGREDIENT: tous.filter(p=>p.type!=='BOISSON').length };
+  const list = tous.filter(p => (typeTab==='BOISSON') === (p.type==='BOISSON'));
+  const catsDuType = Object.entries(CATS_LABELS).filter(([k]) => (typeTab==='BOISSON') === (k in CATS_BOISSON));
 
   // Stats dashboard
   const stats = {
@@ -80,10 +108,24 @@ export default function StocksPage() {
   const cats = [...new Set(list.map(p => p.categorie))].sort();
 
   const createMut = useMutation({
-    mutationFn: stocksAPI.createProduit,
-    onSuccess: () => { qc.invalidateQueries(['produits']); setShowCreate(false); showToast('Produit créé ✓'); },
-    onError: e => showToast(e?.error || 'Erreur', 'error'),
+    mutationFn: (d) => edition ? stocksAPI.majProduit(edition.id, d) : stocksAPI.createProduit(d),
+    onSuccess: () => { qc.invalidateQueries(['produits']); setShowCreate(false); setEdition(null); showToast(edition ? 'Produit modifié ✓' : 'Produit créé ✓'); },
+    onError: e => showToast(e?.response?.data?.error || e?.error || 'Erreur', 'error'),
   });
+  const ouvrirCreation = () => { setEdition(null); setForm(FORM_VIDE(typeTab)); setShowCreate(true); };
+  const ouvrirEdition = (p) => { setEdition(p); setForm({ ...FORM_VIDE(p.type), ...p, imageUrl:p.imageUrl||'', lien:p.lien||'' }); setShowCreate(true); };
+
+  const importerRzi = async (e) => {
+    const f = e.target.files?.[0]; e.target.value = '';
+    if (!f) return;
+    try {
+      const articles = JSON.parse(await f.text());
+      const creer = confirm('Créer aussi dans le stock Yakro les boissons RZI-Camp qui n\u2019existent pas encore ?\n\nOK = oui, Annuler = mettre à jour seulement les images des boissons existantes');
+      const r = await stocksAPI.importBoissons({ articles, creerManquants: creer });
+      qc.invalidateQueries(['produits']);
+      showToast(`✅ ${r.misAJour} mise(s) à jour · ${r.crees} créée(s)${r.sansMatch?` · ${r.sansMatch} sans correspondance`:''}${r.imagesIgnorees?` · ${r.imagesIgnorees} image(s) trop lourde(s)`:''}`);
+    } catch (err) { showToast('Fichier invalide ou erreur : ' + (err?.response?.data?.error || err.message), 'error'); }
+  };
   const mvtMut = useMutation({
     mutationFn: (data) => {
       if (data.type === 'PERTE' && (!data.motif || !data.typeMotif)) return Promise.reject({ message: 'Motif obligatoire pour une perte' });
@@ -182,9 +224,24 @@ export default function StocksPage() {
             disabled={seeding} onClick={seedYakro}>
             {seeding ? '⏳' : '🔥'} Init. Yakro
           </button>
+          {typeTab==='BOISSON' && <>
+            <input ref={importRzi} type="file" accept=".json,application/json" style={{ display:'none' }} onChange={importerRzi}/>
+            <button className="btn btn-ghost btn-sm" onClick={()=>importRzi.current?.click()}><ImagePlus size={13}/> Images RZI-Camp</button>
+          </>}
           <button className="btn btn-primary btn-sm" style={{ background:'#1a3f6f', border:'none' }}
-            onClick={()=>setShowCreate(true)}><Plus size={13}/> Produit</button>
+            onClick={ouvrirCreation}><Plus size={13}/> {typeTab==='BOISSON' ? 'Boisson' : 'Ingrédient'}</button>
         </div>
+      </div>
+
+      {/* Segmentation boissons / ingrédients */}
+      <div role="tablist" style={{ display:'flex', gap:8, marginBottom:14 }}>
+        {[['BOISSON','🥤 Boissons'],['INGREDIENT','🥬 Ingrédients']].map(([k,l])=>(
+          <button key={k} role="tab" aria-selected={typeTab===k} onClick={()=>{setTypeTab(k);setCatFilter('');setNiveauFilter('');}}
+            style={{ flex:'0 1 200px', minHeight:44, border:'none', borderRadius:12, cursor:'pointer', fontFamily:'Syne', fontWeight:700, fontSize:14,
+              background:typeTab===k?'#8B1A1A':'white', color:typeTab===k?'white':'#555', boxShadow:typeTab===k?'none':'0 0 0 1px #e8e7e1' }}>
+            {l} <span style={{ opacity:.7, fontWeight:500, fontSize:12 }}>{nbParType[k]}</span>
+          </button>
+        ))}
       </div>
 
       {/* Filiale + vue */}
@@ -284,7 +341,7 @@ export default function StocksPage() {
               <table className="table-erp">
                 <thead>
                   <tr>
-                    <th>Statut</th><th>Produit</th><th>Catégorie</th>
+                    <th>Statut</th>{typeTab==='BOISSON' && <th>Image</th>}<th>Produit</th><th>Catégorie</th>
                     <th style={{ textAlign:'right' }}>Stock</th>
                     <th style={{ textAlign:'right' }}>🟠 Alerte</th>
                     <th style={{ textAlign:'right' }}>🔴 Critique</th>
@@ -301,6 +358,13 @@ export default function StocksPage() {
                         <td>
                           <span style={{ fontSize:16, title:n.label }}>{n.icon}</span>
                         </td>
+                        {typeTab==='BOISSON' && (
+                          <td>
+                            <button onClick={()=>setVue(p)} aria-label={`Voir ${p.nom}`} style={{ width:48, height:48, border:'none', borderRadius:10, background:'#F7F7F5', padding:0, cursor:'pointer', overflow:'hidden' }}>
+                              {p.imageUrl ? <img src={p.imageUrl} alt="" loading="lazy" style={{ width:'100%', height:'100%', objectFit:'cover' }}/> : <span style={{ fontSize:20 }}>🥤</span>}
+                            </button>
+                          </td>
+                        )}
                         <td>
                           <div style={{ fontWeight:600, fontSize:13 }}>{p.nom}</div>
                           <div style={{ fontSize:10, color:'#888' }}>{p.reference}</div>
@@ -316,19 +380,20 @@ export default function StocksPage() {
                           {fmtF((p.stockTotal||0)*(p.prixAchat||0))}
                         </td>
                         <td>
-                          <button onClick={()=>setShowMvt(p)} className="btn btn-sm btn-ghost" style={{ fontSize:11 }}>
-                            ± Mouvement
-                          </button>
+                          <div style={{ display:'flex', gap:6 }}>
+                            <button onClick={()=>setShowMvt(p)} className="btn btn-sm btn-ghost" style={{ fontSize:11 }}>± Mouvement</button>
+                            <button onClick={()=>ouvrirEdition(p)} className="btn btn-sm btn-ghost" aria-label={`Modifier ${p.nom}`}><Pencil size={13}/></button>
+                          </div>
                         </td>
                       </tr>
                     );
                   })}
                   {filtered.length === 0 && (
-                    <tr><td colSpan={9}>
+                    <tr><td colSpan={10}>
                       <div className="empty-state">
                         <Package size={28} color="#ddd"/>
                         <p style={{ marginTop:8 }}>
-                          {list.length === 0
+                          {list.length === 0 && tous.length === 0
                             ? <span>Aucun article en stock. <button style={{ color:'#8B1A1A', background:'none', border:'none', cursor:'pointer', fontWeight:600 }} onClick={seedYakro}>🔥 Initialiser Yakro Grill</button></span>
                             : 'Aucun résultat pour ces filtres'}
                         </p>
@@ -348,15 +413,15 @@ export default function StocksPage() {
         <div className="modal-overlay" onClick={()=>setShowCreate(false)}>
           <div className="modal" style={{ maxWidth:540 }} onClick={e=>e.stopPropagation()}>
             <div style={{ display:'flex', justifyContent:'space-between', marginBottom:18 }}>
-              <h3 style={{ margin:0, fontFamily:'Syne', fontSize:16 }}>📦 Nouveau produit</h3>
-              <button onClick={()=>setShowCreate(false)} style={{ background:'none', border:'none', cursor:'pointer' }}><X size={18}/></button>
+              <h3 style={{ margin:0, fontFamily:'Syne', fontSize:16 }}>{edition ? '✏️ Modifier' : (form.type==='BOISSON' ? '🥤 Nouvelle boisson' : '🥬 Nouvel ingrédient')}</h3>
+              <button onClick={()=>{setShowCreate(false);setEdition(null);}} aria-label="Fermer" style={{ background:'none', border:'none', cursor:'pointer' }}><X size={18}/></button>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
               <div style={{ gridColumn:'1/-1' }}><label className="label">Nom *</label><input className="input" value={form.nom} onChange={e=>setForm(f=>({...f,nom:e.target.value}))}/></div>
               <div>
                 <label className="label">Catégorie</label>
                 <select className="input" value={form.categorie} onChange={e=>setForm(f=>({...f,categorie:e.target.value}))}>
-                  {Object.entries(CATS_LABELS).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+                  {Object.entries(CATS_LABELS).filter(([k])=>(form.type==='BOISSON')===(k in CATS_BOISSON)).map(([k,v])=><option key={k} value={k}>{v}</option>)}
                 </select>
               </div>
               <div><label className="label">Unité</label><input className="input" value={form.unite} onChange={e=>setForm(f=>({...f,unite:e.target.value}))}/></div>
@@ -370,6 +435,23 @@ export default function StocksPage() {
                 <label className="label">🔴 Seuil critique</label>
                 <input className="input" type="number" value={form.stockMinimum} onChange={e=>setForm(f=>({...f,stockMinimum:Number(e.target.value)}))}/>
               </div>
+              {form.type==='BOISSON' && (
+                <div style={{ gridColumn:'1/-1', display:'grid', gap:8 }}>
+                  <div style={{ display:'flex', gap:12, alignItems:'center' }}>
+                    <div style={{ width:84, height:84, borderRadius:12, background:'#F7F7F5', overflow:'hidden', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      {form.imageUrl ? <img src={form.imageUrl} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }}/> : <span style={{ fontSize:28 }}>🥤</span>}
+                    </div>
+                    <div style={{ display:'grid', gap:6, flex:1, minWidth:0 }}>
+                      <label className="btn btn-sm btn-ghost" style={{ cursor:'pointer', justifySelf:'start' }}><ImagePlus size={13}/> {form.imageUrl ? 'Remplacer la photo' : 'Ajouter une photo'}
+                        <input type="file" accept="image/*" style={{ display:'none' }} onChange={e=>{const f=e.target.files?.[0]; e.target.value=''; lireImage(f, d=>setForm(x=>({...x,imageUrl:d})), m=>showToast(m,'error'));}}/>
+                      </label>
+                      <input className="input" placeholder="…ou URL de l'image (https://)" value={form.imageUrl.startsWith('data:') ? '' : form.imageUrl} onChange={e=>setForm(f=>({...f,imageUrl:e.target.value}))}/>
+                    </div>
+                    {form.imageUrl && <button type="button" className="btn btn-sm btn-ghost" style={{ color:'#A32D2D' }} onClick={()=>setForm(f=>({...f,imageUrl:''}))}>Retirer</button>}
+                  </div>
+                  <div><label className="label">Lien de l'article (visualisation)</label><input className="input" type="url" placeholder="https://…" value={form.lien} onChange={e=>setForm(f=>({...f,lien:e.target.value}))}/></div>
+                </div>
+              )}
               {filiale === 'GROUPE' && (
                 <div style={{ gridColumn:'1/-1' }}>
                   <label className="label">Filiale</label>
@@ -384,7 +466,7 @@ export default function StocksPage() {
               <button className="btn btn-primary btn-sm" style={{ background:'#1a3f6f', border:'none' }}
                 disabled={!form.nom||createMut.isPending}
                 onClick={()=>createMut.mutate({ ...form, prixAchat:Number(form.prixAchat), prixVente:Number(form.prixVente) })}>
-                {createMut.isPending?'...':'Créer'}
+                {createMut.isPending?'...':(edition?'Enregistrer':'Créer')}
               </button>
             </div>
           </div>
@@ -453,6 +535,24 @@ export default function StocksPage() {
                 onClick={()=>mvtMut.mutate({ produitId:showMvt.id, filiale:showMvt.filiale, ...mvtForm, quantite:Number(mvtForm.quantite) })}>
                 {mvtMut.isPending?'...':'Valider'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {vue && (
+        <div className="modal-overlay" onClick={()=>setVue(null)}>
+          <div className="modal" style={{ maxWidth:420, textAlign:'center' }} onClick={e=>e.stopPropagation()}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+              <h3 style={{ margin:0, fontFamily:'Syne', fontSize:16 }}>{vue.nom}</h3>
+              <button onClick={()=>setVue(null)} aria-label="Fermer" style={{ background:'none', border:'none', cursor:'pointer' }}><X size={18}/></button>
+            </div>
+            {vue.imageUrl ? <img src={vue.imageUrl} alt={vue.nom} style={{ width:'100%', maxHeight:380, objectFit:'contain', borderRadius:12, background:'#F7F7F5' }}/> : <div style={{ padding:40, fontSize:48, background:'#F7F7F5', borderRadius:12 }}>🥤</div>}
+            <div style={{ fontSize:12, color:'#888', marginTop:10 }}>{vue.reference} · {vue.unite} · Stock {vue.stockTotal||0}</div>
+            <div style={{ display:'flex', gap:8, justifyContent:'center', marginTop:12 }}>
+              {vue.lien && <a className="btn btn-sm btn-ghost" href={vue.lien} target="_blank" rel="noopener noreferrer"><ExternalLink size={13}/> Ouvrir le lien</a>}
+              {vue.imageUrl?.startsWith('http') && <a className="btn btn-sm btn-ghost" href={vue.imageUrl} target="_blank" rel="noopener noreferrer"><ExternalLink size={13}/> Image</a>}
+              <button className="btn btn-sm btn-ghost" onClick={()=>{ouvrirEdition(vue);setVue(null);}}><Pencil size={13}/> Modifier</button>
             </div>
           </div>
         </div>

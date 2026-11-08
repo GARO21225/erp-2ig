@@ -4,12 +4,20 @@ const safe = async (fn) => { try { return await fn(); } catch { return null; } }
 const prisma = require('../lib/prisma');
 const { auth } = require('../middleware/auth');
 
+// Cloisonnement : un utilisateur d'une filiale ne voit et ne modifie que le stock de sa filiale.
+const CATS_BOISSON = ['BOISSONS', 'ALCOOLS_BAR', 'BIERES', 'VINS', 'SPIRITUEUX'];
+const filialeAutorisee = (req, demandee) => (req.user.filiale === 'GROUPE' ? demandee : req.user.filiale);
+const IMAGE_OK = (v) => !v || /^https?:\/\//.test(v) || (/^data:image\/(png|jpeg|webp);base64,/.test(v) && v.length < 450000);
+const LIEN_OK = (v) => !v || /^https?:\/\//.test(v);
+const norm = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\(.*?\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
+
 router.get('/produits', auth, async (req, res) => {
   try {
-    const { filiale, categorie, search } = req.query;
+    const { filiale, categorie, search, type } = req.query;
     const where = {};
-    if (filiale) where.filiale = filiale;
-    else if (req.user.filiale !== 'GROUPE') where.filiale = req.user.filiale;
+    const f = filialeAutorisee(req, filiale);
+    if (f) where.filiale = f;
+    if (type) where.type = type;
     if (categorie) where.categorie = categorie;
     if (search) where.nom = { contains: search, mode: 'insensitive' };
 
@@ -42,7 +50,11 @@ router.get('/produits', auth, async (req, res) => {
 
 router.post('/produits', auth, async (req, res) => {
   try {
-    const { reference, nom, description, categorie, unite, filiale, prixAchat, prixVente, stockAlert, stockMinimum, stockMaximum, actif } = req.body;
+    const { reference, nom, description, categorie, unite, prixAchat, prixVente, stockAlert, stockMinimum, stockMaximum, actif, imageUrl, lien } = req.body;
+    const filiale = filialeAutorisee(req, req.body.filiale);
+    const type = req.body.type === 'BOISSON' || CATS_BOISSON.includes(categorie) ? 'BOISSON' : 'INGREDIENT';
+    if (!IMAGE_OK(imageUrl)) return res.status(400).json({ error: 'Image invalide (URL http(s) ou PNG/JPEG/WebP de 300 Ko max)' });
+    if (!LIEN_OK(lien)) return res.status(400).json({ error: 'Le lien doit commencer par http:// ou https://' });
     const filialesValides = ['GROUPE', 'YAKRO_GRILL', 'TOPTELSIG', 'LIYA'];
     if (!nom || !categorie || !filialesValides.includes(filiale)) {
       return res.status(400).json({ error: `Nom, catégorie et filiale valide requis (${filialesValides.join(', ')})` });
@@ -50,7 +62,8 @@ router.post('/produits', auth, async (req, res) => {
     const ref = reference && reference.trim() ? reference.trim() : `PRD-${Date.now()}`;
     const produit = await prisma.produit.create({
       data: {
-        reference: ref, nom, filiale,
+        reference: ref, nom, filiale, type,
+        imageUrl: imageUrl || null, lien: lien || null,
         description: description || null,
         categorie,
         unite: unite || 'unité',
@@ -69,12 +82,60 @@ router.post('/produits', auth, async (req, res) => {
   }
 });
 
+router.put('/produits/:id', auth, async (req, res) => {
+  try {
+    const p = await prisma.produit.findUnique({ where: { id: req.params.id } });
+    if (!p || (req.user.filiale !== 'GROUPE' && p.filiale !== req.user.filiale)) return res.status(404).json({ error: 'Produit introuvable' });
+    const b = req.body; const data = {};
+    for (const k of ['nom', 'description', 'categorie', 'unite']) if (b[k] !== undefined) data[k] = b[k];
+    for (const k of ['prixAchat', 'prixVente', 'stockAlert', 'stockMinimum']) if (b[k] !== undefined && b[k] !== '') data[k] = Number(b[k]);
+    if (b.actif !== undefined) data.actif = !!b.actif;
+    if (b.imageUrl !== undefined) { if (!IMAGE_OK(b.imageUrl)) return res.status(400).json({ error: 'Image invalide (URL http(s) ou PNG/JPEG/WebP de 300 Ko max)' }); data.imageUrl = b.imageUrl || null; }
+    if (b.lien !== undefined) { if (!LIEN_OK(b.lien)) return res.status(400).json({ error: 'Le lien doit commencer par http:// ou https://' }); data.lien = b.lien || null; }
+    if (data.categorie) data.type = CATS_BOISSON.includes(data.categorie) ? 'BOISSON' : (b.type || p.type);
+    res.json(await prisma.produit.update({ where: { id: p.id }, data }));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Import des boissons (nom, categorie, prix, unite, image_url) exportées de RZI-Camp :
+// met à jour l'image/lien des boissons Yakro de même nom ; crée les manquantes si demandé.
+router.post('/import-boissons', auth, async (req, res) => {
+  try {
+    if (!['DG', 'DIRECTEUR', 'MANAGER', 'MAGASINIER'].includes(req.user.role)) return res.status(403).json({ error: 'Non autorisé' });
+    const filiale = 'YAKRO_GRILL';
+    if (req.user.filiale !== 'GROUPE' && req.user.filiale !== filiale) return res.status(403).json({ error: 'Réservé à Yakro Grill' });
+    const { articles, creerManquants } = req.body;
+    if (!Array.isArray(articles) || !articles.length) return res.status(400).json({ error: 'Liste d\u2019articles vide' });
+    const existants = await prisma.produit.findMany({ where: { filiale, type: 'BOISSON' } });
+    const parNom = new Map(existants.map(p => [norm(p.nom), p]));
+    const r = { misAJour: 0, crees: 0, sansMatch: 0, imagesIgnorees: 0 };
+    for (const a of articles) {
+      const nom = String(a.nom || '').trim(); if (!nom) continue;
+      let image = a.image_url || a.imageUrl || '';
+      if (image && !IMAGE_OK(image)) { image = ''; r.imagesIgnorees++; }
+      const lien = LIEN_OK(a.lien) ? (a.lien || null) : null;
+      const ex = parNom.get(norm(nom));
+      if (ex) {
+        await prisma.produit.update({ where: { id: ex.id }, data: { ...(image ? { imageUrl: image } : {}), ...(lien ? { lien } : {}) } });
+        r.misAJour++;
+      } else if (creerManquants) {
+        const cat = ['BIERES', 'VINS', 'SPIRITUEUX', 'ALCOOLS_BAR'].includes(String(a.categorie).toUpperCase()) ? String(a.categorie).toUpperCase() : 'BOISSONS';
+        const prod = await prisma.produit.create({ data: { reference: `YG-RZI-${Date.now().toString(36)}-${r.crees}`, nom, categorie: cat, type: 'BOISSON', unite: a.unite || 'bouteille', filiale, prixVente: Number(a.prix) || 0, imageUrl: image || null, lien } });
+        await prisma.stock.create({ data: { produitId: prod.id, filiale, quantite: 0, depot: 'Principal' } });
+        r.crees++;
+      } else r.sansMatch++;
+    }
+    res.json(r);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Mouvements de stock
 const MOTIFS_PERTE = ['PEREMPTION', 'CASSE', 'VOL', 'CONSO_INTERNE', 'OFFERT_CLIENT'];
 
 router.post('/mouvements', auth, async (req, res) => {
   try {
-    const { produitId, filiale, type, quantite, motif, typeMotif, depot = 'Principal' } = req.body;
+    const { produitId, type, quantite, motif, typeMotif, depot = 'Principal' } = req.body;
+    const filiale = filialeAutorisee(req, req.body.filiale);
     const qte = Number(quantite);
 
     // Fix 4 — Motif OBLIGATOIRE pour les pertes
@@ -133,7 +194,8 @@ router.get('/mouvements', auth, async (req, res) => {
   try {
     const { filiale, produitId, type, page = 1, limit = 30 } = req.query;
     const where = {};
-    if (filiale) where.filiale = filiale;
+    const f = filialeAutorisee(req, filiale);
+    if (f) where.filiale = f;
     if (produitId) where.produitId = produitId;
     if (type) where.type = type;
 
@@ -237,6 +299,8 @@ router.post('/mouvements/transfert', auth, async (req, res) => {
     if (!produitId || !filialeSource || !filialeDest || !quantite || !motif) return res.status(400).json({ error: 'produitId, filialeSource, filialeDest, quantite, motif requis' });
     const qte = Number(quantite);
     if (qte <= 0) return res.status(400).json({ error: 'Quantité doit être > 0' });
+    if (filialeSource !== filialeDest) return res.status(400).json({ error: 'Le stock n\u2019est pas commun : pas de transfert entre filiales' });
+    if (req.user.filiale !== 'GROUPE' && filialeSource !== req.user.filiale) return res.status(403).json({ error: 'Accès refusé' });
 
     // Vérifier stock source suffisant
     const stockSource = await prisma.stock.findUnique({ where: { produitId_filiale_depot: { produitId, filiale: filialeSource, depot: depotSource } } });
@@ -363,7 +427,7 @@ router.post('/seed-yakro', auth, async (req, res) => {
     for (const item of STOCK_ITEMS) {
       const exists = await prisma.produit.findUnique({ where: { reference: item.reference } });
       if (exists) { skipped++; continue; }
-      const produit = await prisma.produit.create({ data: { ...item, filiale: 'YAKRO_GRILL', prixVente: item.prixAchat * 1.3 } });
+      const produit = await prisma.produit.create({ data: { ...item, type: CATS_BOISSON.includes(item.categorie) ? 'BOISSON' : 'INGREDIENT', filiale: 'YAKRO_GRILL', prixVente: item.prixAchat * 1.3 } });
       await prisma.stock.create({ data: { produitId: produit.id, filiale: 'YAKRO_GRILL', quantite: 0, depot: 'Principal' } });
       created++;
     }

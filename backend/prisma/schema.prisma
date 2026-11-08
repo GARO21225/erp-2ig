@@ -368,6 +368,9 @@ model Produit {
   nom         String
   description String?
   categorie   String
+  type        String   @default("INGREDIENT") // BOISSON | INGREDIENT
+  imageUrl    String?  // URL externe ou data:image/... (boissons)
+  lien        String?  // lien de visualisation de l'article
   unite       String   @default("unité")
   filiale     Filiale
   prixAchat   Float    @default(0)
