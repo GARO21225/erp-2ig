@@ -125,6 +125,7 @@ router.post('/import-boissons', auth, async (req, res) => {
         const cat = CAT_RZI[String(a.categorie || '').toLowerCase()] || (['BIERES', 'VINS', 'SPIRITUEUX', 'ALCOOLS_BAR'].includes(String(a.categorie).toUpperCase()) ? String(a.categorie).toUpperCase() : 'BOISSONS');
         const prod = await prisma.produit.create({ data: { reference: `YG-RZI-${Date.now().toString(36)}-${r.crees}`, nom, categorie: cat, type: 'BOISSON', unite: a.unite || 'bouteille', filiale, prixVente: Number(a.prix) || 0, imageUrl: image || null, lien } });
         await prisma.stock.create({ data: { produitId: prod.id, filiale, quantite: 0, depot: 'Principal' } });
+        parNom.set(n, prod); existants.push(prod);
         r.crees++;
       } else r.sansMatch++;
     }
