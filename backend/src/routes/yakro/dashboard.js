@@ -155,13 +155,16 @@ router.get('/', auth, yakro, portee, async (req, res) => {
       .map(p => ({ ...p, marge: p.ca > 0 && p.cout > 0 ? Math.round((p.ca-p.cout)/p.ca*100) : null }))
       .sort((a,b) => b.ca - a.ca).slice(0, 20);
 
-    // Courbe CA 7 derniers jours
+    // Courbe du CA adaptée à la période : jour/semaine = 7 derniers jours, mois = jour par jour, année = mois par mois
     const courbe = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(); d.setDate(d.getDate()-i); d.setHours(0,0,0,0);
-      const fin2 = new Date(d); fin2.setHours(23,59,59);
-      const ca = await prisma.paiementYakro.aggregate({ _sum:{ montant:true }, where:{ createdAt:{ gte:d, lte:fin2 }, ...pc } });
-      courbe.push({ label: d.toLocaleDateString('fr', { day:'2-digit', month:'short' }), ca: ca._sum.montant || 0 });
+    const parMois = periode === 'annee';
+    const debutCourbe = periode === 'mois' ? new Date(debut) : parMois ? new Date(debut) : (() => { const d = new Date(); d.setDate(d.getDate() - 6); d.setHours(0,0,0,0); return d; })();
+    const paiementsCourbe = await prisma.paiementYakro.findMany({ where: { createdAt: { gte: debutCourbe, lte: fin }, ...pc }, select: { montant: true, createdAt: true } });
+    const cle = (d) => (parMois ? `${d.getFullYear()}-${d.getMonth()}` : d.toISOString().slice(0, 10));
+    const somme = new Map();
+    paiementsCourbe.forEach(x => somme.set(cle(x.createdAt), (somme.get(cle(x.createdAt)) || 0) + (x.montant || 0)));
+    for (const d = new Date(debutCourbe); d <= fin; parMois ? d.setMonth(d.getMonth() + 1) : d.setDate(d.getDate() + 1)) {
+      courbe.push({ label: d.toLocaleDateString('fr', parMois ? { month: 'short' } : { day: '2-digit', month: 'short' }), ca: somme.get(cle(d)) || 0 });
     }
 
     // Alertes

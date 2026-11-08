@@ -5,7 +5,7 @@ import CentreActions from '../../components/ui/CentreActions';
  * CA, Serveurs, Tables, Produits, Modes paiement, Alertes
  */
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { yakroAPI } from '../../lib/api';
 import { useYakro } from '../../lib/useYakro';
 import { useRestoStore } from '../../store';
@@ -51,10 +51,12 @@ export default function DashboardYakro() {
   const portee = global ? 'TOUS' : courantId;
   const setChoix = (v) => (v === 'TOUS' ? setGlobal() : setRestaurant(v));
   const nomResto = restaurants.find(r => r.id === portee)?.nom;
-  const { data: dash, isLoading, refetch } = useQuery({
+  const { data: dash, isLoading, isFetching, isError, error, refetch } = useQuery({
     queryKey: ['dashboard-yakro', periode, portee],
     queryFn: () => yakroAPI.dashboard(periode, portee),
     enabled: !chargeResto && !!portee,
+    placeholderData: keepPreviousData, // pas d'écran vide pendant le changement de période
+    retry: 1,
     staleTime: 30000,
     refetchInterval: 60000,
   });
@@ -94,6 +96,9 @@ export default function DashboardYakro() {
           <button className="btn btn-ghost btn-sm" onClick={()=>refetch()}><RefreshCw size={13}/></button>
         </div>
       </div>
+
+      {isError && <div role="alert" style={{ background:'#FDF2F2', border:'1px solid #F7C1C1', color:'#A32D2D', borderRadius:8, padding:'8px 14px', fontSize:12, marginBottom:12 }}>Impossible de charger les données ({periode}) : {error?.error || error?.message || 'erreur serveur'} — <button onClick={()=>refetch()} style={{ background:'none', border:'none', color:'#8B1A1A', textDecoration:'underline', cursor:'pointer' }}>réessayer</button></div>}
+      {isFetching && <div style={{ fontSize:11, color:'#888', marginBottom:8 }}>Actualisation…</div>}
 
       {/* Choix : global ou détail d'un restaurant */}
       {restaurants.length > 1 && (
@@ -146,7 +151,7 @@ export default function DashboardYakro() {
 
       {/* KPI exécutifs */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))', gap:10, marginBottom:20 }}>
-        <KPI label="CA du jour" value={fmtF(kpi.caJour)} sub={`Objectif: ${fmtF(kpi.objectifJour)}`} color="#8B1A1A" icon={TrendingUp}/>
+        <KPI label={`CA ${{ jour:"du jour", semaine:"7 derniers jours", mois:"du mois", annee:"de l'année" }[periode]}`} value={fmtF(kpi.caJour)} sub={`Objectif: ${fmtF(kpi.objectifJour)}`} color="#8B1A1A" icon={TrendingUp}/>
         <KPI label="Tickets" value={kpi.nbTickets||0} sub={`${kpi.nbClients||0} clients`} color="#E87722" icon={ShoppingBag}/>
         <KPI label="Ticket moyen" value={fmtF(kpi.ticketMoyen)} sub="Par commande" color="#1a3f6f"/>
         <KPI label="Marge brute est." value={fmtF(kpi.margeEstimee)} sub={`~${kpi.tauxMarge||0}% du CA`} color="#27500A" icon={TrendingUp}/>
@@ -155,9 +160,9 @@ export default function DashboardYakro() {
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap:10, marginBottom:20 }}>
         <KPI label="CA semaine" value={fmtF(kpi.caSemaine)} color="#8B1A1A"/>
         <KPI label="CA mois" value={fmtF(kpi.caMois)} color="#8B1A1A"/>
-        <KPI label="Charges fixes" value={fmtF(kpi.chargesFixes)} sub="salaires, loyer, énergie…" color="#1a3f6f"/>
-        <KPI label="Autres charges" value={fmtF(kpi.autresCharges)} sub="achats, transport…" color="#BA7517"/>
-        <KPI label="Résultat estimé" value={fmtF(kpi.resultatEstime)} color={(kpi.resultatEstime||0)>=0?'#27500A':'#A32D2D'}/>
+        <KPI label={`Charges fixes (${{ jour:"jour", semaine:"7 j", mois:"mois", annee:"année" }[periode]})`} value={fmtF(kpi.chargesFixes)} sub="salaires, loyer, énergie…" color="#1a3f6f"/>
+        <KPI label={`Autres charges (${{ jour:"jour", semaine:"7 j", mois:"mois", annee:"année" }[periode]})`} value={fmtF(kpi.autresCharges)} sub="achats, transport…" color="#BA7517"/>
+        <KPI label={`Résultat estimé (${{ jour:"jour", semaine:"7 j", mois:"mois", annee:"année" }[periode]})`} value={fmtF(kpi.resultatEstime)} color={(kpi.resultatEstime||0)>=0?'#27500A':'#A32D2D'}/>
       </div>
 
       {/* Graphiques ligne 1 */}
