@@ -168,30 +168,40 @@ function PanelCommande({ table, menu, onClose, onSave, loading, listeServeurs })
 }
 
 // ─── Modal paiement ─────────────────────────────────────────────────────────
-function ModalPaiement({ commande, loading, onClose, onPay, modes }) {
+const QR_PARAM = { ORANGE_MONEY:'qr_om', WAVE:'qr_wave', MTN_MONEY:'qr_mtn', MOOV_MONEY:'qr_moov' };
+const NUM_PARAM = { ORANGE_MONEY:'numero_om', WAVE:'numero_wave', MTN_MONEY:'numero_mtn' };
+
+function ModalPaiement({ commande, loading, onClose, onPay, modes, params = {} }) {
   // Seuls les modes acceptés par le restaurant sont proposés
   const moyens = modes?.length ? MOYENS_PMT.filter(m=>modes.includes(m.key)) : MOYENS_PMT;
-  const [lignesPmt, setLignesPmt] = useState([{ typePaiement:moyens[0].key, montant:commande.total, reference:'' }]);
-  const [especesRecues, setEspecesRecues] = useState('');
   const total = commande.total || 0;
+  const [lignesPmt, setLignesPmt] = useState([{ typePaiement:moyens[0].key, montant:total, reference:'', recu:'' }]);
   const totalSaisi = lignesPmt.reduce((s,l)=>s+Number(l.montant||0),0);
   const resteASaisir = total - totalSaisi;
-  const monnaieRendue = lignesPmt.some(l=>l.typePaiement==='ESPECES') && Number(especesRecues) > 0 ? Math.max(0,Number(especesRecues)-total) : 0;
-  const canPay = Math.abs(resteASaisir) < 2;
+  // Paiement mixte : la monnaie ne concerne que la part payée en espèces
+  const partEspeces = lignesPmt.filter(l=>l.typePaiement==='ESPECES').reduce((s,l)=>s+Number(l.montant||0),0);
+  const recu = Number(lignesPmt.find(l=>l.typePaiement==='ESPECES')?.recu) || 0;
+  const monnaieRendue = partEspeces>0 && recu>partEspeces ? recu-partEspeces : 0;
+  const recuInsuffisant = partEspeces>0 && recu>0 && recu<partEspeces;
+  const canPay = Math.abs(resteASaisir) < 2 && !recuInsuffisant && lignesPmt.every(l=>Number(l.montant)>0 && (l.typePaiement==='ESPECES' || l.reference.trim()));
 
   const addLigne = () => {
-    if (resteASaisir<=0) return;
-    setLignesPmt(prev=>[...prev,{typePaiement:(moyens[1]||moyens[0]).key,montant:resteASaisir.toFixed(0),reference:''}]);
+    const libre = moyens.find(m=>!lignesPmt.some(l=>l.typePaiement===m.key)) || moyens[0];
+    setLignesPmt(prev=>[...prev,{typePaiement:libre.key,montant:Math.max(0,resteASaisir).toFixed(0),reference:'',recu:''}]);
   };
   const removeLigne = (i) => setLignesPmt(prev=>prev.filter((_,idx)=>idx!==i));
   const updateLigne = (i,field,value) => setLignesPmt(prev=>prev.map((l,idx)=>idx===i?{...l,[field]:value}:l));
+  const completer = (i) => setLignesPmt(prev=>{
+    const autres = prev.reduce((s,l,idx)=>idx===i?s:s+Number(l.montant||0),0);
+    return prev.map((l,idx)=>idx===i?{...l,montant:String(Math.max(0,total-autres))}:l);
+  });
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth:440 }} onClick={e=>e.stopPropagation()}>
+      <div className="modal" style={{ maxWidth:460 }} onClick={e=>e.stopPropagation()}>
         <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16 }}>
           <h3 style={{ margin:0,fontFamily:'Syne',fontSize:16 }}>Paiement — {commande.numero}</h3>
-          <button onClick={onClose} style={{ background:'none',border:'none',cursor:'pointer' }}><X size={18}/></button>
+          <button onClick={onClose} aria-label="Fermer" style={{ background:'none',border:'none',cursor:'pointer',padding:8 }}><X size={18}/></button>
         </div>
         <div style={{ background:'#FDF2F2',borderRadius:10,padding:14,textAlign:'center',marginBottom:16 }}>
           <div style={{ fontSize:11,color:'#888' }}>Total à encaisser</div>
@@ -200,39 +210,49 @@ function ModalPaiement({ commande, loading, onClose, onPay, modes }) {
         {lignesPmt.map((ligne,i)=>{
           const moyen = MOYENS_PMT.find(m=>m.key===ligne.typePaiement);
           const needRef = ligne.typePaiement !== 'ESPECES';
+          const qr = params[QR_PARAM[ligne.typePaiement]];
+          const numero = params[NUM_PARAM[ligne.typePaiement]];
           return (
             <div key={i} style={{ background:'#F7F7F5',borderRadius:10,padding:12,marginBottom:8 }}>
-              <div style={{ display:'flex',gap:8,marginBottom:needRef?8:0 }}>
-                <select className="input" style={{ flex:2,fontSize:12 }} value={ligne.typePaiement} onChange={e=>updateLigne(i,'typePaiement',e.target.value)}>
+              <div style={{ display:'flex',gap:8,marginBottom:8 }}>
+                <select className="input" style={{ flex:2,fontSize:14 }} value={ligne.typePaiement} aria-label="Mode de paiement" onChange={e=>updateLigne(i,'typePaiement',e.target.value)}>
                   {moyens.map(m=><option key={m.key} value={m.key}>{m.label}</option>)}
                 </select>
-                <input className="input" style={{ flex:1,fontSize:13,fontWeight:600 }} type="number"
-                  value={ligne.montant} onChange={e=>updateLigne(i,'montant',e.target.value)} placeholder="Montant"/>
-                {lignesPmt.length>1 && <button onClick={()=>removeLigne(i)} style={{ background:'#FCEBEB',border:'none',borderRadius:6,padding:'0 8px',cursor:'pointer',color:'#A32D2D' }}><X size={12}/></button>}
+                <input className="input" style={{ flex:1,fontSize:14,fontWeight:600,minWidth:0 }} type="number" inputMode="numeric"
+                  value={ligne.montant} onChange={e=>updateLigne(i,'montant',e.target.value)} placeholder="Montant" aria-label="Montant"/>
+                {lignesPmt.length>1 && <button onClick={()=>removeLigne(i)} aria-label="Retirer ce paiement" style={{ background:'#FCEBEB',border:'none',borderRadius:6,padding:'0 12px',cursor:'pointer',color:'#A32D2D' }}><X size={14}/></button>}
               </div>
-              {needRef && <input className="input" style={{ fontSize:12 }} placeholder={`Réf. ${moyen?.label} *`} value={ligne.reference} onChange={e=>updateLigne(i,'reference',e.target.value)}/>}
+              {lignesPmt.length>1 && resteASaisir!==0 && (
+                <button type="button" onClick={()=>completer(i)} style={{ fontSize:11,background:'none',border:'none',color:'#8B1A1A',cursor:'pointer',padding:'0 0 8px',textDecoration:'underline' }}>Mettre le solde ici</button>
+              )}
+              {needRef && qr && (
+                <div style={{ textAlign:'center',background:'white',borderRadius:10,padding:10,marginBottom:8 }}>
+                  <img src={qr} alt={`QR code ${moyen?.label}`} style={{ width:'100%',maxWidth:220,aspectRatio:'1',objectFit:'contain' }}/>
+                  <div style={{ fontSize:12,fontWeight:600,marginTop:4 }}>Le client scanne et paie {Number(ligne.montant||0).toLocaleString('fr')} F</div>
+                  {numero && <div style={{ fontSize:11,color:'#888' }}>ou envoie au {numero}</div>}
+                </div>
+              )}
+              {needRef && !qr && numero && <div style={{ fontSize:12,marginBottom:8,color:'#555' }}>Numéro {moyen?.label} : <b>{numero}</b></div>}
+              {needRef && <input className="input" style={{ fontSize:14 }} placeholder={`Réf. ${moyen?.label} *`} value={ligne.reference} onChange={e=>updateLigne(i,'reference',e.target.value)}/>}
               {ligne.typePaiement==='ESPECES' && (
-                <div style={{ marginTop:8,display:'flex',gap:8,alignItems:'center' }}>
-                  <input className="input" style={{ fontSize:12 }} type="number" placeholder="Espèces remises" value={especesRecues} onChange={e=>setEspecesRecues(e.target.value)}/>
-                  {especesRecues && Number(especesRecues)>=Number(ligne.montant) && (
-                    <div style={{ fontSize:13,fontWeight:700,color:'#27500A',whiteSpace:'nowrap' }}>
-                      Rendu: {monnaieRendue.toLocaleString('fr')} F
-                    </div>
-                  )}
+                <div style={{ display:'flex',gap:8,alignItems:'center' }}>
+                  <input className="input" style={{ fontSize:14 }} type="number" inputMode="numeric" placeholder="Espèces remises par le client" value={ligne.recu} onChange={e=>updateLigne(i,'recu',e.target.value)}/>
+                  {recu>partEspeces && <div style={{ fontSize:13,fontWeight:700,color:'#27500A',whiteSpace:'nowrap' }}>Rendre {monnaieRendue.toLocaleString('fr')} F</div>}
                 </div>
               )}
             </div>
           );
         })}
-        {resteASaisir>1 && (
+        {recuInsuffisant && <div role="alert" style={{ fontSize:12,color:'#A32D2D',marginBottom:8 }}>Les espèces remises sont inférieures à la part en espèces ({partEspeces.toLocaleString('fr')} F)</div>}
+        {Math.abs(resteASaisir)>=2 && (
           <div style={{ marginBottom:12 }}>
-            <div style={{ fontSize:12,color:'#A32D2D',marginBottom:6,fontWeight:500 }}>Reste : {resteASaisir.toLocaleString('fr')} F</div>
-            <button onClick={addLigne} style={{ fontSize:12,border:'1px dashed #d3d1c7',background:'white',borderRadius:8,padding:'6px 14px',cursor:'pointer',color:'#666',width:'100%' }}>+ Autre moyen de paiement</button>
+            <div style={{ fontSize:12,color:'#A32D2D',marginBottom:6,fontWeight:500 }}>{resteASaisir>0?`Reste : ${resteASaisir.toLocaleString('fr')} F`:`Trop-perçu : ${(-resteASaisir).toLocaleString('fr')} F — ajustez les montants`}</div>
+            {resteASaisir>0 && moyens.length>1 && <button onClick={addLigne} style={{ fontSize:13,border:'1px dashed #d3d1c7',background:'white',borderRadius:8,padding:'10px 14px',cursor:'pointer',color:'#666',width:'100%' }}>+ Paiement mixte : autre moyen pour le reste</button>}
           </div>
         )}
-        {canPay && <div style={{ background:'#EAF3DE',borderRadius:8,padding:'8px 12px',marginBottom:12,display:'flex',alignItems:'center',gap:6,fontSize:12,color:'#27500A' }}><CheckCircle size={14}/> Prêt à encaisser</div>}
-        <button disabled={!canPay||loading} onClick={()=>onPay({ paiements:lignesPmt.map(p=>({...p,montant:Number(p.montant)})), especesRecues:Number(especesRecues)||0, monnaieRendue })}
-          style={{ width:'100%',padding:13,background:canPay?'#8B1A1A':'#ddd',color:'white',border:'none',borderRadius:10,fontFamily:'Syne',fontWeight:700,fontSize:15,cursor:canPay?'pointer':'not-allowed' }}>
+        {canPay && <div style={{ background:'#EAF3DE',borderRadius:8,padding:'8px 12px',marginBottom:12,display:'flex',alignItems:'center',gap:6,fontSize:12,color:'#27500A' }}><CheckCircle size={14}/> Prêt à encaisser{monnaieRendue>0?` · rendre ${monnaieRendue.toLocaleString('fr')} F`:''}</div>}
+        <button disabled={!canPay||loading} onClick={()=>onPay({ paiements:lignesPmt.map(({recu,...p})=>({...p,montant:Number(p.montant)})), especesRecues:recu })}
+          style={{ width:'100%',padding:14,background:canPay?'#8B1A1A':'#ddd',color:'white',border:'none',borderRadius:10,fontFamily:'Syne',fontWeight:700,fontSize:15,cursor:canPay?'pointer':'not-allowed' }}>
           {loading?'Traitement...':`Encaisser ${total.toLocaleString('fr')} F`}
         </button>
       </div>
@@ -666,6 +686,7 @@ export default function POS() {
         <ModalPaiement
           commande={paiementCommande}
           modes={modesAcceptes}
+          params={paramsResto || {}}
           loading={payerCmd.isPending}
           onClose={()=>setPaiementCommande(null)}
           onPay={data=>payerCmd.mutate({ id:paiementCommande.id, data })}

@@ -129,7 +129,7 @@ router.put('/:id/statut', auth, yakro, resto, async (req, res) => {
 // POST /:id/payer — Paiement mixte complet
 router.post('/:id/payer', auth, yakro, resto, can('commande.encaisser'), VALIDATORS.paiementMixte, async (req, res) => {
   try {
-    const { paiements, especesRecues, monnaieRendue } = req.body;
+    const { paiements } = req.body;
     const commande = await prisma.commandeYakro.findFirst({ where: { id: req.params.id, ...sc(req) } });
     if (!commande) return res.status(404).json({ error: 'Commande introuvable' });
     if (commande.statut === 'PAYEE') return res.status(400).json({ error: 'Commande déjà payée' });
@@ -148,6 +148,14 @@ router.post('/:id/payer', auth, yakro, resto, can('commande.encaisser'), VALIDAT
       return res.status(400).json({ error: `Somme paiements (${totalPaye} F) ≠ total commande (${commande.total} F)` });
     }
 
+    // Paiement mixte : la monnaie ne porte que sur la part payée en espèces
+    const partEspeces = paiements.filter(p => p.typePaiement === 'ESPECES').reduce((a, p) => a + Number(p.montant), 0);
+    const especesRecues = Number(req.body.especesRecues || 0);
+    if (partEspeces > 0 && especesRecues > 0 && especesRecues < partEspeces - 0.5) {
+      return res.status(400).json({ error: `Espèces reçues (${especesRecues} F) inférieures à la part en espèces (${partEspeces} F)` });
+    }
+    const monnaieRendue = partEspeces > 0 && especesRecues > partEspeces ? especesRecues - partEspeces : 0;
+
     const result = await prisma.$transaction(async (tx) => {
       const cmdMaj = await tx.commandeYakro.update({
         where: { id: req.params.id },
@@ -158,7 +166,7 @@ router.post('/:id/payer', auth, yakro, resto, can('commande.encaisser'), VALIDAT
       })));
       const caisseT = await tx.caisseTransaction.create({
         data: { commandeId: req.params.id, totalCommande: commande.total,
-                especesRecues: Number(especesRecues || 0), monnaieRendue: Number(monnaieRendue || 0),
+                especesRecues: partEspeces > 0 ? (especesRecues || partEspeces) : 0, monnaieRendue,
                 estMixte: paiements.length > 1 }
       });
       const caisse = await tx.caisse.findFirst({ where: { filiale: 'YAKRO_GRILL', actif: true, ...sc(req) } });

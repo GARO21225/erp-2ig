@@ -237,6 +237,12 @@ router.get('/:id/parametres', auth, yakro, cible(), async (req, res) => {
 router.put('/:id/parametres', auth, yakro, cible('parametres.gerer'), async (req, res) => {
   try {
     const valides = new Set(Y.PARAMETRES.map(p => p.cle));
+    const images = new Set(Y.PARAMETRES.filter(p => p.type === 'image').map(p => p.cle));
+    for (const [k, v] of Object.entries(req.body || {})) {
+      if (images.has(k) && v && (!/^data:image\/(png|jpeg|webp);base64,/.test(v) || v.length > 700000)) {
+        return res.status(400).json({ error: 'Image invalide (PNG, JPEG ou WebP, 500 Ko maximum)' });
+      }
+    }
     const ops = Object.entries(req.body || {}).filter(([k]) => valides.has(k)).map(([cle, v]) => {
       const valeur = typeof v === 'boolean' ? (v ? '1' : '0') : String(v ?? '');
       return prisma.parametreRestaurantYakro.upsert({

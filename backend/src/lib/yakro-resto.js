@@ -55,6 +55,10 @@ const PARAMETRES = [
   { cle: 'numero_om',          groupe: 'Numéros de réception', label: 'Numéro Orange Money', type: 'text', defaut: '' },
   { cle: 'numero_wave',        groupe: 'Numéros de réception', label: 'Numéro Wave',         type: 'text', defaut: '' },
   { cle: 'numero_mtn',         groupe: 'Numéros de réception', label: 'Numéro MTN Money',    type: 'text', defaut: '' },
+  { cle: 'qr_om',   groupe: 'QR codes de paiement', label: 'QR code Orange Money', type: 'image', defaut: '' },
+  { cle: 'qr_wave', groupe: 'QR codes de paiement', label: 'QR code Wave',         type: 'image', defaut: '' },
+  { cle: 'qr_mtn',  groupe: 'QR codes de paiement', label: 'QR code MTN Money',    type: 'image', defaut: '' },
+  { cle: 'qr_moov', groupe: 'QR codes de paiement', label: 'QR code Moov Money',   type: 'image', defaut: '' },
   { cle: 'service_actif',      groupe: 'Service', label: 'Sur place', type: 'bool', defaut: '1' },
   { cle: 'emporter_actif',     groupe: 'Service', label: 'À emporter', type: 'bool', defaut: '1' },
   { cle: 'livraison_actif',    groupe: 'Service', label: 'Livraison', type: 'bool', defaut: '0' },
@@ -135,8 +139,9 @@ const resto = async (req, res, next) => {
       }
       return res.status(403).json({ error: "Aucun restaurant ne vous est affecté — contactez l'administrateur" });
     }
-    const choisi = demande ? liste.find(a => a.restaurant.id === demande) : liste[0];
-    if (!choisi) return res.status(403).json({ error: "Accès refusé à ce restaurant" });
+    // Restaurant demandé non accessible (ex. mémorisé par un autre compte) : un employé retombe sur le sien.
+    // Un administrateur qui demande un restaurant inexistant/désactivé reçoit aussi le premier accessible.
+    const choisi = (demande && liste.find(a => a.restaurant.id === demande)) || liste[0];
     req.restaurantId = choisi.restaurant.id;
     req.restaurant = choisi.restaurant;
     req.permissions = choisi.permissions;

@@ -10,7 +10,7 @@ export const useAuthStore = create(
       dernierEspace: null, // Mémoriser le dernier espace visité
 
       setAuth: (user, token) => set({ user, token }),
-      logout: () => set({ user: null, token: null, dernierEspace: null }),
+      logout: () => { try { localStorage.removeItem('2ig-resto'); } catch {} set({ user: null, token: null, dernierEspace: null }); },
       setFiliale: (filiale) => set({ filiale }),
       setDernierEspace: (espace) => set({ dernierEspace: espace }),
       isAuth: () => !!get().token,

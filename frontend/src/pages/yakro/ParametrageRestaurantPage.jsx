@@ -163,7 +163,9 @@ function OngletParametres({ r, peutModifier }) {
         <div key={g} className="card">
           <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>{g}</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 240px), 1fr))', gap: 10 }}>
-            {liste.map(p => p.type === 'bool' ? (
+            {liste.map(p => p.type === 'image' ? (
+              <ChampQR key={p.cle} p={p} valeur={vals[p.cle]} disabled={!peutModifier} onChange={(v) => setVals(x => ({ ...x, [p.cle]: v }))} />
+            ) : p.type === 'bool' ? (
               <label key={p.cle} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: peutModifier ? 'pointer' : 'default' }}>
                 <input type="checkbox" checked={vals[p.cle] === '1'} disabled={!peutModifier} onChange={e => setVals(v => ({ ...v, [p.cle]: e.target.checked ? '1' : '0' }))} />
                 {p.label}
@@ -327,6 +329,48 @@ export default function ParametrageRestaurantPage() {
       {actif.id === 'prix' && <OngletPrix r={courant} restos={restaurants} peutModifier={peut('prix.gerer')} />}
       {actif.id === 'parametres' && <OngletParametres r={courant} peutModifier={peut('parametres.gerer')} />}
       {actif.id === 'equipe' && <OngletEquipe r={courant} />}
+    </div>
+  );
+}
+
+
+/** Téléversement d'un QR code : réduit côté navigateur (600 px max, PNG net) avant envoi. */
+function ChampQR({ p, valeur, disabled, onChange }) {
+  const [erreur, setErreur] = useState('');
+  const choisir = (e) => {
+    const f = e.target.files?.[0]; e.target.value = '';
+    if (!f) return;
+    if (!f.type.startsWith('image/')) return setErreur('Choisissez une image (PNG ou JPEG)');
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 600 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src);
+      setErreur(''); onChange(c.toDataURL('image/png'));
+    };
+    img.onerror = () => setErreur('Image illisible');
+    img.src = URL.createObjectURL(f);
+  };
+  return (
+    <div>
+      <div className="label">{p.label}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ width: 88, height: 88, borderRadius: 10, background: '#F7F7F5', border: '1px dashed #d3d1c7', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
+          {valeur ? <img src={valeur} alt={p.label} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <span style={{ fontSize: 11, color: '#999' }}>Aucun</span>}
+        </div>
+        {!disabled && (
+          <div style={{ display: 'grid', gap: 6 }}>
+            <label className="btn btn-sm btn-ghost" style={{ cursor: 'pointer' }}>
+              {valeur ? 'Remplacer' : 'Téléverser'}
+              <input type="file" accept="image/*" onChange={choisir} style={{ display: 'none' }} />
+            </label>
+            {valeur && <button type="button" className="btn btn-sm btn-ghost" style={{ color: '#A32D2D' }} onClick={() => onChange('')}>Retirer</button>}
+          </div>
+        )}
+      </div>
+      {erreur && <div style={{ fontSize: 11, color: '#A32D2D', marginTop: 4 }}>{erreur}</div>}
     </div>
   );
 }
