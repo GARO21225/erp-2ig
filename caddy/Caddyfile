@@ -6,6 +6,7 @@
 	https_port 8080
 	auto_https disable_redirects
 	skip_install_trust
+	default_sni {$DOMAIN}
 }
 
 https://{$DOMAIN}:8080 {
