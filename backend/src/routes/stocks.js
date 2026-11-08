@@ -249,6 +249,35 @@ router.post('/mouvements', auth, async (req, res) => {
   }
 });
 
+// Statut POS de chaque boisson Yakro : null = visible au POS, sinon la raison pour laquelle elle est absente
+router.get('/pos-statut', auth, async (req, res) => {
+  try {
+    if (req.user.filiale !== 'GROUPE' && req.user.role !== 'DG' && req.user.filiale !== 'YAKRO_GRILL') return res.status(403).json({ error: 'Réservé à Yakro Grill' });
+    const restaurantId = req.headers['x-restaurant-id'] || null;
+    const [produits, menus, prix] = await Promise.all([
+      prisma.produit.findMany({ where: { filiale: 'YAKRO_GRILL', type: 'BOISSON' }, include: { stocks: true }, omit: { imageData: true } }),
+      prisma.menuYakro.findMany({ where: { NOT: { produitId: null } } }),
+      restaurantId ? prisma.prixRestaurantYakro.findMany({ where: { restaurantId } }) : [],
+    ]);
+    const menuDe = new Map(menus.map(m => [m.produitId, m]));
+    const ov = new Map(prix.map(r => [r.menuId, r]));
+    const statut = {};
+    for (const p of produits) {
+      const stock = p.stocks.reduce((s, x) => s + x.quantite, 0);
+      const m = menuDe.get(p.id);
+      const o = m && ov.get(m.id);
+      statut[p.id] = !p.actif ? 'Article désactivé'
+        : stock <= 0 ? 'Stock à 0'
+        : !m ? 'Pas encore dans le menu du POS (touchez « Synchroniser avec le POS »)'
+        : !m.disponible ? 'Marqué indisponible dans Menu & Carte'
+        : o && !o.disponible ? 'Marqué indisponible dans ce restaurant (Paramétrage → Prix)'
+        : !((o ? o.prix : m.prix) > 0) ? 'Sans prix de vente'
+        : null;
+    }
+    res.json(statut);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Mise à jour en masse (import Excel et édition directe du tableau)
 // ligne : { id? reference? nom, categorie, unite, prixAchat, prixVente, stockAlert, stockMinimum, stock (quantité réelle comptée), entree (quantité reçue à ajouter) }
 router.post('/maj-masse', auth, async (req, res) => {

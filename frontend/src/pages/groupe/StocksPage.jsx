@@ -112,6 +112,14 @@ export default function StocksPage() {
 
   const cats = [...new Set(list.map(p => p.categorie))].sort();
 
+  const { data: posStatut } = useQuery({ queryKey:['pos-statut', filialeFilter], queryFn: stocksAPI.posStatut, enabled: typeTab==='BOISSON' && (filialeFilter==='YAKRO_GRILL' || filiale==='YAKRO_GRILL'), staleTime:10000, retry:false });
+  const [syncPos, setSyncPos] = useState(false);
+  const synchroniserPos = async () => {
+    setSyncPos(true);
+    try { const r = await stocksAPI.syncMenu(); qc.invalidateQueries(['pos-statut']); qc.invalidateQueries(['produits']); qc.invalidateQueries(['menu']); showToast(`✓ POS synchronisé : ${r.liees ?? 0} liée(s), ${r.ajoutesAuMenu ?? 0} ajoutée(s) au menu`); }
+    catch (e) { showToast(e?.error || e?.message || 'Erreur', 'error'); }
+    finally { setSyncPos(false); }
+  };
   const createMut = useMutation({
     mutationFn: (d) => edition ? stocksAPI.majProduit(edition.id, d) : stocksAPI.createProduit(d),
     onSuccess: () => { qc.invalidateQueries(['produits']); setShowCreate(false); setEdition(null); showToast(edition ? 'Produit modifié ✓' : 'Produit créé ✓'); },
@@ -142,7 +150,7 @@ export default function StocksPage() {
   const majMasse = useMutation({
     mutationFn: (lignes) => stocksAPI.majMasse({ filiale: filialeFilter || 'YAKRO_GRILL', type: typeTab, lignes }),
     onSuccess: (r) => {
-      qc.invalidateQueries(['produits']); setModifs({}); setModeEdition(false);
+      qc.invalidateQueries(['produits']); qc.invalidateQueries(['pos-statut']); qc.invalidateQueries(['menu']); setModifs({}); setModeEdition(false);
       showToast(`✓ ${r.crees} créé(s), ${r.majs} modifié(s), ${r.mouvements} mouvement(s) de stock`);
       if (r.erreurs?.length) alert(`${r.erreurs.length} ligne(s) ignorée(s) :\n` + r.erreurs.slice(0,10).map(e => `Ligne ${e.ligne} : ${e.message}`).join('\n'));
     },
@@ -186,6 +194,7 @@ export default function StocksPage() {
           </p>
         </div>
         <div style={{ display:'flex', gap:8 }}>
+          {typeTab==='BOISSON' && <button className="btn btn-ghost btn-sm" disabled={syncPos} onClick={synchroniserPos} style={{ color:'#27500A', borderColor:'#27500A30' }}><RefreshCw size={13}/> {syncPos ? '…' : 'Synchroniser avec le POS'}</button>}
           <button className="btn btn-ghost btn-sm" onClick={handleExport}><Download size={13}/> Exporter Excel</button>
           <input ref={importRef} type="file" accept=".xlsx,.xls,.csv" style={{ display:'none' }} onChange={handleImport}/>
           <button className="btn btn-ghost btn-sm" disabled={majMasse.isPending} onClick={()=>importRef.current?.click()}><Upload size={13}/> Importer Excel</button>
@@ -340,7 +349,9 @@ export default function StocksPage() {
                         <td>
                           <div style={{ fontWeight:600, fontSize:13 }}>{p.nom}</div>
                           <div style={{ fontSize:10, color:'#888' }}>{p.reference}</div>
-                          {typeTab==='BOISSON' && !(p.prixVente>0) && <div style={{ fontSize:10, color:'#B97A18', fontWeight:600 }}>⚠ Sans prix de vente : absent du POS</div>}
+                          {typeTab==='BOISSON' && posStatut && p.filiale==='YAKRO_GRILL' && (posStatut[p.id]
+                            ? <div style={{ fontSize:10, color:'#B97A18', fontWeight:600 }}>⚠ Absent du POS : {posStatut[p.id]}</div>
+                            : <div style={{ fontSize:10, color:'#27500A', fontWeight:600 }}>✓ Visible au POS</div>)}
                         </td>
                         <td><span style={{ fontSize:10, background:'#F7F7F5', borderRadius:6, padding:'2px 6px' }}>{CATS_LABELS[p.categorie]?.split(' ').slice(1).join(' ')||p.categorie}</span></td>
                         <td style={{ textAlign:'right', fontFamily:'Syne', fontWeight:800, fontSize:14, color:n.color }}>

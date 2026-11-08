@@ -107,6 +107,7 @@ export const stocksAPI = {
   mouvements: (params) => api.get('/stocks/mouvements', { params }),
   addMouvement: (data) => api.post('/stocks/mouvements', data),
   majMasse: (data) => api.post('/stocks/maj-masse', data),
+  posStatut: () => api.get('/stocks/pos-statut'),
   achats: () => api.get('/stocks/achats'),
   createAchat: (data) => api.post('/stocks/achats', data),
   reception: (id, data) => api.put(`/stocks/achats/${id}/reception`, data),

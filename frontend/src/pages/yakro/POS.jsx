@@ -507,7 +507,7 @@ export default function POS() {
   const [retourFor, setRetourFor] = useState(null); // commande pour retour article
 
   const { data: tables = [] } = useQuery({ queryKey:['tables'], queryFn:yakroAPI.tables, refetchInterval:15000 });
-  const { data: menu } = useQuery({ queryKey:['menu', courant?.id], queryFn:()=>yakroAPI.menu({ disponible:'true' }) });
+  const { data: menu } = useQuery({ queryKey:['menu', courant?.id], queryFn:()=>yakroAPI.menu({ disponible:'true' }), refetchInterval:30000 });
   const { data: serveursRaw } = useQuery({ queryKey:['serveurs-yakro', courant?.id], enabled:!!courant?.id, queryFn:()=>employesAPI.list({ filiale:'YAKRO_GRILL', statut:'ACTIF', limit:50, restaurantId:courant?.id }), staleTime:60000 });
   const listeServeurs = Array.isArray(serveursRaw) ? serveursRaw : (serveursRaw?.data || []);
 
