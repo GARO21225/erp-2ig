@@ -5,6 +5,8 @@ import { Clock, Users, QrCode, History, Plus, X, AlertTriangle } from 'lucide-re
 import { yakroAPI } from '../../lib/api';
 import { useYakro } from '../../lib/useYakro';
 import { duree } from './PointerPage';
+import ScanneurQR from './ScanneurQR';
+import { useNavigate } from 'react-router-dom';
 
 const heure = (d) => new Date(d).toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' });
 const jour = (d) => new Date(d).toLocaleDateString('fr', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -107,6 +109,8 @@ export default function PointagePage() {
   const [modal, setModal] = useState(null); // { cible? }
   const rafraichir = () => { qc.invalidateQueries({ queryKey: ['pointage'] }); setModal(null); };
 
+  const navigate = useNavigate();
+  const [scan, setScan] = useState(false);
   const moi = useQuery({ queryKey: ['pointage', 'moi'], queryFn: yakroAPI.pointageMoi, enabled: onglet === 'moi', refetchInterval: 30000 });
   const pres = useQuery({ queryKey: ['pointage', 'presences', courant?.id], queryFn: yakroAPI.pointagePresences, enabled: voir && onglet === 'presences', refetchInterval: 30000 });
   const hist = useQuery({ queryKey: ['pointage', 'hist', courant?.id, du, au], queryFn: () => yakroAPI.pointageHistorique({ du, au }), enabled: voir && onglet === 'historique' });
@@ -130,7 +134,11 @@ export default function PointagePage() {
             <div style={{ background: '#EDF5E7', borderRadius: 12, padding: 14, marginBottom: 14 }}>
               <b style={{ color: '#3C7A37' }}>● Vous êtes en service</b> depuis {heure(moi.data.enService.entreeLe)} ({duree(moi.data.enService.dureeMin)}). Scannez le QR du restaurant pour pointer votre départ.
             </div>
-          ) : <div style={{ background: '#FAF6F0', borderRadius: 12, padding: 14, marginBottom: 14, fontSize: 13 }}>Vous n'êtes pas en service. Scannez le QR code affiché au restaurant avec l'appareil photo de votre téléphone pour pointer votre arrivée.</div>}
+          ) : <div style={{ background: '#FAF6F0', borderRadius: 12, padding: 14, marginBottom: 14, fontSize: 13 }}>Vous n'êtes pas en service. Scannez le QR code affiché au restaurant pour pointer votre arrivée.</div>}
+          <button onClick={() => setScan(true)} style={{ width: '100%', minHeight: 56, marginBottom: 14, border: 0, borderRadius: 14, background: ROUGE, color: 'white', fontFamily: 'Syne', fontWeight: 700, fontSize: 16, cursor: 'pointer' }}>
+            <QrCode size={18} style={{ verticalAlign: -3, marginRight: 8 }} />{moi.data?.enService ? 'Scanner pour pointer ma sortie' : 'Scanner pour pointer mon arrivée'}
+          </button>
+          {scan && <ScanneurQR onClose={() => setScan(false)} onCode={(t) => { setScan(false); try { const u = new URL(t); if (u.pathname === '/yakro/pointer') return navigate('/yakro/pointer' + u.search); } catch { /* pas un lien */ } alert('Ce QR code n’est pas celui du pointage Yakro Grill.'); }} />}
           <Tableau sessions={moi.data?.historique || []} />
         </div>
       )}
