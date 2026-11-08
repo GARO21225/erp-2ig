@@ -7,12 +7,16 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { alertesAPI } from '../../lib/api';
 import { Bell } from 'lucide-react';
+import { useAuthStore } from '../../store';
 
 const GRAVITE = {
   CRITIQUE: { bg:'#FCEBEB', color:'#A32D2D', badge:'#A32D2D' },
   ATTENTION: { bg:'#FAEEDA', color:'#BA7517', badge:'#BA7517' },
   INFO:      { bg:'#EEF3FB', color:'#1a3f6f', badge:'#1a3f6f' },
 };
+
+// Tableau de bord de l'espace actif (et non celui du Groupe)
+const DASHBOARD_ESPACE = { GROUPE: '/dashboard', YAKRO_GRILL: '/yakro/dashboard', TOPTELSIG: '/toptelsig/dashboard', EXPERTS: '/experts/dashboard', LIYA: '/liya/livraisons' };
 
 const FILIALE_ROUTE = {
   TOPTELSIG: '/toptelsig/ventes',
@@ -24,6 +28,8 @@ const FILIALE_ROUTE = {
 export default function NotifCentre({ color = '#1a3f6f' }) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
+  const filialeActive = useAuthStore(s => s.filiale);
+  const dashboardEspace = DASHBOARD_ESPACE[filialeActive] || '/dashboard';
 
   const { data } = useQuery({
     queryKey: ['alertes-notif'],
@@ -61,7 +67,7 @@ export default function NotifCentre({ color = '#1a3f6f' }) {
               ) : alertes.map((a, i) => {
                 const st = GRAVITE[a.gravite] || GRAVITE.INFO;
                 return (
-                  <div key={i} onClick={()=>{ navigate(FILIALE_ROUTE[a.filiale]||'/dashboard'); setOpen(false); }}
+                  <div key={i} onClick={()=>{ navigate(FILIALE_ROUTE[a.filiale]||dashboardEspace); setOpen(false); }}
                     style={{ padding:'10px 16px', borderBottom:'0.5px solid #f0efe9', cursor:'pointer', background:'white', display:'flex', gap:10, alignItems:'flex-start' }}
                     onMouseEnter={e=>e.currentTarget.style.background='#F7F7F5'}
                     onMouseLeave={e=>e.currentTarget.style.background='white'}>
@@ -76,7 +82,7 @@ export default function NotifCentre({ color = '#1a3f6f' }) {
               })}
             </div>
             <div style={{ padding:'8px 16px', borderTop:'1px solid #e8e7e1', textAlign:'center' }}>
-              <button onClick={()=>{ navigate('/dashboard'); setOpen(false); }}
+              <button onClick={()=>{ navigate(dashboardEspace); setOpen(false); }}
                 style={{ fontSize:11, color:'#1a3f6f', background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>
                 Voir le tableau de bord →
               </button>

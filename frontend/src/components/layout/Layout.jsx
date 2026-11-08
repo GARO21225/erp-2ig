@@ -147,7 +147,9 @@ export default function Layout() {
   useEffect(() => {
     const p = location.pathname;
     const f = p.startsWith('/yakro') ? 'YAKRO_GRILL' : p.startsWith('/liya') ? 'LIYA' : p.startsWith('/toptelsig') ? 'TOPTELSIG' : null;
-    if (f && f !== filiale) setFiliale(f);
+    const groupe = ['/dashboard', '/utilisateurs', '/historisation', '/finance', '/parametres-entreprise'].some(g => p === g || p.startsWith(g + '/'));
+    const cible = f || (groupe && (role === 'DG' || user?.filiale === 'GROUPE') ? 'GROUPE' : null);
+    if (cible && cible !== filiale) setFiliale(cible);
   }, [location.pathname]);
 
   // Mémoriser l'espace courant à chaque changement de filiale
