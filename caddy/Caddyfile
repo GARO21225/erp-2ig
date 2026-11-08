@@ -1,11 +1,11 @@
-# HTTPS sur un port dédié (comme RZI Camp : https://domaine:PORT), certificat Let's Encrypt reconnu.
+# HTTPS sur un port dédié (comme RZI Camp : https://domaine:PORT, ici le port 8080 de l ancien HTTP), certificat Let's Encrypt reconnu.
 # La validation passe par le DNS Porkbun : ni le port 80 ni le 443 du serveur ne sont utilisés.
 {
-	https_port 8443
+	https_port 8080
 	auto_https disable_redirects
 }
 
-{$DOMAIN}:8443 {
+{$DOMAIN}:8080 {
 	tls {
 		dns porkbun {
 			api_key {env.PORKBUN_API_KEY}

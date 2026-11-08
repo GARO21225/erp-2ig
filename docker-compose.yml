@@ -31,14 +31,14 @@ services:
       context: ./frontend
     container_name: erp-frontend
     restart: always
-    ports:
-      - "8080:80"
+    expose:
+      - "80"
     networks:
       - erp-network
     depends_on:
       - backend
 
-  # HTTPS sur le port 8443 (certificat Let's Encrypt via DNS Porkbun) : https://${DOMAIN}:8443
+  # HTTPS sur le port 8080 (l'ancien port HTTP) (certificat Let's Encrypt via DNS Porkbun) : https://${DOMAIN}
   caddy:
     build:
       context: ./caddy
@@ -49,7 +49,7 @@ services:
       PORKBUN_API_KEY: ${PORKBUN_API_KEY:-}
       PORKBUN_API_SECRET_KEY: ${PORKBUN_API_SECRET_KEY:-}
     ports:
-      - "8443:8443"
+      - "8080:8080"
     volumes:
       - caddy_data:/data
       - caddy_config:/config
