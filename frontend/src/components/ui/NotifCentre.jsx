@@ -6,8 +6,9 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { alertesAPI } from '../../lib/api';
-import { Bell } from 'lucide-react';
-import { useAuthStore } from '../../store';
+import { Bell, Volume2, VolumeX } from 'lucide-react';
+import { useAuthStore, useRestoStore } from '../../store';
+import { useNotifs } from '../../lib/useNotifs';
 
 const GRAVITE = {
   CRITIQUE: { bg:'#FCEBEB', color:'#A32D2D', badge:'#A32D2D' },
@@ -30,6 +31,10 @@ export default function NotifCentre({ color = '#1a3f6f' }) {
   const navigate = useNavigate();
   const filialeActive = useAuthStore(s => s.filiale);
   const dashboardEspace = DASHBOARD_ESPACE[filialeActive] || '/dashboard';
+  const userId = useAuthStore(s => s.user?.id);
+  const restaurantId = useRestoStore(s => s.restaurantId);
+  // Notifications personnelles (ce qui m'est assigné) : son + vibration pour chaque nouveauté
+  const { items: perso, son, basculer } = useNotifs({ actif: filialeActive === 'YAKRO_GRILL', userId, restaurantId });
 
   const { data } = useQuery({
     queryKey: ['alertes-notif'],
@@ -39,7 +44,7 @@ export default function NotifCentre({ color = '#1a3f6f' }) {
   });
 
   const alertes = data?.alertes || [];
-  const critiques = data?.critiques || 0;
+  const critiques = (data?.critiques || 0) + perso.length;
 
   return (
     <div style={{ position:'relative' }}>
@@ -59,10 +64,25 @@ export default function NotifCentre({ color = '#1a3f6f' }) {
           <div style={{ position:'absolute', top:'100%', right:0, marginTop:6, width:320, background:'white', border:'0.5px solid #e8e7e1', borderRadius:12, zIndex:300, boxShadow:'0 8px 32px rgba(0,0,0,0.12)', overflow:'hidden' }}>
             <div style={{ padding:'12px 16px', borderBottom:'1px solid #e8e7e1', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
               <div style={{ fontFamily:'Syne', fontWeight:700, fontSize:13 }}>🔔 Alertes</div>
-              <span style={{ fontSize:11, color:'#888' }}>{alertes.length} alerte(s)</span>
+              <span style={{ fontSize:11, color:'#888', display:'flex', alignItems:'center', gap:8 }}>
+                {perso.length + alertes.length} élément(s)
+                {filialeActive === 'YAKRO_GRILL' && <button type="button" onClick={basculer} aria-pressed={son} aria-label={son ? 'Couper le son et la vibration' : 'Activer le son et la vibration'} title={son ? 'Son et vibration activés' : 'Son coupé'} style={{ background:'none', border:'none', cursor:'pointer', padding:4, color: son ? '#8B1A1A' : '#aaa', display:'flex' }}>{son ? <Volume2 size={16}/> : <VolumeX size={16}/>}</button>}
+              </span>
             </div>
             <div style={{ maxHeight:360, overflowY:'auto' }}>
-              {alertes.length === 0 ? (
+              {perso.length > 0 && <div style={{ padding:'6px 16px', fontSize:10, fontWeight:700, letterSpacing:.5, color:'#8B1A1A', background:'#FDF2F2' }}>POUR VOUS</div>}
+              {perso.map((n) => (
+                <div key={n.id} onClick={()=>{ navigate(n.lien || dashboardEspace); setOpen(false); }}
+                  style={{ padding:'10px 16px', borderBottom:'0.5px solid #f0efe9', cursor:'pointer', background:'white', display:'flex', gap:10, alignItems:'flex-start' }}>
+                  <div style={{ width:8, height:8, borderRadius:'50%', background: n.niveau === 'alerte' ? '#A32D2D' : '#BA7517', marginTop:4, flexShrink:0 }}/>
+                  <div>
+                    <div style={{ fontSize:12, fontWeight:700, color:'#333' }}>{n.titre}</div>
+                    <div style={{ fontSize:11, color:'#666', marginTop:1 }}>{n.detail}</div>
+                  </div>
+                </div>
+              ))}
+              {perso.length > 0 && alertes.length > 0 && <div style={{ padding:'6px 16px', fontSize:10, fontWeight:700, letterSpacing:.5, color:'#888', background:'#F7F7F5' }}>ALERTES</div>}
+              {alertes.length === 0 && perso.length === 0 ? (
                 <div style={{ padding:20, textAlign:'center', color:'#888', fontSize:13 }}>✅ Aucune alerte</div>
               ) : alertes.map((a, i) => {
                 const st = GRAVITE[a.gravite] || GRAVITE.INFO;

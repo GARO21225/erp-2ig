@@ -36,6 +36,7 @@ app.use('/api/recherche',   require('./routes/recherche'));
 app.use('/api/audit', require('./routes/audit'));
 app.use('/api/backup',      require('./routes/backup'));
 app.use('/api/yakro/pointage', require('./routes/yakro/pointage'));
+app.use('/api/yakro/notifications', require('./routes/yakro/notifications'));
 app.use('/api/yakro/restaurants', require('./routes/yakro/restaurants'));
 app.use('/api/yakro/factures', require('./routes/yakro/factures'));
 app.use('/api/yakro/dashboard', require('./routes/yakro/dashboard'));
