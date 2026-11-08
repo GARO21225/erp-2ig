@@ -149,14 +149,19 @@ router.get('/', auth, yakro, resto, async (req, res) => {
     if (nbAnnulees > 5) alertes.push({ type:'ANNULATIONS', gravite:'ATTENTION', msg:`${nbAnnulees} annulation(s) aujourd'hui` });
     if (trendCA < -20) alertes.push({ type:'BAISSE_CA', gravite:'ATTENTION', msg:`CA en baisse de ${Math.abs(trendCA)}% vs hier` });
 
+    // Charges de la période : fixes (salaires, loyer, énergie…) et autres (achats, transport…)
+    const parNature = await safe(() => prisma.depenseYakro.groupBy({ by: ['nature'], _sum: { montant: true }, where: { date: { gte: debut, lte: fin }, ...sc(req) } })) || [];
+    const chargesFixes = parNature.find(x => x.nature === 'FIXE')?._sum.montant || 0;
+    const autresCharges = parNature.find(x => x.nature === 'VARIABLE')?._sum.montant || 0;
+
     res.json({
       kpi: {
         caJour, caSemaine: caWeek._sum.montant||0, caMois: caMois._sum.montant||0,
         nbTickets, nbClients, ticketMoyen, margeEstimee, tauxMarge,
         tablesOccupees, tablesLibres: tables.length - tablesOccupees, totalTables: tables.length,
         trendCA, objectifJour: 500000,
-        depensesJour: depenses._sum.total || 0,
-        resultatEstime: caJour - (depenses._sum.total || 0),
+        depensesJour: chargesFixes + autresCharges, chargesFixes, autresCharges,
+        resultatEstime: caJour - chargesFixes - autresCharges,
       },
       topServeurs, topTables, topProduits,
       paiements: paiementsParMode.map(p => ({ type:p.type, montant:p._sum.montant||0, nb:p._count.id })),

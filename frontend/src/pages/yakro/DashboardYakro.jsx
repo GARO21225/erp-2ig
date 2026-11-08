@@ -107,7 +107,8 @@ export default function DashboardYakro() {
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap:10, marginBottom:20 }}>
         <KPI label="CA semaine" value={fmtF(kpi.caSemaine)} color="#8B1A1A"/>
         <KPI label="CA mois" value={fmtF(kpi.caMois)} color="#8B1A1A"/>
-        <KPI label="Dépenses jour" value={fmtF(kpi.depensesJour)} color="#A32D2D"/>
+        <KPI label="Charges fixes" value={fmtF(kpi.chargesFixes)} sub="salaires, loyer, énergie…" color="#1a3f6f"/>
+        <KPI label="Autres charges" value={fmtF(kpi.autresCharges)} sub="achats, transport…" color="#BA7517"/>
         <KPI label="Résultat estimé" value={fmtF(kpi.resultatEstime)} color={(kpi.resultatEstime||0)>=0?'#27500A':'#A32D2D'}/>
       </div>
 

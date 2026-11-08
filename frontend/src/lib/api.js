@@ -174,6 +174,9 @@ export const yakroAPI = {
   payerDepenseYakro: (id, data) => api.put(`/yakro/depenses/${id}/payer`, data),
   statsDepensesYakro: () => api.get('/yakro/depenses/stats'),
   categoriesDepensesYakro: () => api.get('/yakro/depenses/categories'),
+  salaireDepenseYakro: (employeId, periode) => api.get(`/yakro/depenses/salaire/${employeId}`, { params: { periode } }),
+  recuDepenseYakro: (id) => api.get(`/yakro/depenses/${id}/recu`),
+  majRecuDepenseYakro: (id, recu) => api.put(`/yakro/depenses/${id}/recu`, { recu }),
   // Session caisse
   sessionCaisseActive: () => api.get('/yakro/caisse-session/session-active'),
   ouvrirCaisse: (montant) => api.post('/yakro/caisse-session/ouvrir', { montantOuverture: montant }),

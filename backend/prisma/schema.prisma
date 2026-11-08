@@ -1472,11 +1472,17 @@ model DepenseYakro {
   payeParNom     String?
   reference      String?
   notes          String?
+  nature         String   @default("VARIABLE") // FIXE | VARIABLE
+  employeId      String?  // salaire : salarié concerné
+  employeNom     String?
+  periode        String?  // salaire : mois concerné (AAAA-MM)
+  recu           String?  // reçu (image ou PDF en data URI)
   creePar        String
   creeParNom     String
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  @@index([restaurantId, date])
   @@map("depenses_yakro")
 }
 
