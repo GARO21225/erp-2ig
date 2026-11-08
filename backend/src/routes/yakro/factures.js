@@ -243,11 +243,10 @@ router.post('/retours', auth, yakro, resto, async (req, res) => {
       // Retour stock si demandé
       if (retourStock && menuId) {
         const menu = await tx.menuYakro.findUnique({ where: { id: menuId } }).catch(() => null);
-        if (menu?.produitStockId) {
-          await tx.stock.updateMany({
-            where: { produitId: menu.produitStockId, filiale: 'YAKRO_GRILL' },
-            data: { quantite: { increment: Number(quantite) } }
-          }).catch(() => {});
+        if (menu?.produitId) {
+          const q = Number(quantite);
+          await tx.stock.upsert({ where: { produitId_filiale_depot: { produitId: menu.produitId, filiale: 'YAKRO_GRILL', depot: 'Principal' } }, create: { produitId: menu.produitId, filiale: 'YAKRO_GRILL', depot: 'Principal', quantite: q }, update: { quantite: { increment: q } } });
+          await tx.mouvementStock.create({ data: { produitId: menu.produitId, filiale: 'YAKRO_GRILL', type: 'ENTREE', quantite: q, motif: `Retour article ${menuNom} — ${motif}`, refDocument: commandeId, operateurId: req.user.id } });
         }
       }
 

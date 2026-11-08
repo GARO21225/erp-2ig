@@ -348,6 +348,13 @@ export function exportTicketYakro(commande) {
     if (y > 180) { doc.addPage([80, 200]); y = 10; }
   });
 
+  (commande.retours || []).forEach(r => {
+    doc.setTextColor(186, 117, 23);
+    doc.text(`Retour ${r.quantite}× ${String(r.menuNom).slice(0, 18)}`, 4, y);
+    doc.text(`-${r.montantDeduit.toLocaleString('fr')} F`, w-4, y, { align: 'right' }); y += 5;
+    doc.setTextColor(0, 0, 0);
+  });
+
   // Séparateur
   doc.line(4, y, w-4, y); y += 4;
 

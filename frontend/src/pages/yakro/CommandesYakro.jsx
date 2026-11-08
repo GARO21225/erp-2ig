@@ -62,6 +62,12 @@ function DetailCommande({ commande, onClose, onUpdateStatut }) {
               <span style={{ fontWeight: 600, fontSize: 13, color: '#8B1A1A' }}>{(l.prixUnitaire * l.quantite).toLocaleString('fr')} F</span>
             </div>
           ))}
+          {commande.retours?.map(r => (
+            <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '0.5px solid #f0efe9', color: '#BA7517' }}>
+              <div style={{ fontSize: 13 }}>↩ Retour {r.quantite}× {r.menuNom}<div style={{ fontSize: 11, fontStyle: 'italic' }}>{r.motif}{r.retourStock ? ' · remis en stock' : ''}{r.valide ? ' · validé' : ' · à valider'}</div></div>
+              <span style={{ fontWeight: 600, fontSize: 13 }}>−{r.montantDeduit.toLocaleString('fr')} F</span>
+            </div>
+          ))}
         </div>
 
         {/* Notes cuisine */}

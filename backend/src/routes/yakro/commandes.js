@@ -31,6 +31,8 @@ router.get('/', auth, yakro, resto, async (req, res) => {
         include: { table: true, lignes: { include: { menu: true } }, paiements: true, caisseTransaction: true }
       })
     ]);
+    const rets = commandes.length ? await prisma.retourArticleYakro.findMany({ where: { commandeId: { in: commandes.map(c => c.id) } }, orderBy: { createdAt: 'asc' } }).catch(() => []) : [];
+    for (const c of commandes) c.retours = rets.filter(r => r.commandeId === c.id);
     res.json({ data: commandes, total, page: Number(page), pages: Math.ceil(total/Number(limit)) });
   } catch (e) { logger.error('GET /yakro/commandes', { error: e.message }); res.status(500).json({ error: e.message }); }
 });
