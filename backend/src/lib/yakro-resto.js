@@ -18,6 +18,7 @@ const PERMISSIONS = [
   { cle: 'prix.gerer',         groupe: 'Menu',      label: 'Fixer les prix du restaurant' },
   { cle: 'tables.gerer',       groupe: 'Salle',     label: 'Configurer les tables' },
   { cle: 'reservations.gerer', groupe: 'Salle',     label: 'Gérer les réservations' },
+  { cle: 'cuisine.voir',      groupe: 'Commandes', label: 'Écran cuisine / bar (marquer les plats prêts)' },
   { cle: 'depenses.saisir',    groupe: 'Dépenses',  label: 'Saisir une dépense' },
   { cle: 'depenses.valider',   groupe: 'Dépenses',  label: 'Valider ou rejeter une dépense (DG)' },
   { cle: 'depenses.decaisser', groupe: 'Dépenses',  label: 'Décaisser une dépense (comptable)' },
@@ -39,7 +40,7 @@ const PROFILS_DEFAUT = [
   { code: 'SERVEUR', nom: 'Serveur', description: 'Prend les commandes en salle',
     permissions: ['commande.creer','menu.voir','reservations.gerer'] },
   { code: 'BARMAN', nom: 'Barman / Cuisine', description: 'Prépare les commandes',
-    permissions: ['commande.creer','menu.voir'] },
+    permissions: ['commande.creer','menu.voir','cuisine.voir'] },
   { code: 'COMPTABLE', nom: 'Comptable', description: 'Suit caisse, dépenses et rapports',
     permissions: ['caisse.voir','depenses.saisir','depenses.decaisser','depenses.cloturer','rapports.voir','menu.voir'] },
 ];
@@ -94,9 +95,9 @@ async function assurerProfilsDefaut() {
     });
   }
   // Profils système : ils reçoivent les nouvelles permissions du circuit des dépenses
-  for (const code of ['COMPTABLE']) {
+  for (const code of ['COMPTABLE', 'BARMAN']) {
     const pr = await prisma.profilYakro.findUnique({ where: { code } });
-    const voulu = PROFILS_DEFAUT.find(x => x.code === code).permissions.filter(c => ['depenses.decaisser', 'depenses.cloturer'].includes(c));
+    const voulu = PROFILS_DEFAUT.find(x => x.code === code).permissions.filter(c => ['depenses.decaisser', 'depenses.cloturer', 'cuisine.voir'].includes(c));
     const m = voulu.filter(c => !pr.permissions.includes(c));
     if (pr.systeme && m.length) await prisma.profilYakro.update({ where: { id: pr.id }, data: { permissions: [...pr.permissions, ...m] } });
   }

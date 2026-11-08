@@ -119,6 +119,59 @@ router.post('/', auth, yakro, resto, can('commande.creer'), VALIDATORS.commande,
   } catch (e) { logger.error('POST /yakro/commandes', { error: e.message }); res.status(e.statut || 500).json({ error: e.message }); }
 });
 
+// ── Écran cuisine / bar : tickets à préparer, « prêt » (prévient le serveur), « servi » ──
+const STATIONS_BAR = ['BIERE','VIN','CHAMPAGNE','COCKTAIL_ALCOOLISE','COCKTAIL_SANS_ALCOOL','SUCRERIE','TISANE','BOISSON'];
+const stationDe = (categorie) => (STATIONS_BAR.includes(categorie) ? 'BAR' : 'CUISINE');
+
+router.get('/cuisine', auth, yakro, resto, async (req, res) => {
+  try {
+    const since = new Date(Date.now() - 12 * 3600000);
+    const cmds = await prisma.commandeYakro.findMany({
+      where: { ...sc(req), statut: { in: ['EN_COURS', 'CUISINE', 'PRETE', 'SERVIE'] }, createdAt: { gte: since } },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, numero: true, statut: true, notes: true, serveurNom: true, nbCouverts: true, type: true, createdAt: true, table: { select: { numero: true, zone: true } },
+        lignes: { select: { id: true, quantite: true, notes: true, statut: true, menu: { select: { nom: true, categorie: true } } } } },
+    });
+    const tickets = [];
+    for (const c of cmds) {
+      const actives = c.lignes.filter((l) => l.statut !== 'SERVI').map((l) => ({ id: l.id, nom: l.menu?.nom || '?', quantite: l.quantite, notes: l.notes, statut: l.statut, station: stationDe(l.menu?.categorie) }));
+      if (!actives.length) continue;
+      tickets.push({ id: c.id, numero: c.numero, table: c.table ? `Table ${c.table.numero}` : (c.type === 'EMPORTER' ? 'À emporter' : 'Sans table'), zone: c.table?.zone || null, serveurNom: c.serveurNom || '—', couverts: c.nbCouverts, notes: c.notes, createdAt: c.createdAt, lignes: actives });
+    }
+    res.json(tickets);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT /:id/pret { station: CUISINE | BAR | TOUT } — les articles de la station sont prêts : le serveur est notifié
+router.put('/:id/pret', auth, yakro, resto, async (req, res) => {
+  try {
+    const c = await prisma.commandeYakro.findFirst({ where: { id: req.params.id, ...sc(req) }, select: { id: true, statut: true, lignes: { select: { id: true, statut: true, menu: { select: { categorie: true } } } } } });
+    if (!c) return res.status(404).json({ error: 'Commande introuvable' });
+    if (['PAYEE', 'ANNULEE'].includes(c.statut)) return res.status(400).json({ error: 'Commande déjà clôturée' });
+    const station = req.body.station || 'TOUT';
+    const ids = c.lignes.filter((l) => l.statut !== 'SERVI' && (station === 'TOUT' || stationDe(l.menu?.categorie) === station)).map((l) => l.id);
+    if (!ids.length) return res.status(400).json({ error: 'Rien à marquer prêt pour cette station' });
+    await prisma.$transaction(async (tx) => {
+      await tx.ligneCommandeYakro.updateMany({ where: { id: { in: ids } }, data: { statut: 'PRET' } });
+      const restant = await tx.ligneCommandeYakro.count({ where: { commandeId: c.id, statut: { in: ['EN_ATTENTE', 'EN_CUISINE'] } } });
+      await tx.commandeYakro.update({ where: { id: c.id }, data: { statut: restant === 0 ? 'PRETE' : 'CUISINE' } });
+    });
+    res.json({ ok: true, prets: ids.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT /:id/servi — le serveur a récupéré les articles prêts
+router.put('/:id/servi', auth, yakro, resto, async (req, res) => {
+  try {
+    const c = await prisma.commandeYakro.findFirst({ where: { id: req.params.id, ...sc(req) }, select: { id: true, statut: true } });
+    if (!c) return res.status(404).json({ error: 'Commande introuvable' });
+    const r = await prisma.ligneCommandeYakro.updateMany({ where: { commandeId: c.id, statut: 'PRET' }, data: { statut: 'SERVI' } });
+    const reste = await prisma.ligneCommandeYakro.count({ where: { commandeId: c.id, statut: { not: 'SERVI' } } });
+    if (reste === 0 && c.statut === 'PRETE') await prisma.commandeYakro.update({ where: { id: c.id }, data: { statut: 'SERVIE' } });
+    res.json({ ok: true, servis: r.count });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // PUT /:id/statut
 router.put('/:id/statut', auth, yakro, resto, async (req, res) => {
   try {

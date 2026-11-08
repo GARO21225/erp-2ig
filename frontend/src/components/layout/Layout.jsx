@@ -62,6 +62,7 @@ const NAV = {
   YAKRO_GRILL: [
     { id: 'yakro-dashboard', label: 'Dashboard',           to: '/yakro/dashboard',        icon: Activity },
     { id: 'pos',             label: 'Plan de Salle (POS)', to: '/yakro/pos',              icon: Layers },
+    { id: 'cuisine',         label: 'Cuisine & Bar',       to: '/yakro/cuisine',          icon: Flame },
     { id: 'pointage',        label: 'Pointage du personnel', to: '/yakro/pointage',       icon: Clock },
     { id: 'menu',            label: 'Menu & Carte',        to: '/yakro/menu',             icon: BookOpen },
     { id: 'commandes',       label: 'Historiques',         to: '/yakro/historiques',      icon: ClipboardList },
@@ -104,7 +105,7 @@ const NAV_COMMUNS = [
 // Onglets du bas sur phone (Yakro Grill) ; le reste passe par « Plus »
 const TABBAR = [
   { id: 'pos', court: 'Salle' },
-  { id: 'commandes', court: 'Commandes' },
+  { id: 'cuisine', court: 'Cuisine' },
   { id: 'caisse', court: 'Caisse' },
   { id: 'yakro-dashboard', court: 'Tableau' },
 ];

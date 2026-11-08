@@ -24,6 +24,7 @@ import FinancePage from './pages/groupe/FinancePage';
 import StocksPage from './pages/groupe/StocksPage';
 import POS from './pages/yakro/POS';
 import CommandesYakro from './pages/yakro/CommandesYakro';
+import CuisinePage from './pages/yakro/CuisinePage';
 import MenuPage from './pages/yakro/MenuPage';
 import ReservationsYakro from './pages/yakro/ReservationsYakro';
 import DashboardYakro from './pages/yakro/DashboardYakro';
@@ -112,6 +113,7 @@ export default function App() {
             <Route path="yakro/depenses" element={<DepensesYakroPage />} />
             <Route path="yakro/gestion-caisse" element={<GestionCaissePage />} />
             <Route path="yakro/pos" element={<POS />} />
+            <Route path="yakro/cuisine" element={<CuisinePage />} />
             <Route path="yakro/pointage" element={<PointagePage />} />
             <Route path="yakro/commandes" element={<CommandesYakro />} />
             <Route path="yakro/historiques" element={<HistoriquesPage />} />

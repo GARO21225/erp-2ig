@@ -38,12 +38,15 @@ router.get('/', auth, yakro, resto, async (req, res) => {
     }
     // Commandes : prêtes pour moi (serveur) / à préparer (cuisine, bar)
     const recent = new Date(Date.now() - 8 * 3600000);
-    q.push(prisma.commandeYakro.findMany({ where: { ...S, createdAt: { gte: recent }, statut: { in: ['EN_COURS', 'CUISINE', 'PRETE'] } }, select: { id: true, numero: true, statut: true, serveurId: true, serveurNom: true, updatedAt: true, createdAt: true, table: { select: { numero: true } } }, orderBy: { updatedAt: 'desc' }, take: 40 })
+    const cuisinier = u.role === 'BARMAN' || P.has('cuisine.voir');
+    q.push(prisma.commandeYakro.findMany({ where: { ...S, createdAt: { gte: recent }, statut: { in: ['EN_COURS', 'CUISINE', 'PRETE'] } }, select: { id: true, numero: true, serveurId: true, serveurNom: true, updatedAt: true, createdAt: true, table: { select: { numero: true } }, lignes: { select: { quantite: true, statut: true, menu: { select: { nom: true } } } } }, orderBy: { updatedAt: 'desc' }, take: 40 })
       .then((l) => { for (const c of l) {
         const t = c.table ? `Table ${c.table.numero}` : 'À emporter';
         const miene = c.serveurNom === nomComplet || c.serveurId === u.id;
-        if (c.statut === 'PRETE' && miene) add(`cmd:${c.id}:PRETE`, 'commande', 'Votre commande est prête', `${t} · ${c.numero}`, '/yakro/pos', c.updatedAt, 'alerte');
-        if (['EN_COURS', 'CUISINE'].includes(c.statut) && u.role === 'BARMAN') add(`cmd:${c.id}:${c.statut}`, 'commande', 'Commande à préparer', `${t} · ${c.numero}`, '/yakro/commandes', c.createdAt);
+        const prets = c.lignes.filter((x) => x.statut === 'PRET');
+        const attente = c.lignes.filter((x) => ['EN_ATTENTE', 'EN_CUISINE'].includes(x.statut));
+        if (prets.length && miene) add(`cmd:${c.id}:PRET:${prets.length}`, 'commande', 'À récupérer en cuisine / bar', `${t} · ${prets.map((x) => `${x.quantite}× ${x.menu?.nom}`).join(', ')}`, '/yakro/cuisine', c.updatedAt, 'alerte');
+        if (attente.length && cuisinier) add(`cmd:${c.id}:ATT:${attente.length}`, 'commande', 'Nouvelle commande à préparer', `${t} · ${attente.map((x) => `${x.quantite}× ${x.menu?.nom}`).join(', ')}`, '/yakro/cuisine', c.createdAt);
       } }));
     await Promise.all(q);
     items.sort((a, b) => new Date(b.at) - new Date(a.at));

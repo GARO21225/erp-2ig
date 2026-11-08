@@ -588,7 +588,7 @@ export default function POS() {
   const showToast = (msg,type='success') => { setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
 
   const createCmd = useMutation({ mutationFn:yakroAPI.createCommande, onSuccess:()=>{ qc.invalidateQueries(['tables']); qc.invalidateQueries(['menu']); setCommandeTable(null); setPanneauTable(null); showToast('Commande créée ✓'); }, onError:e=>showToast(e?.error||'Erreur','error') });
-  const updateStatut = useMutation({ mutationFn:({id,statut})=>yakroAPI.updateStatut(id,statut), onSuccess:()=>{ qc.invalidateQueries(['tables']); showToast('Statut mis à jour'); } });
+  const updateStatut = useMutation({ mutationFn:({id,statut})=>statut==='PRETE' ? yakroAPI.pret(id,'TOUT') : yakroAPI.updateStatut(id,statut), onSuccess:()=>{ qc.invalidateQueries(['tables']); showToast('Statut mis à jour'); } });
   const payerCmd = useMutation({
     mutationFn: ({ id, data }) => yakroAPI.payer(id, data),
     onSuccess: async (res, vars) => {
