@@ -48,6 +48,15 @@ router.get('/', auth, yakro, resto, async (req, res) => {
         if (prets.length && miene) add(`cmd:${c.id}:PRET:${prets.length}`, 'commande', 'À récupérer en cuisine / bar', `${t} · ${prets.map((x) => `${x.quantite}× ${x.menu?.nom}`).join(', ')}`, '/yakro/cuisine', c.updatedAt, 'alerte');
         if (attente.length && cuisinier) add(`cmd:${c.id}:ATT:${attente.length}`, 'commande', 'Nouvelle commande à préparer', `${t} · ${attente.map((x) => `${x.quantite}× ${x.menu?.nom}`).join(', ')}`, '/yakro/cuisine', c.createdAt);
       } }));
+    // Congés : demandes à valider (patron) ; décision récente (agent concerné)
+    const d7 = new Date(Date.now() - 7 * 86400000), fr = (d) => new Date(d).toLocaleDateString('fr', { day: 'numeric', month: 'short' });
+    q.push(prisma.congeYakro.findMany({ where: { ...(dg ? S : {}), OR: [...(dg ? [{ statut: 'DEMANDE' }] : []), { utilisateurId: u.id, statut: { in: ['APPROUVE', 'REFUSE'] }, decideLe: { gte: d7 } }] }, orderBy: { updatedAt: 'desc' }, take: 30 })
+      .then((l) => { for (const c of l) {
+        const per = `du ${fr(c.dateDebut)} au ${fr(c.dateFin)}`;
+        if (c.statut === 'DEMANDE') add(`cge:${c.id}:D`, 'conge', 'Congé à valider', `${c.nom} · ${per}`, '/yakro/conges', c.createdAt);
+        else if (c.utilisateurId === u.id && c.statut === 'APPROUVE') add(`cge:${c.id}:A`, 'conge', 'Congé approuvé', `${per} · reprise le ${fr(c.dateReprise)}`, '/yakro/conges', c.decideLe);
+        else if (c.utilisateurId === u.id && c.statut === 'REFUSE') add(`cge:${c.id}:R`, 'conge', 'Congé refusé', `${per} — ${c.motifRefus || ''}`, '/yakro/conges', c.decideLe, 'alerte');
+      } }).catch(() => {}));
     await Promise.all(q);
     items.sort((a, b) => new Date(b.at) - new Date(a.at));
     res.json({ total: items.length, items });

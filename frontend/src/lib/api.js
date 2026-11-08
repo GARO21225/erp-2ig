@@ -180,6 +180,11 @@ export const yakroAPI = {
   transfererTable: (data) => api.post('/yakro/tables/transferer', data),
   historiqueServeurs: () => api.get('/yakro/tables/historique-serveurs'),
   // Dépenses Yakro
+  conges: (params) => api.get('/yakro/conges', { params }),
+  demanderConge: (data) => api.post('/yakro/conges', data),
+  deciderConge: (id, data) => api.put(`/yakro/conges/${id}/decider`, data),
+  repriseConge: (id, dateReprise) => api.put(`/yakro/conges/${id}/reprise`, { dateReprise }),
+  annulerConge: (id) => api.put(`/yakro/conges/${id}/annuler`),
   depensesYakro: (params) => api.get('/yakro/depenses', { params }),
   createDepenseYakro: (data) => api.post('/yakro/depenses', data),
   validerDepenseYakro: (id) => api.put(`/yakro/depenses/${id}/valider`),

@@ -1754,3 +1754,27 @@ model PointageYakro {
   @@index([utilisateurId, sortieLe])
   @@map("pointages_yakro")
 }
+
+model CongeYakro {
+  id            String    @id @default(cuid())
+  numero        String?
+  utilisateurId String
+  nom           String
+  restaurantId  String
+  type          String    @default("ANNUEL") // ANNUEL | MALADIE | PERMISSION | SANS_SOLDE | AUTRE
+  dateDebut     DateTime
+  dateFin       DateTime
+  motif         String?
+  statut        String    @default("DEMANDE") // DEMANDE | APPROUVE | REFUSE | ANNULE
+  decidePar     String?
+  decideParNom  String?
+  decideLe      DateTime?
+  motifRefus    String?
+  dateReprise   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([restaurantId, statut])
+  @@index([utilisateurId, createdAt])
+  @@map("conges_yakro")
+}
