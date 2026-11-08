@@ -224,7 +224,7 @@ function ModalPaiement({ commande, loading, onClose, onPay, modes, params = {} }
     // première ligne : l'utilisateur saisit la part de chaque mode, le solde se complète en un clic
     // Mixte « mobile money + espèces » : on saisit la part mobile money, les espèces = total − mobile money
     if (prev.length===1) {
-      const mm = moyens.find(m=>m.key!=='ESPECES');
+      const mm = moyens.find(m=>m.key!=='ESPECES' && params[QR_PARAM[m.key]]) || moyens.find(m=>m.key!=='ESPECES');
       const cash = moyens.find(m=>m.key==='ESPECES');
       if (mm && cash) return [{ typePaiement:mm.key, montant:'', reference:'', recu:'' },{ typePaiement:'ESPECES', montant:total, reference:'', recu:'' }];
     }
@@ -287,7 +287,7 @@ function ModalPaiement({ commande, loading, onClose, onPay, modes, params = {} }
               {mixte && resteASaisir!==0 && (
                 <button type="button" onClick={()=>completer(i)} style={{ fontSize:12,background:'none',border:'none',color:'#8B1A1A',cursor:'pointer',padding:'0 0 8px',textDecoration:'underline' }}>Mettre le solde ici</button>
               )}
-              {needRef && !qr && mixte && <div style={{ fontSize:12,color:'#BA7517',background:'#FAEEDA',borderRadius:8,padding:'8px 10px',marginBottom:8 }}>QR code {moyen?.label} non configuré (Paramétrage restaurant → Paramètres).</div>}
+              {needRef && !qr && <div style={{ fontSize:12,color:'#BA7517',background:'#FAEEDA',borderRadius:8,padding:'8px 10px',marginBottom:8 }}>Pas de QR code {moyen?.label} enregistré : ajoutez-le dans Paramétrage restaurant → Paramètres → QR codes de paiement.</div>}
               {needRef && qr && (
                 <div style={{ textAlign:'center',background:'white',borderRadius:10,padding:10,marginBottom:8 }}>
                   <img src={qr} alt={`QR code ${moyen?.label}`} style={{ width:'100%',maxWidth:220,aspectRatio:'1',objectFit:'contain' }}/>
