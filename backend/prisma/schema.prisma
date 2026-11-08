@@ -532,6 +532,7 @@ model ChangementServeurYakro {
 }
 
 model CommandeYakro {
+  pourboire     Float    @default(0) // pourboire laissé par le client (hors chiffre d'affaires)
   id          String   @id @default(cuid())
   restaurantId String?
   numero      String   @unique

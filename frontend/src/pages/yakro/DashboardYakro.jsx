@@ -162,6 +162,7 @@ export default function DashboardYakro() {
         <KPI label="CA mois" value={fmtF(kpi.caMois)} color="#8B1A1A"/>
         <KPI label={`Charges fixes (${{ jour:"jour", semaine:"7 j", mois:"mois", annee:"année" }[periode]})`} value={fmtF(kpi.chargesFixes)} sub="salaires, loyer, énergie…" color="#1a3f6f"/>
         <KPI label={`Autres charges (${{ jour:"jour", semaine:"7 j", mois:"mois", annee:"année" }[periode]})`} value={fmtF(kpi.autresCharges)} sub="achats, transport…" color="#BA7517"/>
+        <KPI label="Pourboires" value={fmtF(kpi.pourboires)} sub="hors chiffre d'affaires" color="#27500A"/>
         <KPI label={`Résultat estimé (${{ jour:"jour", semaine:"7 j", mois:"mois", annee:"année" }[periode]})`} value={fmtF(kpi.resultatEstime)} color={(kpi.resultatEstime||0)>=0?'#27500A':'#A32D2D'}/>
       </div>
 

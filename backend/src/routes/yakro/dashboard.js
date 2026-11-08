@@ -178,6 +178,8 @@ router.get('/', auth, yakro, portee, async (req, res) => {
     if (nbAnnulees > 5) alertes.push({ type:'ANNULATIONS', gravite:'ATTENTION', msg:`${nbAnnulees} annulation(s) aujourd'hui` });
     if (trendCA < -20) alertes.push({ type:'BAISSE_CA', gravite:'ATTENTION', msg:`CA en baisse de ${Math.abs(trendCA)}% vs hier` });
 
+    const pourboires = (await safe(() => prisma.commandeYakro.aggregate({ _sum: { pourboire: true }, where: wherePayee })))?._sum?.pourboire || 0;
+
     // Charges de la période : fixes (salaires, loyer, énergie…) et autres (achats, transport…)
     const parNature = await safe(() => prisma.depenseYakro.groupBy({ by: ['nature'], _sum: { montant: true }, where: { date: { gte: debut, lte: fin }, ...scD(req) } })) || [];
     const chargesFixes = parNature.find(x => x.nature === 'FIXE')?._sum.montant || 0;
@@ -206,7 +208,7 @@ router.get('/', auth, yakro, portee, async (req, res) => {
         nbTickets, nbClients, ticketMoyen, margeEstimee, tauxMarge,
         tablesOccupees, tablesLibres: tables.length - tablesOccupees, totalTables: tables.length,
         trendCA, objectifJour: 500000,
-        depensesJour: chargesFixes + autresCharges, chargesFixes, autresCharges,
+        pourboires, depensesJour: chargesFixes + autresCharges, chargesFixes, autresCharges,
         resultatEstime: caJour - chargesFixes - autresCharges,
       },
       topServeurs, topTables, topProduits,

@@ -158,15 +158,18 @@ router.post('/:id/payer', auth, yakro, resto, can('commande.encaisser'), VALIDAT
     // Paiement mixte : la monnaie ne porte que sur la part payée en espèces
     const partEspeces = paiements.filter(p => p.typePaiement === 'ESPECES').reduce((a, p) => a + Number(p.montant), 0);
     const especesRecues = Number(req.body.especesRecues || 0);
-    if (partEspeces > 0 && especesRecues > 0 && especesRecues < partEspeces - 0.5) {
-      return res.status(400).json({ error: `Espèces reçues (${especesRecues} F) inférieures à la part en espèces (${partEspeces} F)` });
+    // Pourboire : en plus du total (jamais compté dans le chiffre d'affaires), payé en espèces ou par mobile money
+    const pourboire = Math.max(0, Math.min(Number(req.body.pourboire) || 0, commande.total * 5 + 100000));
+    const tipEspeces = req.body.modePourboire === 'ESPECES' ? pourboire : 0;
+    if (partEspeces > 0 && especesRecues > 0 && especesRecues < partEspeces + tipEspeces - 0.5) {
+      return res.status(400).json({ error: `Espèces reçues (${especesRecues} F) inférieures à la part en espèces + pourboire (${partEspeces + tipEspeces} F)` });
     }
-    const monnaieRendue = partEspeces > 0 && especesRecues > partEspeces ? especesRecues - partEspeces : 0;
+    const monnaieRendue = partEspeces > 0 && especesRecues > partEspeces + tipEspeces ? especesRecues - partEspeces - tipEspeces : 0;
 
     const result = await prisma.$transaction(async (tx) => {
       const cmdMaj = await tx.commandeYakro.update({
         where: { id: req.params.id },
-        data: { statut: 'PAYEE', typePaiement: paiements[0].typePaiement, payeeLe: new Date() }
+        data: { statut: 'PAYEE', typePaiement: paiements[0].typePaiement, payeeLe: new Date(), pourboire }
       });
       const paiementsCreees = await Promise.all(paiements.map(p => tx.paiementYakro.create({
         data: { commandeId: req.params.id, montant: Number(p.montant), type: p.typePaiement, reference: p.reference || null }

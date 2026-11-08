@@ -182,25 +182,51 @@ function PanelCommande({ table, menu, onClose, onSave, loading, listeServeurs })
 const QR_PARAM = { ORANGE_MONEY:'qr_om', WAVE:'qr_wave', MTN_MONEY:'qr_mtn', MOOV_MONEY:'qr_moov' };
 const NUM_PARAM = { ORANGE_MONEY:'numero_om', WAVE:'numero_wave', MTN_MONEY:'numero_mtn' };
 
+// Logos affichés sous les QR codes : logo téléversé dans les paramètres, sinon pastille aux couleurs du mode
+const LOGO_PARAM = { ORANGE_MONEY:'logo_om', WAVE:'logo_wave', MTN_MONEY:'logo_mtn', MOOV_MONEY:'logo_moov' };
+const PASTILLE = { ORANGE_MONEY:{ bg:'#FF7900', fg:'#fff', t:'Orange Money' }, WAVE:{ bg:'#1DC8F2', fg:'#fff', t:'Wave' }, MTN_MONEY:{ bg:'#FFCC00', fg:'#201915', t:'MTN MoMo' }, MOOV_MONEY:{ bg:'#0072BC', fg:'#fff', t:'Moov Money' } };
+function LogosPaiement({ type, params }) {
+  const logo = params[LOGO_PARAM[type]]; const p = PASTILLE[type];
+  return (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:14, marginTop:10, paddingTop:10, borderTop:'1px solid #eee' }}>
+      <img src="/logos/yakro.svg" alt="Yakro Grill" style={{ height:34, maxWidth:120, objectFit:'contain' }}/>
+      <span aria-hidden style={{ width:1, height:26, background:'#ddd' }}/>
+      {logo ? <img src={logo} alt={p?.t} style={{ height:34, maxWidth:120, objectFit:'contain' }}/>
+        : p && <span style={{ background:p.bg, color:p.fg, fontWeight:800, fontFamily:'Syne', fontSize:13, borderRadius:8, padding:'8px 12px' }}>{p.t}</span>}
+    </div>
+  );
+}
+
 function ModalPaiement({ commande, loading, onClose, onPay, modes, params = {} }) {
   // Seuls les modes acceptés par le restaurant sont proposés
   const moyens = modes?.length ? MOYENS_PMT.filter(m=>modes.includes(m.key)) : MOYENS_PMT;
   const total = commande.total || 0;
   const [lignesPmt, setLignesPmt] = useState([{ typePaiement:moyens[0].key, montant:total, reference:'', recu:'' }]);
+  const [pourboire, setPourboire] = useState('');
+  const [modeTip, setModeTip] = useState('');
+  const mixte = lignesPmt.length > 1;
   const totalSaisi = lignesPmt.reduce((s,l)=>s+Number(l.montant||0),0);
   const resteASaisir = total - totalSaisi;
-  // Paiement mixte : la monnaie ne concerne que la part payée en espèces
+  const tip = Math.max(0, Number(pourboire) || 0);
+  // Le pourboire est payé avec un des modes de la commande (par défaut le premier)
+  const modeDuTip = lignesPmt.some(l=>l.typePaiement===modeTip) ? modeTip : lignesPmt[0].typePaiement;
+  const tipEspeces = modeDuTip==='ESPECES' ? tip : 0;
+  // Paiement mixte : la monnaie ne concerne que la part payée en espèces (pourboire espèces déduit)
   const partEspeces = lignesPmt.filter(l=>l.typePaiement==='ESPECES').reduce((s,l)=>s+Number(l.montant||0),0);
   const recu = Number(lignesPmt.find(l=>l.typePaiement==='ESPECES')?.recu) || 0;
-  const monnaieRendue = partEspeces>0 && recu>partEspeces ? recu-partEspeces : 0;
-  const recuInsuffisant = partEspeces>0 && recu>0 && recu<partEspeces;
+  const aRendre = recu - partEspeces - tipEspeces;
+  const monnaieRendue = partEspeces>0 && aRendre>0 ? aRendre : 0;
+  const recuInsuffisant = partEspeces>0 && recu>0 && recu<partEspeces+tipEspeces;
   const canPay = Math.abs(resteASaisir) < 2 && !recuInsuffisant && lignesPmt.every(l=>Number(l.montant)>0);
 
-  const addLigne = () => {
-    const libre = moyens.find(m=>!lignesPmt.some(l=>l.typePaiement===m.key)) || moyens[0];
-    setLignesPmt(prev=>[...prev,{typePaiement:libre.key,montant:Math.max(0,resteASaisir).toFixed(0),reference:'',recu:''}]);
-  };
-  const removeLigne = (i) => setLignesPmt(prev=>prev.filter((_,idx)=>idx!==i));
+  const passerEnMixte = () => setLignesPmt(prev => {
+    const libre = moyens.find(m=>!prev.some(l=>l.typePaiement===m.key)) || moyens[0];
+    // première ligne : l'utilisateur saisit la part de chaque mode, le solde se complète en un clic
+    return prev.length===1 ? [{...prev[0],montant:''},{typePaiement:libre.key,montant:'',reference:'',recu:''}]
+                           : [...prev,{typePaiement:libre.key,montant:Math.max(0,total-prev.reduce((s,l)=>s+Number(l.montant||0),0)).toFixed(0),reference:'',recu:''}];
+  });
+  const revenirSimple = () => setLignesPmt(prev=>[{...prev[0],montant:total}]);
+  const removeLigne = (i) => setLignesPmt(prev=>prev.length<=2 ? [{...prev.find((_,idx)=>idx!==i),montant:total}] : prev.filter((_,idx)=>idx!==i));
   const updateLigne = (i,field,value) => setLignesPmt(prev=>prev.map((l,idx)=>idx===i?{...l,[field]:value}:l));
   const completer = (i) => setLignesPmt(prev=>{
     const autres = prev.reduce((s,l,idx)=>idx===i?s:s+Number(l.montant||0),0);
@@ -214,56 +240,91 @@ function ModalPaiement({ commande, loading, onClose, onPay, modes, params = {} }
           <h3 style={{ margin:0,fontFamily:'Syne',fontSize:16 }}>Paiement — {commande.numero}</h3>
           <button onClick={onClose} aria-label="Fermer" style={{ background:'none',border:'none',cursor:'pointer',padding:8 }}><X size={18}/></button>
         </div>
-        <div style={{ background:'#FDF2F2',borderRadius:10,padding:14,textAlign:'center',marginBottom:16 }}>
+        <div style={{ background:'#FDF2F2',borderRadius:10,padding:14,textAlign:'center',marginBottom:12 }}>
           <div style={{ fontSize:11,color:'#888' }}>Total à encaisser</div>
           <div style={{ fontFamily:'Syne',fontWeight:800,fontSize:30,color:'#8B1A1A' }}>{total.toLocaleString('fr')} F</div>
         </div>
+
+        {moyens.length>1 && (
+          <button type="button" onClick={mixte ? revenirSimple : passerEnMixte} aria-pressed={mixte}
+            style={{ width:'100%',minHeight:44,marginBottom:12,borderRadius:10,cursor:'pointer',fontSize:13,fontWeight:700,
+              border:`1.5px solid ${mixte?'#8B1A1A':'#d3d1c7'}`, background:mixte?'#8B1A1A':'white', color:mixte?'white':'#8B1A1A' }}>
+            {mixte ? '✓ Paiement mixte — toucher pour payer avec un seul mode' : '⇄ Paiement mixte (plusieurs modes, ex. espèces + Wave)'}
+          </button>
+        )}
+
         {lignesPmt.map((ligne,i)=>{
           const moyen = MOYENS_PMT.find(m=>m.key===ligne.typePaiement);
           const needRef = ligne.typePaiement !== 'ESPECES';
           const qr = params[QR_PARAM[ligne.typePaiement]];
           const numero = params[NUM_PARAM[ligne.typePaiement]];
+          // Montant figé quand il n'y a qu'un mode : c'est exactement le total
+          const fige = !mixte;
+          const tipIci = ligne.typePaiement===modeDuTip ? tip : 0;
+          const aPayer = Number(ligne.montant||0) + tipIci;
           return (
             <div key={i} style={{ background:'#F7F7F5',borderRadius:10,padding:12,marginBottom:8 }}>
               <div style={{ display:'flex',gap:8,marginBottom:8 }}>
                 <select className="input" style={{ flex:2,fontSize:14 }} value={ligne.typePaiement} aria-label="Mode de paiement" onChange={e=>updateLigne(i,'typePaiement',e.target.value)}>
                   {moyens.map(m=><option key={m.key} value={m.key}>{m.label}</option>)}
                 </select>
-                <input className="input" style={{ flex:1,fontSize:14,fontWeight:600,minWidth:0 }} type="number" inputMode="numeric"
-                  value={ligne.montant} onChange={e=>updateLigne(i,'montant',e.target.value)} placeholder="Montant" aria-label="Montant"/>
-                {lignesPmt.length>1 && <button onClick={()=>removeLigne(i)} aria-label="Retirer ce paiement" style={{ background:'#FCEBEB',border:'none',borderRadius:6,padding:'0 12px',cursor:'pointer',color:'#A32D2D' }}><X size={14}/></button>}
+                <input className="input" style={{ flex:1,fontSize:14,fontWeight:600,minWidth:0,background:fige?'#ECEBE6':undefined }} type="number" inputMode="numeric"
+                  value={ligne.montant} readOnly={fige} onChange={e=>updateLigne(i,'montant',e.target.value)} placeholder="Montant" aria-label={fige?'Montant figé':'Montant'}/>
+                {mixte && <button onClick={()=>removeLigne(i)} aria-label="Retirer ce paiement" style={{ background:'#FCEBEB',border:'none',borderRadius:6,padding:'0 12px',cursor:'pointer',color:'#A32D2D' }}><X size={14}/></button>}
               </div>
-              {lignesPmt.length>1 && resteASaisir!==0 && (
-                <button type="button" onClick={()=>completer(i)} style={{ fontSize:11,background:'none',border:'none',color:'#8B1A1A',cursor:'pointer',padding:'0 0 8px',textDecoration:'underline' }}>Mettre le solde ici</button>
+              {fige && needRef && <div style={{ fontSize:11,color:'#888',marginBottom:6 }}>🔒 Montant figé : le client paie exactement le total.</div>}
+              {mixte && resteASaisir!==0 && (
+                <button type="button" onClick={()=>completer(i)} style={{ fontSize:12,background:'none',border:'none',color:'#8B1A1A',cursor:'pointer',padding:'0 0 8px',textDecoration:'underline' }}>Mettre le solde ici</button>
               )}
               {needRef && qr && (
                 <div style={{ textAlign:'center',background:'white',borderRadius:10,padding:10,marginBottom:8 }}>
                   <img src={qr} alt={`QR code ${moyen?.label}`} style={{ width:'100%',maxWidth:220,aspectRatio:'1',objectFit:'contain' }}/>
-                  <div style={{ fontSize:12,fontWeight:600,marginTop:4 }}>Le client scanne et paie {Number(ligne.montant||0).toLocaleString('fr')} F</div>
+                  <div style={{ fontSize:13,fontWeight:700,marginTop:4 }}>Le client scanne et paie {aPayer.toLocaleString('fr')} F</div>
+                  {tipIci>0 && <div style={{ fontSize:11,color:'#27500A' }}>dont pourboire {tipIci.toLocaleString('fr')} F</div>}
                   {numero && <div style={{ fontSize:11,color:'#888' }}>ou envoie au {numero}</div>}
+                  <LogosPaiement type={ligne.typePaiement} params={params}/>
                 </div>
               )}
-              {needRef && !qr && numero && <div style={{ fontSize:12,marginBottom:8,color:'#555' }}>Numéro {moyen?.label} : <b>{numero}</b></div>}
+              {needRef && !qr && numero && <div style={{ fontSize:12,marginBottom:8,color:'#555' }}>Numéro {moyen?.label} : <b>{numero}</b>{tipIci>0 && <> · à payer {aPayer.toLocaleString('fr')} F (pourboire inclus)</>}</div>}
               {needRef && <div style={{ fontSize:11,color:'#888',marginBottom:6 }}>Vérifiez la notification de paiement reçue sur le téléphone du restaurant, puis encaissez. La référence est facultative.</div>}
               {needRef && <input className="input" style={{ fontSize:14 }} placeholder={`Réf. ${moyen?.label} (facultatif)`} value={ligne.reference} onChange={e=>updateLigne(i,'reference',e.target.value)}/>}
               {ligne.typePaiement==='ESPECES' && (
                 <div style={{ display:'flex',gap:8,alignItems:'center' }}>
                   <input className="input" style={{ fontSize:14 }} type="number" inputMode="numeric" placeholder="Espèces remises par le client" value={ligne.recu} onChange={e=>updateLigne(i,'recu',e.target.value)}/>
-                  {recu>partEspeces && <div style={{ fontSize:13,fontWeight:700,color:'#27500A',whiteSpace:'nowrap' }}>Rendre {monnaieRendue.toLocaleString('fr')} F</div>}
+                  {monnaieRendue>0 && <div style={{ fontSize:13,fontWeight:700,color:'#27500A',whiteSpace:'nowrap' }}>Rendre {monnaieRendue.toLocaleString('fr')} F</div>}
                 </div>
               )}
             </div>
           );
         })}
-        {recuInsuffisant && <div role="alert" style={{ fontSize:12,color:'#A32D2D',marginBottom:8 }}>Les espèces remises sont inférieures à la part en espèces ({partEspeces.toLocaleString('fr')} F)</div>}
-        {Math.abs(resteASaisir)>=2 && (
+        {recuInsuffisant && <div role="alert" style={{ fontSize:12,color:'#A32D2D',marginBottom:8 }}>Les espèces remises sont inférieures à la part en espèces{tipEspeces>0?' + pourboire':''} ({(partEspeces+tipEspeces).toLocaleString('fr')} F)</div>}
+        {mixte && Math.abs(resteASaisir)>=2 && (
           <div style={{ marginBottom:12 }}>
             <div style={{ fontSize:12,color:'#A32D2D',marginBottom:6,fontWeight:500 }}>{resteASaisir>0?`Reste : ${resteASaisir.toLocaleString('fr')} F`:`Trop-perçu : ${(-resteASaisir).toLocaleString('fr')} F — ajustez les montants`}</div>
-            {resteASaisir>0 && moyens.length>1 && <button onClick={addLigne} style={{ fontSize:13,border:'1px dashed #d3d1c7',background:'white',borderRadius:8,padding:'10px 14px',cursor:'pointer',color:'#666',width:'100%' }}>+ Paiement mixte : autre moyen pour le reste</button>}
+            {resteASaisir>0 && lignesPmt.length<moyens.length && <button onClick={passerEnMixte} style={{ fontSize:13,border:'1px dashed #d3d1c7',background:'white',borderRadius:8,padding:'10px 14px',cursor:'pointer',color:'#666',width:'100%' }}>+ Ajouter un autre mode pour le reste</button>}
           </div>
         )}
-        {canPay && <div style={{ background:'#EAF3DE',borderRadius:8,padding:'8px 12px',marginBottom:12,display:'flex',alignItems:'center',gap:6,fontSize:12,color:'#27500A' }}><CheckCircle size={14}/> Prêt à encaisser{monnaieRendue>0?` · rendre ${monnaieRendue.toLocaleString('fr')} F`:''}</div>}
-        <button disabled={!canPay||loading} onClick={()=>onPay({ paiements:lignesPmt.map(({recu,...p})=>({...p,montant:Number(p.montant)})), especesRecues:recu })}
+
+        {/* Pourboire : en plus du total, jamais compté dans le chiffre d'affaires */}
+        <div style={{ background:'#FAF6F0',borderRadius:10,padding:12,marginBottom:10 }}>
+          <div style={{ display:'flex',gap:8,alignItems:'center' }}>
+            <label htmlFor="tip" style={{ fontSize:13,fontWeight:600,flex:'0 0 auto' }}>🙏 Pourboire</label>
+            <input id="tip" className="input" style={{ fontSize:14,minWidth:0 }} type="number" inputMode="numeric" min="0" placeholder="0 (facultatif)" value={pourboire} onChange={e=>setPourboire(e.target.value)}/>
+            {mixte && tip>0 && (
+              <select className="input" style={{ fontSize:12,flex:'0 0 auto',maxWidth:130 }} value={modeDuTip} onChange={e=>setModeTip(e.target.value)} aria-label="Pourboire payé en">
+                {[...new Set(lignesPmt.map(l=>l.typePaiement))].map(k=><option key={k} value={k}>en {MOYENS_PMT.find(m=>m.key===k)?.label}</option>)}
+              </select>
+            )}
+          </div>
+          {partEspeces>0 && recu>partEspeces && tipEspeces===0 && (
+            <button type="button" onClick={()=>{ setPourboire(String(recu-partEspeces)); setModeTip('ESPECES'); }}
+              style={{ marginTop:8,fontSize:12,background:'none',border:'none',color:'#8B1A1A',textDecoration:'underline',cursor:'pointer',padding:0 }}>Le client garde la monnaie ({(recu-partEspeces).toLocaleString('fr')} F) → pourboire</button>
+          )}
+          {tip>0 && <div style={{ fontSize:11,color:'#6B5F57',marginTop:6 }}>Le pourboire est enregistré à part : il n'entre pas dans le chiffre d'affaires.</div>}
+        </div>
+
+        {canPay && <div style={{ background:'#EAF3DE',borderRadius:8,padding:'8px 12px',marginBottom:12,display:'flex',alignItems:'center',gap:6,fontSize:12,color:'#27500A' }}><CheckCircle size={14}/> Prêt à encaisser{monnaieRendue>0?` · rendre ${monnaieRendue.toLocaleString('fr')} F`:''}{tip>0?` · pourboire ${tip.toLocaleString('fr')} F`:''}</div>}
+        <button disabled={!canPay||loading} onClick={()=>onPay({ paiements:lignesPmt.map(({recu,...p})=>({...p,montant:Number(p.montant)})), especesRecues:recu, pourboire:tip, modePourboire:modeDuTip })}
           style={{ width:'100%',padding:14,background:canPay?'#8B1A1A':'#ddd',color:'white',border:'none',borderRadius:10,fontFamily:'Syne',fontWeight:700,fontSize:15,cursor:canPay?'pointer':'not-allowed' }}>
           {loading?'Traitement...':`Encaisser ${total.toLocaleString('fr')} F`}
         </button>
