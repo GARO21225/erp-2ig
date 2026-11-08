@@ -1,26 +1,29 @@
-import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { exportExcel } from './export';
+import { exportExcel, creerPDF, logoPng } from './export';
 
 const F = (n) => `${Math.round(n || 0).toLocaleString('fr').replace(/[  ]/g, ' ')} F`;
 const D = (d) => (d ? new Date(d).toLocaleString('fr', { dateStyle: 'short', timeStyle: 'short' }) : '—');
 export const STATUTS = { BROUILLON: 'Émise', VALIDEE: 'Validée', REJETEE: 'Rejetée', PAYEE: 'Décaissée', JUSTIFIEE: 'Justifiée', CLOTUREE: 'Clôturée' };
 
 /** Rapport détaillé d'une dépense (PDF) : circuit complet, écart, justificatif. */
-export function rapportDepensePDF(d, recu, restaurant = '') {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+export async function rapportDepensePDF(d, recu, restaurant = '') {
+  const doc = creerPDF({ unit: 'mm', format: 'a4' });
+  const logo = await logoPng();
   const W = doc.internal.pageSize.getWidth();
-  doc.setFillColor(139, 26, 26); doc.rect(0, 0, W, 24, 'F');
-  doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.text('Rapport de dépense', 14, 14);
-  doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.text(`Yakro Grill${restaurant ? ` — ${restaurant}` : ''}`, 14, 20);
-  doc.text(`Édité le ${D(new Date())}`, W - 14, 14, { align: 'right' });
-  doc.setTextColor(30); doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.text(d.description, 14, 34);
+  // En-tête : logo du restaurant à gauche, titre et date à droite, filet rouge
+  if (logo) doc.addImage(logo.data, 'PNG', 14, 8, 50, 50 * logo.h / logo.w);
+  doc.setTextColor(139, 26, 26); doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text('Rapport de dépense', W - 14, 14, { align: 'right' });
+  doc.setTextColor(110); doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+  doc.text(restaurant || 'Yakro Grill', W - 14, 20, { align: 'right' });
+  doc.text(`Édité le ${D(new Date())}`, W - 14, 25, { align: 'right' });
+  doc.setDrawColor(139, 26, 26); doc.setLineWidth(0.8); doc.line(14, 30, W - 14, 30);
+  doc.setTextColor(30); doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.text(d.description, 14, 40);
   doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(110);
-  doc.text(`N° ${d.id}   ·   Statut : ${STATUTS[d.statut] || d.statut}`, 14, 40);
+  doc.text(`N° ${d.id}   ·   Statut : ${STATUTS[d.statut] || d.statut}`, 14, 46);
 
   const ecart = d.montantJustifie != null ? d.montant - d.montantJustifie : null;
   autoTable(doc, {
-    startY: 46, theme: 'grid', styles: { fontSize: 9, cellPadding: 2 }, columnStyles: { 0: { fontStyle: 'bold', cellWidth: 55, fillColor: [247, 245, 240] } },
+    startY: 52, theme: 'grid', styles: { fontSize: 9, cellPadding: 2 }, columnStyles: { 0: { fontStyle: 'bold', cellWidth: 55, fillColor: [247, 245, 240] } },
     body: [
       ['Catégorie / nature', `${d.categorie} — ${d.nature === 'FIXE' ? 'charge fixe' : 'autre charge'}`],
       ['Bénéficiaire', d.beneficiaire || '—'],
@@ -30,7 +33,7 @@ export function rapportDepensePDF(d, recu, restaurant = '') {
       ['Mode de paiement', (d.typePaiement || '—').replace(/_/g, ' ')],
       ['Référence du décaissement', d.reference || '—'],
       ['Montant justifié', d.montantJustifie != null ? F(d.montantJustifie) : '—'],
-      ['Écart (décaissé − justifié)', ecart == null ? '—' : ecart === 0 ? 'Aucun' : `${F(ecart)} ${ecart > 0 ? '(non justifié / à restituer)' : '(dépassement)'}`],
+      ['Écart (décaissé - justifié)', ecart == null ? '—' : ecart === 0 ? 'Aucun' : `${F(ecart)} ${ecart > 0 ? '(non justifié / à restituer)' : '(dépassement)'}`],
       ...(d.notes ? [['Notes', d.notes]] : []),
     ],
   });
@@ -38,11 +41,11 @@ export function rapportDepensePDF(d, recu, restaurant = '') {
     startY: doc.lastAutoTable.finalY + 6, theme: 'striped', styles: { fontSize: 9, cellPadding: 2 }, headStyles: { fillColor: [26, 63, 111] },
     head: [['Étape du circuit', 'Par', 'Date', 'Détail']],
     body: [
-      ['① Émission', d.creeParNom, D(d.createdAt), ''],
-      [d.statut === 'REJETEE' ? '② Rejet (DG)' : '② Validation (DG)', d.valideParNom || '—', D(d.valideLe), d.motifRejet ? `Motif : ${d.motifRejet}` : ''],
-      ['③ Décaissement', d.payeParNom || '—', D(d.payeLe), d.reference ? `Réf. ${d.reference}` : ''],
-      ['④ Justification', d.justifieParNom || '—', D(d.justifieLe), d.noteJustification || ''],
-      ['⑤ Clôture', d.clotureParNom || '—', D(d.clotureLe), ''],
+      ['1. Émission', d.creeParNom, D(d.createdAt), ''],
+      [d.statut === 'REJETEE' ? '2. Rejet (DG)' : '2. Validation (DG)', d.valideParNom || '—', D(d.valideLe), d.motifRejet ? `Motif : ${d.motifRejet}` : ''],
+      ['3. Décaissement', d.payeParNom || '—', D(d.payeLe), d.reference ? `Réf. ${d.reference}` : ''],
+      ['4. Justification', d.justifieParNom || '—', D(d.justifieLe), d.noteJustification || ''],
+      ['5. Clôture', d.clotureParNom || '—', D(d.clotureLe), ''],
     ],
   });
   let y = doc.lastAutoTable.finalY + 8;

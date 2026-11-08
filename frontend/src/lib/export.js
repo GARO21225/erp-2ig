@@ -6,6 +6,29 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
+// ─── PDF : polices standard = pas d'Unicode étendu (espaces fines, ①, −, ✓ → caractères illisibles) ───
+const propre = (t) => String(t)
+  .replace(/[\u202f\u00a0\u2009]/g, ' ').replace(/\u2212/g, '-')
+  .replace(/[\u2460-\u2464]/g, (c) => `${c.charCodeAt(0) - 0x245f}.`)
+  .replace(/[\u2713\u2714\u21a9\u2192]/g, '').replace(/[^\x00-\xFF\u2013\u2014\u2018\u2019\u201C\u201D\u2022\u2026\u20AC]/g, '');
+/** jsPDF dont le texte est nettoyé pour les polices standard. */
+export function creerPDF(opts) {
+  const doc = new jsPDF(opts);
+  const texte = doc.text.bind(doc);
+  doc.text = (t, ...r) => texte(Array.isArray(t) ? t.map(propre) : propre(t), ...r);
+  return doc;
+}
+export { propre as pdfTexte };
+/** Logo (SVG ou image) rasterisé en PNG pour l'insérer dans un PDF. */
+export function logoPng(url = '/logos/yakro.svg', largeur = 640) {
+  return new Promise((ok) => {
+    const img = new Image();
+    img.onload = () => { const c = document.createElement('canvas'); c.width = largeur; c.height = Math.round(largeur * (img.height || 40) / (img.width || 160)); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); ok({ data: c.toDataURL('image/png'), w: c.width, h: c.height }); };
+    img.onerror = () => ok(null);
+    img.src = url;
+  });
+}
+
 // ─── EXCEL ───────────────────────────────────────────────────────────────────
 
 /**
@@ -82,7 +105,7 @@ export function parseExcel(file) {
  * @param {Object} opts - Options (sous-titre, totaux, orientation)
  */
 export function exportPDF(titre, nomFichier, entetes, lignes, opts = {}) {
-  const doc = new jsPDF({
+  const doc = creerPDF({
     orientation: opts.orientation || 'portrait',
     unit: 'mm',
     format: 'a4',
@@ -298,7 +321,7 @@ export function exportMouvementsStock(mouvements) {
 
 // ── TICKET YAKRO GRILL avec logo et formatage restaurant ─────────────────────
 export function exportTicketYakro(commande) {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [80, 200] }); // Format ticket 80mm
+  const doc = creerPDF({ orientation: 'portrait', unit: 'mm', format: [80, 200] }); // Format ticket 80mm
   const w = 80;
   const now = new Date();
 
