@@ -38,16 +38,14 @@ services:
     depends_on:
       - backend
 
-  # HTTPS sur le port 8080 (l'ancien port HTTP) (certificat Let's Encrypt via DNS Porkbun) : https://${DOMAIN}
+  # HTTPS sur le port 8080 (l'ancien port HTTP) : https://204.168.229.74:8080
   caddy:
     build:
       context: ./caddy
     container_name: erp-caddy
     restart: always
     environment:
-      DOMAIN: ${DOMAIN:-yakro.roxgold-sitelife.com}
-      PORKBUN_API_KEY: ${PORKBUN_API_KEY:-}
-      PORKBUN_API_SECRET_KEY: ${PORKBUN_API_SECRET_KEY:-}
+      DOMAIN: ${DOMAIN:-204.168.229.74}
     ports:
       - "8080:8080"
     volumes:

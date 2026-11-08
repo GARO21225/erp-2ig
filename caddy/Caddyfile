@@ -1,18 +1,22 @@
-# HTTPS sur un port dédié (comme RZI Camp : https://domaine:PORT, ici le port 8080 de l ancien HTTP), certificat Let's Encrypt reconnu.
-# La validation passe par le DNS Porkbun : ni le port 80 ni le 443 du serveur ne sont utilisés.
+# HTTPS directement sur l'adresse IP et le port 8080 : https://204.168.229.74:8080
+# Certificat émis par l'autorité interne de Caddy. Une autorité publique (Let's Encrypt) ne peut pas
+# valider une IP sur un autre port que 80/443 : on installe donc UNE FOIS le certificat racine sur chaque
+# appareil (téléchargeable sur /ca.crt) ; ensuite plus aucun avertissement.
 {
 	https_port 8080
 	auto_https disable_redirects
+	skip_install_trust
 }
 
 {$DOMAIN}:8080 {
-	tls {
-		dns porkbun {
-			api_key {env.PORKBUN_API_KEY}
-			api_secret_key {env.PORKBUN_API_SECRET_KEY}
-		}
-	}
+	tls internal
 	encode gzip
+	handle /ca.crt {
+		root * /data/caddy/pki/authorities/local
+		rewrite * /root.crt
+		header Content-Disposition "attachment; filename=yakro-grill-ca.crt"
+		file_server
+	}
 	handle /api/* {
 		reverse_proxy erp-backend:4000
 	}
