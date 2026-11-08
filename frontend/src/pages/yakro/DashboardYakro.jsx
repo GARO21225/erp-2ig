@@ -7,6 +7,7 @@ import CentreActions from '../../components/ui/CentreActions';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { yakroAPI } from '../../lib/api';
+import { useYakro } from '../../lib/useYakro';
 import {
   BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
@@ -41,9 +42,16 @@ function KPI({ label, value, sub, color='#8B1A1A', icon:Icon, trend }) {
 
 export default function DashboardYakro() {
   const [periode, setPeriode] = useState('jour');
+  const { restaurants, isLoading: chargeResto } = useYakro();
+  const [choix, setChoix] = useState(null); // 'TOUS' ou id d'un restaurant
+  // Plusieurs restaurants : vue globale par défaut, puis détail au choix
+  const portee = choix ?? (restaurants.length > 1 ? 'TOUS' : restaurants[0]?.id);
+  const global = portee === 'TOUS';
+  const nomResto = restaurants.find(r => r.id === portee)?.nom;
   const { data: dash, isLoading, refetch } = useQuery({
-    queryKey: ['dashboard-yakro', periode],
-    queryFn: () => yakroAPI.dashboard(periode),
+    queryKey: ['dashboard-yakro', periode, portee],
+    queryFn: () => yakroAPI.dashboard(periode, portee),
+    enabled: !chargeResto && !!portee,
     staleTime: 30000,
     refetchInterval: 60000,
   });
@@ -67,7 +75,7 @@ export default function DashboardYakro() {
       <div className="page-header">
         <div>
           <h1 style={{ margin:0, fontFamily:'Syne', fontWeight:800, fontSize:22, color:'#8B1A1A' }}>
-            🔥 Dashboard — Yakro Grill
+            🔥 Dashboard — {global ? 'Tous les restaurants' : (nomResto || 'Yakro Grill')}
           </h1>
           <p style={{ margin:'4px 0 0', fontSize:12, color:'#888' }}>
             Vue exécutive · {new Date().toLocaleDateString('fr', { weekday:'long', day:'2-digit', month:'long' })}
@@ -83,6 +91,43 @@ export default function DashboardYakro() {
           <button className="btn btn-ghost btn-sm" onClick={()=>refetch()}><RefreshCw size={13}/></button>
         </div>
       </div>
+
+      {/* Choix : global ou détail d'un restaurant */}
+      {restaurants.length > 1 && (
+        <div className="yk-chips" role="tablist" aria-label="Restaurant" style={{ marginBottom:14 }}>
+          <button className="yk-chip" role="tab" aria-pressed={global} onClick={()=>setChoix('TOUS')}>Vue globale<small>{restaurants.length}</small></button>
+          {restaurants.map(r => <button key={r.id} className="yk-chip" role="tab" aria-pressed={portee===r.id} onClick={()=>setChoix(r.id)}>{r.nom}</button>)}
+        </div>
+      )}
+
+      {/* Vue globale : comparaison des restaurants */}
+      {global && (d.parRestaurant || []).length > 0 && (
+        <div className="card" style={{ marginBottom:20, overflowX:'auto' }}>
+          <div style={{ fontWeight:700, fontSize:13, marginBottom:8 }}>Comparaison des restaurants — cliquez pour le détail</div>
+          <table className="table-erp">
+            <thead><tr><th>Restaurant</th><th style={{ textAlign:'right' }}>CA</th><th style={{ textAlign:'right' }}>Tickets</th><th style={{ textAlign:'right' }}>Ticket moyen</th><th style={{ textAlign:'right' }}>Charges fixes</th><th style={{ textAlign:'right' }}>Autres charges</th><th style={{ textAlign:'right' }}>Résultat</th></tr></thead>
+            <tbody>
+              {d.parRestaurant.map(r => (
+                <tr key={r.id} onClick={()=>setChoix(r.id)} style={{ cursor:'pointer' }}>
+                  <td><b>{r.nom}</b></td>
+                  <td style={{ textAlign:'right' }}>{fmtFull(r.ca)}</td>
+                  <td style={{ textAlign:'right' }}>{r.tickets}</td>
+                  <td style={{ textAlign:'right' }}>{fmtFull(r.ticketMoyen)}</td>
+                  <td style={{ textAlign:'right' }}>{fmtFull(r.chargesFixes)}</td>
+                  <td style={{ textAlign:'right' }}>{fmtFull(r.autresCharges)}</td>
+                  <td style={{ textAlign:'right', fontWeight:700, color:r.resultat>=0?'#27500A':'#A32D2D' }}>{fmtFull(r.resultat)}</td>
+                </tr>
+              ))}
+              <tr style={{ background:'#FAF6F0', fontWeight:700 }}>
+                <td>Total</td>
+                {['ca','tickets','ticketMoyen','chargesFixes','autresCharges','resultat'].map(k => (
+                  <td key={k} style={{ textAlign:'right' }}>{k==='tickets' ? d.parRestaurant.reduce((s,r)=>s+r.tickets,0) : k==='ticketMoyen' ? fmtFull(Math.round(d.parRestaurant.reduce((s,r)=>s+r.ca,0)/Math.max(1,d.parRestaurant.reduce((s,r)=>s+r.tickets,0)))) : fmtFull(d.parRestaurant.reduce((s,r)=>s+r[k],0))}</td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Alertes */}
       {alertes.length > 0 && (

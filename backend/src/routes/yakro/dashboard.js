@@ -4,7 +4,8 @@
 const router = require('express').Router();
 const prisma = require('../../lib/prisma');
 const { auth, requireFiliale } = require('../../middleware/auth');
-const { resto, sc } = require('../../lib/yakro-resto');
+const Y = require('../../lib/yakro-resto');
+const { resto, sc } = Y;
 const yakro = requireFiliale('YAKRO_GRILL');
 
 const CATS_BAR = ['BIERE','VIN','CHAMPAGNE','COCKTAIL_ALCOOLISE','COCKTAIL_SANS_ALCOOL','SUCRERIE','TISANE','BOISSON'];
@@ -25,7 +26,25 @@ function getDateRange(periode) {
   return { debut, fin };
 }
 
-router.get('/', auth, yakro, resto, async (req, res) => {
+// Portée : ?portee=TOUS → tous les restaurants accessibles (vue globale) ; ?portee=<id> → un restaurant ; sinon restaurant courant
+const portee = async (req, res, next) => {
+  try {
+    const p = req.query.portee;
+    if (p === 'TOUS') {
+      const liste = await Y.accesDe(req.user);
+      if (!liste.length) return res.status(403).json({ error: "Aucun restaurant ne vous est affecté" });
+      req.restaurantId = null; req.portee = 'TOUS'; req.restos = liste.map(a => a.restaurant);
+      req.scopeIds = req.restos.map(r => r.id);
+      return next();
+    }
+    if (p) req.headers['x-restaurant-id'] = p;
+    return resto(req, res, next);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+};
+// Filtres Prisma selon la portée (un restaurant, ou l'ensemble de ceux accessibles)
+const scD = (req) => (req.scopeIds ? { restaurantId: { in: req.scopeIds } } : sc(req));
+
+router.get('/', auth, yakro, portee, async (req, res) => {
   try {
     const { periode = 'jour' } = req.query;
     const { debut, fin } = getDateRange(periode);
@@ -33,8 +52,8 @@ router.get('/', auth, yakro, resto, async (req, res) => {
     const hierDebut = new Date(debutHier); hierDebut.setDate(hierDebut.getDate() - 1);
     const hierFin = new Date(debutHier);
 
-    const where = { createdAt: { gte: debut, lte: fin }, ...sc(req) };
-    const pc = req.restaurantId ? { commande: { restaurantId: req.restaurantId } } : {};
+    const where = { createdAt: { gte: debut, lte: fin }, ...scD(req) };
+    const pc = req.scopeIds ? { commande: { restaurantId: { in: req.scopeIds } } } : req.restaurantId ? { commande: { restaurantId: req.restaurantId } } : {};
     const wherePayee = { ...where, statut: 'PAYEE' };
 
     const safe = async (fn) => { try { return await fn(); } catch { return null; } };
@@ -50,7 +69,7 @@ router.get('/', auth, yakro, resto, async (req, res) => {
       safe(() => prisma.commandeYakro.count({ where: wherePayee })),
       safe(() => prisma.commandeYakro.count({ where: { ...where, statut: 'ANNULEE' } })),
       safe(() => prisma.paiementYakro.groupBy({ by: ['type'], _sum: { montant: true }, _count: { id: true }, where: { createdAt: { gte: debut }, ...pc }, orderBy: { _sum: { montant: 'desc' } } })),
-      safe(() => prisma.tableRestaurant.findMany({ where: sc(req), orderBy: { numero: 'asc' } })),
+      safe(() => prisma.tableRestaurant.findMany({ where: scD(req), orderBy: { numero: 'asc' } })),
       prisma.ligneCommandeYakro.findMany({
         where: { commande: { statut: 'PAYEE', ...where } },
         include: { menu: { select: { nom:true, categorie:true, prix:true, coutRevient:true } } },
@@ -77,7 +96,7 @@ router.get('/', auth, yakro, resto, async (req, res) => {
 
     // Tables occupées
     const commandesOuvertes = await prisma.commandeYakro.findMany({
-      where: { statut: { in: ['EN_COURS','CUISINE','PRETE','SERVIE'] }, tableId: { not: null }, ...sc(req) },
+      where: { statut: { in: ['EN_COURS','CUISINE','PRETE','SERVIE'] }, tableId: { not: null }, ...scD(req) },
       select: { tableId: true }
     });
     const tablesOccupees = new Set(commandesOuvertes.map(c => c.tableId)).size;
@@ -150,11 +169,28 @@ router.get('/', auth, yakro, resto, async (req, res) => {
     if (trendCA < -20) alertes.push({ type:'BAISSE_CA', gravite:'ATTENTION', msg:`CA en baisse de ${Math.abs(trendCA)}% vs hier` });
 
     // Charges de la période : fixes (salaires, loyer, énergie…) et autres (achats, transport…)
-    const parNature = await safe(() => prisma.depenseYakro.groupBy({ by: ['nature'], _sum: { montant: true }, where: { date: { gte: debut, lte: fin }, ...sc(req) } })) || [];
+    const parNature = await safe(() => prisma.depenseYakro.groupBy({ by: ['nature'], _sum: { montant: true }, where: { date: { gte: debut, lte: fin }, ...scD(req) } })) || [];
     const chargesFixes = parNature.find(x => x.nature === 'FIXE')?._sum.montant || 0;
     const autresCharges = parNature.find(x => x.nature === 'VARIABLE')?._sum.montant || 0;
 
+    // Vue globale : comparaison restaurant par restaurant
+    let parRestaurant;
+    if (req.portee === 'TOUS') {
+      parRestaurant = await Promise.all(req.restos.map(async (r) => {
+        const [ca, tickets, ch] = await Promise.all([
+          safe(() => prisma.paiementYakro.aggregate({ _sum: { montant: true }, where: { createdAt: { gte: debut, lte: fin }, commande: { restaurantId: r.id } } })),
+          safe(() => prisma.commandeYakro.count({ where: { statut: 'PAYEE', createdAt: { gte: debut, lte: fin }, restaurantId: r.id } })),
+          safe(() => prisma.depenseYakro.groupBy({ by: ['nature'], _sum: { montant: true }, where: { date: { gte: debut, lte: fin }, restaurantId: r.id } })),
+        ]);
+        const fixes = (ch || []).find(x => x.nature === 'FIXE')?._sum.montant || 0;
+        const autres = (ch || []).find(x => x.nature === 'VARIABLE')?._sum.montant || 0;
+        const c = ca?._sum?.montant || 0;
+        return { id: r.id, nom: r.nom, ca: c, tickets: tickets || 0, ticketMoyen: tickets ? Math.round(c / tickets) : 0, chargesFixes: fixes, autresCharges: autres, resultat: c - fixes - autres };
+      }));
+    }
+
     res.json({
+      portee: req.portee || 'UN', parRestaurant,
       kpi: {
         caJour, caSemaine: caWeek._sum.montant||0, caMois: caMois._sum.montant||0,
         nbTickets, nbClients, ticketMoyen, margeEstimee, tauxMarge,

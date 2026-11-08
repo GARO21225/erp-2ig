@@ -161,7 +161,7 @@ export const yakroAPI = {
   createReservation: (data) => api.post('/yakro/reservations', data),
   updateReservation: (id, statut) => api.put(`/yakro/reservations/${id}/statut`, { statut }),
   // Dashboard
-  dashboard: (periode) => api.get('/yakro/dashboard', { params: { periode } }),
+  dashboard: (periode, portee) => api.get('/yakro/dashboard', { params: { periode, portee: portee || undefined } }),
   // Tables enrichi
   assignerServeur: (id, data) => api.put(`/yakro/tables/${id}/assigner-serveur`, data),
   cloturerTable: (id) => api.put(`/yakro/tables/${id}/cloturer`),
