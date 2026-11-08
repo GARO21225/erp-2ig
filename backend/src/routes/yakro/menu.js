@@ -34,26 +34,51 @@ router.get('/', auth, resto, async (req, res) => {
   }
 });
 
+
+// Photo d'un plat : lien http(s) ou fichier téléversé (data URI, 700 Ko max) servi par /image/:id
+const PHOTO_OK = (v) => /^data:image\/(png|jpeg|webp);base64,/.test(v) && v.length < 950000;
+const LIEN_OK = (v) => /^https?:\/\/\S+$/i.test(v);
+const photoData = (id, photo, image) => {
+  if (photo) return PHOTO_OK(photo) ? { imageData: photo, imageType: photo.slice(5, photo.indexOf(';')), image: `/api/yakro/menu/image/${id}?v=${Date.now()}` } : null;
+  if (image === '') return { imageData: null, imageType: null, image: null };
+  if (image) return LIEN_OK(image) || image.startsWith('/api/') ? { imageData: null, imageType: null, image } : null;
+  return {};
+};
+
+// GET /image/:id — public (balise <img> sans jeton)
+router.get('/image/:id', async (req, res) => {
+  try {
+    const m = await prisma.menuYakro.findUnique({ where: { id: req.params.id }, select: { imageData: true, imageType: true }, omit: { imageData: false } });
+    if (!m?.imageData) return res.status(404).end();
+    const buf = Buffer.from(m.imageData.split(',')[1], 'base64');
+    res.set('Content-Type', m.imageType || 'image/jpeg').set('Cache-Control', 'public, max-age=86400').send(buf);
+  } catch { res.status(500).end(); }
+});
+
 router.post('/', auth, yakro, resto, can('menu.gerer'), async (req, res) => {
   try {
     const { nom, description, categorie, sousCategorie, prix, prixMini, prixMaxi, disponible, image, coutRevient } = req.body;
     if (!nom || !categorie || prix === undefined || prix === '') {
       return res.status(400).json({ error: 'Nom, catégorie et prix requis' });
     }
+    const { photo } = req.body;
+    if ((photo || (image && image !== '')) && !photoData('x', photo, image)) return res.status(400).json({ error: 'Photo invalide (PNG/JPEG/WebP 700 Ko max) ou lien incorrect (http/https)' });
+    const catNorm = String(categorie).trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
     const item = await prisma.menuYakro.create({
       data: {
-        nom, categorie,
+        nom, categorie: catNorm || categorie,
         description: description || null,
         sousCategorie: sousCategorie || null,
         prix: Number(prix),
         prixMini: prixMini ? Number(prixMini) : null,
         prixMaxi: prixMaxi ? Number(prixMaxi) : null,
         disponible: disponible !== undefined ? !!disponible : true,
-        image: image || null,
+        image: LIEN_OK(image || '') ? image : null,
         coutRevient: coutRevient ? Number(coutRevient) : null,
       }
     });
-    res.status(201).json(item);
+    const ph = photo ? photoData(item.id, photo) : null;
+    res.status(201).json(ph ? await prisma.menuYakro.update({ where: { id: item.id }, data: ph }) : item);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -71,7 +96,11 @@ router.put('/:id', auth, yakro, resto, can('menu.gerer'), async (req, res) => {
     if (prixMini !== undefined) data.prixMini = prixMini ? Number(prixMini) : null;
     if (prixMaxi !== undefined) data.prixMaxi = prixMaxi ? Number(prixMaxi) : null;
     if (disponible !== undefined) data.disponible = !!disponible;
-    if (image !== undefined) data.image = image || null;
+    if (image !== undefined || req.body.photo) {
+      const ph = photoData(req.params.id, req.body.photo, image);
+      if (!ph) return res.status(400).json({ error: 'Photo invalide (PNG/JPEG/WebP 700 Ko max) ou lien incorrect (http/https)' });
+      Object.assign(data, ph);
+    }
     if (coutRevient !== undefined) data.coutRevient = coutRevient ? Number(coutRevient) : null;
     const item = await prisma.menuYakro.update({ where: { id: req.params.id }, data });
     res.json(item);

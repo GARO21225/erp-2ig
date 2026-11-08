@@ -174,7 +174,7 @@ router.get('/:id/prix', auth, yakro, cible('menu.voir'), async (req, res) => {
     ]);
     res.json(menu.map(m => {
       const o = prix.get(m.id);
-      return { menuId: m.id, nom: m.nom, categorie: m.categorie, prixBase: m.prix, prix: o ? o.prix : m.prix, disponible: o ? o.disponible : true, personnalise: !!o };
+      return { menuId: m.id, nom: m.nom, categorie: m.categorie, image: m.image, prixBase: m.prix, prix: o ? o.prix : m.prix, disponible: o ? o.disponible : true, personnalise: !!o };
     }));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Save, Trash2, Plus, UserPlus } from 'lucide-react';
-import { yakroAPI } from '../../lib/api';
+import { yakroAPI, imgSrc } from '../../lib/api';
 import { useYakro } from '../../lib/useYakro';
 import TablesPage from './TablesPage';
 import RestaurantsPage from './RestaurantsPage';
@@ -56,7 +56,83 @@ function OngletGeneral({ r }) {
   );
 }
 
-// ── Prix ───────────────────────────────────────────────────────────────────
+// ── Photo / lien d'un plat + nouveau plat (avec nouvelle catégorie) ────────
+function lirePhoto(f, ok, ko) {
+  if (!f) return;
+  if (!f.type.startsWith('image/')) return ko('Choisissez une image');
+  const img = new Image();
+  img.onload = () => {
+    const k = Math.min(1, 800 / Math.max(img.width, img.height));
+    const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    ok(c.toDataURL('image/jpeg', 0.8)); URL.revokeObjectURL(img.src);
+  };
+  img.onerror = () => ko('Image illisible');
+  img.src = URL.createObjectURL(f);
+}
+
+/** Création d'un plat (catégorie existante ou nouvelle) ou changement de photo/lien d'un plat existant. */
+function ModalPlat({ plat, categories, onClose, onDone }) {
+  const edition = !!plat;
+  const [nom, setNom] = useState(plat?.nom || '');
+  const [cat, setCat] = useState(plat?.categorie || categories[0] || '');
+  const [nouvelle, setNouvelle] = useState('');
+  const [prix, setPrix] = useState('');
+  const [photo, setPhoto] = useState('');
+  const [lien, setLien] = useState(plat?.image && /^https?:/.test(plat.image) ? plat.image : '');
+  const [erreur, setErreur] = useState('');
+  const NOUVELLE = '__nouvelle__';
+  const categorie = cat === NOUVELLE ? nouvelle.trim() : cat;
+  const apercu = photo || imgSrc(lien || plat?.image || '');
+  const m = useMutation({
+    mutationFn: () => {
+      const corps = photo ? { photo } : { image: lien.trim() };
+      return edition ? yakroAPI.updateMenu(plat.menuId, corps) : yakroAPI.createMenu({ nom: nom.trim(), categorie, prix: Number(prix), ...corps });
+    },
+    onSuccess: () => { onDone(); onClose(); },
+    onError: (e) => setErreur(e?.error || e?.response?.data?.error || e.message),
+  });
+  const ok = edition ? true : nom.trim() && categorie && Number(prix) >= 0 && prix !== '';
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+        <h3 style={{ margin: '0 0 12px', fontFamily: 'Syne', fontSize: 16, color: ROUGE }}>{edition ? `Photo — ${plat.nom}` : 'Nouveau plat'}</h3>
+        <div className="form-grid">
+          {!edition && <>
+            <div className="full"><label className="label">Nom du plat *</label><input className="input" value={nom} onChange={e => setNom(e.target.value)} /></div>
+            <div><label className="label">Catégorie *</label>
+              <select className="input" value={cat} onChange={e => setCat(e.target.value)}>
+                {categories.map(c => <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>)}
+                <option value={NOUVELLE}>＋ Nouvelle catégorie…</option>
+              </select>
+            </div>
+            <div><label className="label">Prix commun (FCFA) *</label><input className="input" type="number" min="0" value={prix} onChange={e => setPrix(e.target.value)} /></div>
+            {cat === NOUVELLE && <div className="full"><label className="label">Nom de la nouvelle catégorie *</label><input className="input" value={nouvelle} onChange={e => setNouvelle(e.target.value)} placeholder="ex. Plat du jour" autoFocus /></div>}
+          </>}
+          <div className="full" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <div style={{ width: 84, height: 84, borderRadius: 10, background: '#F1EFE8', overflow: 'hidden', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+              {apercu ? <img src={apercu} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display = 'none'; }} /> : <span style={{ fontSize: 26, opacity: .4 }}>🍽</span>}
+            </div>
+            <div style={{ flex: 1 }}>
+              <label className="btn btn-sm btn-ghost" style={{ cursor: 'pointer' }}>📷 Choisir une photo
+                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; lirePhoto(f, p => { setPhoto(p); setLien(''); }, setErreur); }} />
+              </label>
+              <div style={{ fontSize: 11, color: '#888', margin: '6px 0 2px' }}>ou un lien vers une image</div>
+              <input className="input" placeholder="https://…" value={lien} onChange={e => { setLien(e.target.value); setPhoto(''); }} />
+            </div>
+          </div>
+        </div>
+        {erreur && <p role="alert" style={{ color: '#A32D2D', fontSize: 13, marginTop: 8 }}>{erreur}</p>}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+          <button className="btn btn-ghost" onClick={onClose}>Annuler</button>
+          <button className="btn btn-primary" style={{ background: ROUGE, border: 'none' }} disabled={!ok || m.isPending} onClick={() => { setErreur(''); m.mutate(); }}>{m.isPending ? '...' : edition ? 'Enregistrer' : 'Créer le plat'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Menu & prix ────────────────────────────────────────────────────────────
 function OngletPrix({ r, restos, peutModifier }) {
   const qc = useQueryClient();
   const [edits, setEdits] = useState({});
@@ -64,6 +140,7 @@ function OngletPrix({ r, restos, peutModifier }) {
   const [cat, setCat] = useState('');
   const [src, setSrc] = useState('');
   const [pct, setPct] = useState(0);
+  const [modal, setModal] = useState(null); // { plat } : plat existant (photo) ou {} (nouveau)
   const [etat, retour] = useRetour();
   const { data: lignes = [], isLoading } = useQuery({ queryKey: ['yakro-prix', r.id], queryFn: () => yakroAPI.prixRestaurant(r.id) });
   useEffect(() => setEdits({}), [r.id]);
@@ -97,6 +174,7 @@ function OngletPrix({ r, restos, peutModifier }) {
           <option value="">Toutes catégories</option>
           {categories.map(c => <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>)}
         </select>
+        {peutModifier && <button className="btn btn-sm btn-ghost" onClick={() => setModal({})}><Plus size={13} /> Nouveau plat / catégorie</button>}
         {peutModifier && (
           <button className="btn btn-sm" style={{ background: ROUGE, color: 'white', border: 'none' }} disabled={!modifies.length || sauver.isPending} onClick={() => sauver.mutate()}>
             <Save size={13} /> Enregistrer{modifies.length ? ` (${modifies.length})` : ''}
@@ -117,16 +195,23 @@ function OngletPrix({ r, restos, peutModifier }) {
         </div>
       )}
       <div style={{ padding: '0 12px' }}><Bandeau {...etat} /></div>
+      {modal && <ModalPlat plat={modal.plat} categories={categories} onClose={() => setModal(null)} onDone={() => { apres(); qc.invalidateQueries({ queryKey: ['menu'] }); retour.ok(modal.plat ? 'Photo enregistrée' : 'Plat créé'); }} />}
       <div style={{ overflowX: 'auto' }}>
         {isLoading ? <div style={{ padding: 30, textAlign: 'center', color: '#888', fontSize: 13 }}>Chargement...</div> : (
           <table className="table-erp">
-            <thead><tr><th>Plat</th><th>Prix commun</th><th>Prix {r.nom}</th><th>Dispo</th></tr></thead>
+            <thead><tr><th style={{ width: 56 }}></th><th>Plat</th><th>Prix commun</th><th>Prix {r.nom}</th><th>Dispo</th></tr></thead>
             <tbody>
               {visibles.map(l => {
                 const v = val(l);
                 const diff = Number(v.prix) !== l.prixBase;
                 return (
                   <tr key={l.menuId}>
+                    <td>
+                      <button type="button" disabled={!peutModifier} onClick={() => setModal({ plat: l })} aria-label={`Photo de ${l.nom}`} title="Changer la photo ou le lien"
+                        style={{ width: 44, height: 44, borderRadius: 8, border: '1px dashed #d8d6cc', background: '#F7F5F0', overflow: 'hidden', padding: 0, cursor: peutModifier ? 'pointer' : 'default', display: 'grid', placeItems: 'center' }}>
+                        {l.image ? <img src={imgSrc(l.image)} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 16, opacity: .5 }}>📷</span>}
+                      </button>
+                    </td>
                     <td><div style={{ fontWeight: 500, fontSize: 13 }}>{l.nom}</div><div style={{ fontSize: 10, color: '#999' }}>{l.categorie.replace(/_/g, ' ')}</div></td>
                     <td style={{ color: '#888', fontSize: 12 }}>{l.prixBase.toLocaleString('fr')}</td>
                     <td>
@@ -308,7 +393,7 @@ export default function ParametrageRestaurantPage() {
 
   const onglets = [
     { id: 'general', label: 'Général', visible: peut('parametres.gerer') },
-    { id: 'prix', label: 'Prix', visible: peut('prix.gerer') || peut('menu.voir') },
+    { id: 'prix', label: 'Menu & prix', visible: peut('prix.gerer') || peut('menu.voir') },
     { id: 'parametres', label: 'Paramètres', visible: peut('parametres.gerer') },
     { id: 'equipe', label: 'Équipe & profils', visible: peut('equipe.gerer') },
     { id: 'tables', label: 'Plan de salle', visible: peut('parametres.gerer') },

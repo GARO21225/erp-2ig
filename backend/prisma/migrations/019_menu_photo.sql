@@ -1,0 +1,2 @@
+ALTER TABLE menu_yakro ADD COLUMN IF NOT EXISTS "imageData" TEXT;
+ALTER TABLE menu_yakro ADD COLUMN IF NOT EXISTS "imageType" TEXT;

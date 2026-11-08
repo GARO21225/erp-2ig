@@ -640,6 +640,8 @@ model MenuYakro {
   image       String?
   coutRevient Float?   // pour calcul marge
   produitId   String?  // boisson liée au stock (déduit à chaque vente)
+  imageData   String?  // photo téléversée (data URI), servie par /api/yakro/menu/image/:id
+  imageType   String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
