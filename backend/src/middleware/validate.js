@@ -85,7 +85,6 @@ const VALIDATORS = {
         for (const p of val) {
           if (!p.typePaiement) return 'Type de paiement manquant';
           if (!p.montant || Number(p.montant) <= 0) return 'Montant invalide';
-          if (p.typePaiement !== 'ESPECES' && !p.reference) return `Référence obligatoire pour ${p.typePaiement}`;
         }
         return null;
       }

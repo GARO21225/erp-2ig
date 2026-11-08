@@ -183,7 +183,7 @@ function ModalPaiement({ commande, loading, onClose, onPay, modes, params = {} }
   const recu = Number(lignesPmt.find(l=>l.typePaiement==='ESPECES')?.recu) || 0;
   const monnaieRendue = partEspeces>0 && recu>partEspeces ? recu-partEspeces : 0;
   const recuInsuffisant = partEspeces>0 && recu>0 && recu<partEspeces;
-  const canPay = Math.abs(resteASaisir) < 2 && !recuInsuffisant && lignesPmt.every(l=>Number(l.montant)>0 && (l.typePaiement==='ESPECES' || l.reference.trim()));
+  const canPay = Math.abs(resteASaisir) < 2 && !recuInsuffisant && lignesPmt.every(l=>Number(l.montant)>0);
 
   const addLigne = () => {
     const libre = moyens.find(m=>!lignesPmt.some(l=>l.typePaiement===m.key)) || moyens[0];
@@ -233,7 +233,8 @@ function ModalPaiement({ commande, loading, onClose, onPay, modes, params = {} }
                 </div>
               )}
               {needRef && !qr && numero && <div style={{ fontSize:12,marginBottom:8,color:'#555' }}>Numéro {moyen?.label} : <b>{numero}</b></div>}
-              {needRef && <input className="input" style={{ fontSize:14 }} placeholder={`Réf. ${moyen?.label} *`} value={ligne.reference} onChange={e=>updateLigne(i,'reference',e.target.value)}/>}
+              {needRef && <div style={{ fontSize:11,color:'#888',marginBottom:6 }}>Vérifiez la notification de paiement reçue sur le téléphone du restaurant, puis encaissez. La référence est facultative.</div>}
+              {needRef && <input className="input" style={{ fontSize:14 }} placeholder={`Réf. ${moyen?.label} (facultatif)`} value={ligne.reference} onChange={e=>updateLigne(i,'reference',e.target.value)}/>}
               {ligne.typePaiement==='ESPECES' && (
                 <div style={{ display:'flex',gap:8,alignItems:'center' }}>
                   <input className="input" style={{ fontSize:14 }} type="number" inputMode="numeric" placeholder="Espèces remises par le client" value={ligne.recu} onChange={e=>updateLigne(i,'recu',e.target.value)}/>

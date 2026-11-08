@@ -143,6 +143,8 @@ router.post('/:id/payer', auth, yakro, resto, can('commande.encaisser'), VALIDAT
     if (params.session_obligatoire === '1' && !await prisma.sessionCaisseYakro.findFirst({ where: { statut: 'OUVERTE', ...sc(req) } })) {
       return res.status(400).json({ error: "Ouvrez d'abord la session de caisse" });
     }
+    // Référence facultative : sans saisie, on génère une référence interne (le caissier confirme sur le téléphone du restaurant)
+    paiements.forEach((p, i) => { if (p.typePaiement !== 'ESPECES' && !String(p.reference || '').trim()) p.reference = `AUTO-${commande.numero}-${p.typePaiement}-${i + 1}`; });
     const totalPaye = paiements.reduce((s, p) => s + Number(p.montant), 0);
     if (Math.abs(totalPaye - commande.total) > 1) {
       return res.status(400).json({ error: `Somme paiements (${totalPaye} F) ≠ total commande (${commande.total} F)` });
