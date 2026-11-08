@@ -69,6 +69,13 @@ function LigneCommande({ cmd }) {
                   <td style={{ textAlign:'right', padding:'4px 0 4px 8px', fontWeight:600 }}>{fmtFull(l.sous_total)}</td>
                 </tr>
               ))}
+              {(cmd.retours||[]).map(r => (
+                <tr key={r.id} style={{ color:'#BA7517' }}>
+                  <td style={{ padding:'4px 8px 4px 0' }}>↩ Retour {r.nom}<div style={{ fontSize:10, fontStyle:'italic' }}>{r.motif}</div></td>
+                  <td style={{ textAlign:'center', padding:'4px 8px' }}>−{r.quantite}</td><td/>
+                  <td style={{ textAlign:'right', padding:'4px 0 4px 8px', fontWeight:600 }}>−{fmtFull(r.montant)}</td>
+                </tr>
+              ))}
               <tr style={{ borderTop:'1.5px solid #e8e7e1', background:'#F7F7F5' }}>
                 <td colSpan={3} style={{ padding:'5px 8px 5px 0', fontWeight:700 }}>TOTAL</td>
                 <td style={{ textAlign:'right', padding:'5px 0 5px 8px', fontFamily:'Syne', fontWeight:800, color:'#8B1A1A' }}>{fmtFull(cmd.total)}</td>
@@ -128,7 +135,7 @@ export default function CaisseYakro({ histo = false }) {
       rows.push([
         c.numero, fmtH(c.createdAt), c.table, c.serveurNom, c.nbCouverts, c.total,
         c.paiements.map(p=>`${MODE_LABELS[p.type]||p.type}:${p.montant}`).join(' / '),
-        c.lignes.map(l=>`${l.nom}×${l.quantite}`).join(', '),
+        c.lignes.map(l=>`${l.nom}×${l.quantite}`).join(', ') + (c.retours?.length ? ' | RETOURS: ' + c.retours.map(r=>`${r.nom}×${r.quantite} −${r.montant}`).join(', ') : ''),
       ]);
     });
     const csv = '\uFEFF' + rows.map(r => r.join(';')).join('\r\n');

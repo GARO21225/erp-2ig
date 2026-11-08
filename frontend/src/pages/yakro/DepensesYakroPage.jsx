@@ -4,6 +4,7 @@ import { yakroAPI, employesAPI } from '../../lib/api';
 import { useYakro } from '../../lib/useYakro';
 import { Plus, X, Check, Paperclip, FileText, Upload } from 'lucide-react';
 import { useAuthStore } from '../../store';
+import { rapportDepensePDF, rapportDepensesExcel } from '../../lib/rapportDepense';
 
 const MODES = ['ESPECES','ORANGE_MONEY','MTN_MONEY','MOOV_MONEY','WAVE','BANQUE'];
 const STATUT_CONFIG = {
@@ -146,7 +147,7 @@ export default function DepensesYakroPage({ histo = false }) {
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
   const rafraichir = () => { qc.invalidateQueries({ queryKey:['depenses-yakro'] }); qc.invalidateQueries({ queryKey:['stats-depenses-yakro'] }); qc.invalidateQueries({ queryKey:['recu-depense'] }); };
 
-  const params = { statut:statutFilter||undefined, nature:natureFilter||undefined, ...(histo ? { du, au, categorie:categorieFilter||undefined } : {}) };
+  const params = { statut:statutFilter||undefined, nature:natureFilter||undefined, archive: histo ? '1' : '0', ...(histo ? { du, au, categorie:categorieFilter||undefined } : {}) };
   const { data } = useQuery({ queryKey:['depenses-yakro', courant?.id, params], queryFn:()=>yakroAPI.depensesYakro(params), staleTime:15000 });
   const { data: stats } = useQuery({ queryKey:['stats-depenses-yakro', courant?.id], queryFn:yakroAPI.statsDepensesYakro, staleTime:60000, enabled:!histo });
   const { data: categories = [] } = useQuery({ queryKey:['cats-dep-yakro'], queryFn:yakroAPI.categoriesDepensesYakro, staleTime:3600000 });
@@ -211,6 +212,7 @@ export default function DepensesYakroPage({ histo = false }) {
           <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:12, alignItems:'end' }}>
             <div><label className="label">Du</label><input className="input" type="date" value={du} onChange={e=>setDu(e.target.value)}/></div>
             <div><label className="label">Au</label><input className="input" type="date" value={au} onChange={e=>setAu(e.target.value)}/></div>
+            <button className="btn btn-ghost btn-sm" disabled={!depenses.length} onClick={()=>rapportDepensesExcel(depenses)}><FileText size={13}/> Rapport détaillé (Excel)</button>
             <div><label className="label">Catégorie</label>
               <select className="input" value={categorieFilter} onChange={e=>setCategorieFilter(e.target.value)}>
                 <option value="">Toutes</option>{(Array.isArray(categories)?categories:[]).map(c=><option key={c} value={c}>{c}</option>)}
@@ -226,7 +228,7 @@ export default function DepensesYakroPage({ histo = false }) {
       )}
 
       <div style={{ display:'flex', gap:6, marginBottom:12, flexWrap:'wrap' }}>
-        {[['','Toutes'],['BROUILLON','À valider'],['VALIDEE','À décaisser'],['PAYEE','À justifier'],['JUSTIFIEE','À clôturer'],['CLOTUREE','Clôturées'],['REJETEE','Rejetées']].map(([k,v])=>(
+        {(histo ? [['','Toutes'],['CLOTUREE','Clôturées'],['REJETEE','Rejetées']] : [['','Toutes'],['BROUILLON','À valider'],['VALIDEE','À décaisser'],['PAYEE','À justifier'],['JUSTIFIEE','À clôturer']]).map(([k,v])=>(
           <button key={k} onClick={()=>setStatutFilter(k)} className={`filter-btn ${statutFilter===k?'active':''}`}
             style={{ background:statutFilter===k?'#8B1A1A':undefined, color:statutFilter===k?'white':undefined }}>{v}</button>
         ))}
@@ -270,6 +272,9 @@ export default function DepensesYakroPage({ histo = false }) {
                 <button className="btn btn-sm btn-ghost" style={{ fontSize:11, color:d.aRecu?'#27500A':'#888' }} onClick={()=>setRecuVu(d)} aria-label="Reçu">
                   {d.aRecu ? <FileText size={12}/> : <Paperclip size={12}/>} {d.aRecu ? 'Reçu' : saisir ? 'Ajouter reçu' : 'Pas de reçu'}
                 </button>
+                {['CLOTUREE','REJETEE'].includes(d.statut) && (
+                  <button className="btn btn-sm btn-ghost" style={{ fontSize:11 }} onClick={async ()=>{ let r=''; if (d.aRecu) { try { r=(await yakroAPI.recuDepenseYakro(d.id)).recu; } catch {} } rapportDepensePDF(d, r, courant?.nom); }}>📄 Rapport PDF</button>
+                )}
                 {!histo && d.statut==='BROUILLON' && estDG && (<>
                   <button className="btn btn-sm" style={{ background:'#1a3f6f', color:'white', border:'none', fontSize:11 }} onClick={()=>validerMut.mutate(d.id)}><Check size={11}/> Valider</button>
                   <button className="btn btn-sm btn-ghost" style={{ fontSize:11, color:'#A32D2D' }} onClick={()=>setEtape({ type:'rejeter', depense:d })}>Rejeter</button>
@@ -291,7 +296,7 @@ export default function DepensesYakroPage({ histo = false }) {
       </div>
 
       {etape && <EtapeModal etape={etape.type} depense={etape.depense} onClose={()=>setEtape(null)} onDone={rafraichir}/>}
-      {recuVu && <VoirRecu depense={recuVu} peutModifier={saisir} onClose={()=>setRecuVu(null)} onChange={rafraichir}/>}
+      {recuVu && <VoirRecu depense={recuVu} peutModifier={saisir && !['CLOTUREE','REJETEE'].includes(recuVu.statut)} onClose={()=>setRecuVu(null)} onChange={rafraichir}/>}
 
       {showCreate && (
         <div className="modal-overlay" onClick={()=>setShowCreate(false)}>

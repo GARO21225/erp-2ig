@@ -21,6 +21,8 @@ router.get('/', auth, yakro, resto, async (req, res) => {
     const { statut, nature, categorie, employeId, du, au, dateDebut } = req.query;
     const where = { ...sc(req) };
     if (statut) where.statut = statut;
+    else if (req.query.archive === '1') where.statut = { in: ['CLOTUREE', 'REJETEE'] };
+    else if (req.query.archive === '0') where.statut = { notIn: ['CLOTUREE', 'REJETEE'] };
     if (nature) where.nature = nature;
     if (categorie) where.categorie = categorie;
     if (employeId) where.employeId = employeId;
@@ -29,7 +31,7 @@ router.get('/', auth, yakro, resto, async (req, res) => {
     else { const d = new Date(); d.setDate(d.getDate() - 30); where.date = { gte: d }; }
     const [data, total, avecRecu] = await Promise.all([
       prisma.depenseYakro.findMany({ where, orderBy: [{ date: 'desc' }, { createdAt: 'desc' }], take: 500, omit: { recu: true } }),
-      prisma.depenseYakro.groupBy({ by: ['nature'], _sum: { montant: true }, where: { ...where, statut: where.statut || { not: 'REJETEE' } } }),
+      prisma.depenseYakro.groupBy({ by: ['nature'], _sum: { montant: true }, where: { ...where, statut: typeof where.statut === 'string' ? where.statut : where.statut?.in ? { in: where.statut.in.filter(s => s !== 'REJETEE') } : where.statut?.notIn ? where.statut : { not: 'REJETEE' } } }),
       prisma.depenseYakro.findMany({ where: { ...where, NOT: { recu: null } }, select: { id: true } }),
     ]);
     const ids = new Set(avecRecu.map(r => r.id));
@@ -83,8 +85,9 @@ router.put('/:id/recu', auth, yakro, resto, can('depenses.saisir'), async (req, 
   try {
     const { recu } = req.body;
     if (recu && !RECU_OK(recu)) return res.status(400).json({ error: 'Reçu invalide (image PNG/JPEG/WebP ou PDF, 1 Mo max)' });
-    const ok = await prisma.depenseYakro.findFirst({ where: { id: req.params.id, ...sc(req) }, select: { id: true } });
+    const ok = await prisma.depenseYakro.findFirst({ where: { id: req.params.id, ...sc(req) }, select: { id: true, statut: true } });
     if (!ok) return res.status(404).json({ error: 'Dépense introuvable' });
+    if (['CLOTUREE', 'REJETEE'].includes(ok.statut)) return res.status(403).json({ error: 'Dépense clôturée : le justificatif ne peut plus être modifié' });
     await prisma.depenseYakro.update({ where: { id: ok.id }, data: { recu: recu || null } });
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }

@@ -366,6 +366,18 @@ router.get('/caisse-detail', auth, yakro, resto, async (req, res) => {
       parCateg[cat] = (parCateg[cat] || 0) + montant;
     }
 
+    // Retours d'articles du jour : déduits du bar / de la cuisine
+    const retoursJour = await prisma.retourArticleYakro.findMany({ where: { createdAt: { gte: auj, lt: demain }} }).catch(() => []);
+    const cmdsOk = new Set((await prisma.commandeYakro.findMany({ where: { statut: 'PAYEE', createdAt: { gte: auj, lt: demain }, ...sc(req) }, select: { id: true } })).map(c => c.id));
+    const menusRet = await prisma.menuYakro.findMany({ where: { id: { in: retoursJour.map(r => r.menuId).filter(Boolean) } }, select: { id: true, categorie: true } });
+    const catDe = new Map(menusRet.map(m => [m.id, m.categorie]));
+    for (const r of retoursJour) {
+      if (!cmdsOk.has(r.commandeId)) continue;
+      const cat = catDe.get(r.menuId) || 'AUTRE';
+      if (CATS_BAR.includes(cat)) totalBar -= r.montantDeduit; else totalCuisine -= r.montantDeduit;
+      parCateg[cat] = (parCateg[cat] || 0) - r.montantDeduit;
+    }
+
     const paiements = await prisma.paiementYakro.groupBy({
       by: ['type'],
       _sum: { montant: true },
@@ -406,7 +418,9 @@ router.get('/historique', auth, yakro, resto, async (req, res) => {
       take: Number(limit),
     });
 
+    const rets = commandes.length ? await prisma.retourArticleYakro.findMany({ where: { commandeId: { in: commandes.map(c => c.id) } }, orderBy: { createdAt: 'asc' } }).catch(() => []) : [];
     res.json(commandes.map(c => ({
+      retours: rets.filter(r => r.commandeId === c.id).map(r => ({ id: r.id, nom: r.menuNom, quantite: r.quantite, montant: r.montantDeduit, motif: r.motif, valide: r.valide })),
       id: c.id,
       numero: c.numero,
       table: c.table ? `Table ${c.table.numero} — ${c.table.zone}` : 'Emporter',
