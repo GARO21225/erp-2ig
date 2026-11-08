@@ -302,10 +302,11 @@ function OngletEquipe({ r }) {
 // ── Page ───────────────────────────────────────────────────────────────────
 export default function ParametrageRestaurantPage() {
   const { courant, restaurants, peut, isLoading } = useYakro();
-  const [onglet, setOnglet] = useState('restaurants');
+  const [onglet, setOnglet] = useState('general');
+  const [vue, setVue] = useState(null);
+  const enListe = (vue ?? (peut('restaurants.gerer') ? 'liste' : 'detail')) === 'liste';
 
   const onglets = [
-    { id: 'restaurants', label: 'Mes restaurants', visible: peut('restaurants.gerer') },
     { id: 'general', label: 'Général', visible: peut('parametres.gerer') },
     { id: 'prix', label: 'Prix', visible: peut('prix.gerer') || peut('menu.voir') },
     { id: 'parametres', label: 'Paramètres', visible: peut('parametres.gerer') },
@@ -315,12 +316,14 @@ export default function ParametrageRestaurantPage() {
   const actif = onglets.find(o => o.id === onglet) || onglets[0];
 
   if (isLoading) return <div style={{ padding: 40, textAlign: 'center', color: '#888', fontSize: 13 }}>Chargement...</div>;
+  if (enListe) return <RestaurantsPage onParametrer={() => { setOnglet('general'); setVue('detail'); }} />;
   if (!courant) return <div className="card" style={{ fontSize: 13 }}>Aucun restaurant accessible.</div>;
   if (!actif) return <div className="card" style={{ fontSize: 13 }}>Vous n'avez pas accès au paramétrage de ce restaurant.</div>;
 
   return (
     <div className="page-enter">
       <div style={{ marginBottom: 14 }}>
+        {peut('restaurants.gerer') && <button className="btn btn-sm btn-ghost" style={{ marginBottom: 8 }} onClick={() => setVue('liste')}>← Mes restaurants</button>}
         <h1 style={{ margin: 0, fontSize: 20, fontFamily: 'Syne', fontWeight: 800 }}>Paramétrage — {courant.nom}</h1>
         <div style={{ fontSize: 12, color: '#888', marginTop: 3 }}>Votre profil ici : {courant.profil}</div>
       </div>
@@ -334,7 +337,6 @@ export default function ParametrageRestaurantPage() {
       {actif.id === 'parametres' && <OngletParametres r={courant} peutModifier={peut('parametres.gerer')} />}
       {actif.id === 'equipe' && <OngletEquipe r={courant} />}
       {actif.id === 'tables' && <TablesPage />}
-      {actif.id === 'restaurants' && <RestaurantsPage />}
     </div>
   );
 }

@@ -8,7 +8,7 @@ import { useYakro } from '../../lib/useYakro';
 
 const VIDE = { nom: '', ville: '', adresse: '', telephone: '', nbTables: 10, copierPrixDe: '', pourcentage: 0, gerantId: '' };
 
-export default function RestaurantsPage() {
+export default function RestaurantsPage({ onParametrer }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const setRestaurant = useRestoStore(s => s.setRestaurant);
@@ -67,7 +67,7 @@ export default function RestaurantsPage() {
               </div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 'auto' }}>
                 <button className="btn btn-sm" style={{ background: '#8B1A1A', color: 'white', border: 'none' }} onClick={() => aller(r, '/yakro/pos')}><ShoppingBag size={13} /> Ouvrir</button>
-                <button className="btn btn-sm btn-ghost" onClick={() => aller(r, '/yakro/parametrage')}><Settings size={13} /> Paramétrer</button>
+                <button className="btn btn-sm btn-ghost" onClick={() => onParametrer ? (setRestaurant(r.id), qc.invalidateQueries({ predicate: q => q.queryKey[0] !== 'yakro-moi' }), onParametrer(r)) : aller(r, '/yakro/parametrage')}><Settings size={13} /> Paramétrer</button>
                 {peut('restaurants.gerer') && restaurants.length > 1 && (
                   <button className="btn btn-sm btn-ghost" style={{ color: '#A32D2D' }}
                     onClick={() => window.confirm(`Désactiver ${r.nom} ? L'historique est conservé.`) && desactiver.mutate(r.id)}>Désactiver</button>
