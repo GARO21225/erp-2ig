@@ -1,6 +1,17 @@
-# HTTPS automatique (certificat Let's Encrypt reconnu par les navigateurs, aucun avertissement).
-# {$DOMAIN} = nom de domaine ; par défaut 204-168-229-74.sslip.io, qui pointe vers l'IP du serveur sans rien acheter.
-{$DOMAIN} {
+# HTTPS sur un port dédié (comme RZI Camp : https://domaine:PORT), certificat Let's Encrypt reconnu.
+# La validation passe par le DNS Porkbun : ni le port 80 ni le 443 du serveur ne sont utilisés.
+{
+	https_port 8443
+	auto_https disable_redirects
+}
+
+{$DOMAIN}:8443 {
+	tls {
+		dns porkbun {
+			api_key {env.PORKBUN_API_KEY}
+			api_secret_key {env.PORKBUN_API_SECRET_KEY}
+		}
+	}
 	encode gzip
 	handle /api/* {
 		reverse_proxy erp-backend:4000

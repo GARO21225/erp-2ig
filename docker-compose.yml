@@ -38,17 +38,18 @@ services:
     depends_on:
       - backend
 
-  # HTTPS : certificat Let's Encrypt automatique (ports 80 et 443 du serveur à ouvrir)
+  # HTTPS sur le port 8443 (certificat Let's Encrypt via DNS Porkbun) : https://${DOMAIN}:8443
   caddy:
     build:
       context: ./caddy
     container_name: erp-caddy
     restart: always
     environment:
-      DOMAIN: ${DOMAIN:-204-168-229-74.sslip.io}
+      DOMAIN: ${DOMAIN:-yakro.roxgold-sitelife.com}
+      PORKBUN_API_KEY: ${PORKBUN_API_KEY:-}
+      PORKBUN_API_SECRET_KEY: ${PORKBUN_API_SECRET_KEY:-}
     ports:
-      - "80:80"
-      - "443:443"
+      - "8443:8443"
     volumes:
       - caddy_data:/data
       - caddy_config:/config
