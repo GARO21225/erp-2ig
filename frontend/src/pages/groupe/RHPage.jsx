@@ -269,6 +269,11 @@ function EmployeDetail({ employe, onClose, onEdit, onSuspend, onReintegre, onQui
             <div>
               <div style={{ fontFamily:'Syne', fontWeight:700, fontSize:16 }}>{employe.prenom} {employe.nom}</div>
               <div style={{ fontSize:12, color:'#888' }}>{employe.poste} · {employe.matricule}</div>
+              {employe.filiale === 'YAKRO_GRILL' && (
+                <div style={{ fontSize:12, marginTop:3, color: employe.restaurants?.length ? '#8B1A1A' : '#B97A18', fontWeight:600 }}>
+                  🍽 {employe.restaurants?.length ? employe.restaurants.join(', ') : 'Non affecté à un restaurant'}
+                </div>
+              )}
               <div style={{ display:'flex', gap:6, marginTop:6 }}>
                 <a href={`tel:${employe.telephone}`} style={{ padding:'3px 10px', borderRadius:6, background:'#EAF3DE', color:'#27500A', textDecoration:'none', fontSize:11 }}>📞 Appeler</a>
                 <a href={`https://wa.me/${tel}`} target="_blank" rel="noreferrer" style={{ padding:'3px 10px', borderRadius:6, background:'#FFF0EB', color:'#E85D04', textDecoration:'none', fontSize:11 }}>📱 WhatsApp</a>
@@ -487,7 +492,7 @@ export default function RHPage() {
         ) : (
           <table className="table-erp">
             <thead>
-              <tr><th>Employé</th><th>Poste</th><th>Filiale</th><th>Contact</th><th>Embauche</th><th>Salaire</th><th>Statut</th><th></th></tr>
+              <tr><th>Employé</th><th>Poste</th><th>Filiale</th><th>Restaurant</th><th>Contact</th><th>Embauche</th><th>Salaire</th><th>Statut</th><th></th></tr>
             </thead>
             <tbody>
               {employes.map(e => (
@@ -505,6 +510,11 @@ export default function RHPage() {
                   </td>
                   <td style={{ fontSize:13 }}>{e.poste}</td>
                   <td><span className={`badge badge-${e.filiale==='YAKRO_GRILL'?'yakro':e.filiale==='LIYA'?'liya':'toptelsig'}`}>{FILIALES_LABELS[e.filiale]||e.filiale}</span></td>
+                  <td style={{ fontSize:12 }}>
+                    {e.filiale !== 'YAKRO_GRILL' ? <span style={{ color:'#bbb' }}>—</span>
+                      : e.restaurants?.length ? e.restaurants.map(r => <span key={r} style={{ display:'inline-block', margin:'1px 4px 1px 0', padding:'2px 8px', borderRadius:10, background:'#FDF2F2', color:'#8B1A1A', fontWeight:600 }}>🍽 {r}</span>)
+                      : <span style={{ color:'#B97A18' }} title={e.utilisateurId ? 'Compte non affecté à un restaurant' : 'Aucun compte utilisateur lié'}>Non affecté</span>}
+                  </td>
                   <td>
                     <div style={{ display:'flex', alignItems:'center', gap:5, fontSize:12 }}>
                       <span style={{ color:'#666' }}>{e.telephone}</span>

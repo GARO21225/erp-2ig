@@ -57,7 +57,6 @@ export default function StocksPage() {
   const [typeTab, setTypeTab] = useState('BOISSON'); // BOISSON | INGREDIENT
   const [vue, setVue] = useState(null); // article affiché en grand
   const [edition, setEdition] = useState(null); // produit en cours de modification
-  const importRzi = useRef(null);
   // Les boissons du menu Yakro doivent toutes figurer au stock : synchronisation automatique (sans effet si déjà fait)
   useEffect(() => {
     if (filiale === 'TOPTELSIG' || filiale === 'LIYA') return;
@@ -119,26 +118,6 @@ export default function StocksPage() {
   });
   const ouvrirCreation = () => { setEdition(null); setForm(FORM_VIDE(typeTab)); setShowCreate(true); };
   const ouvrirEdition = (p) => { setEdition(p); setForm({ ...FORM_VIDE(p.type), ...p, imageUrl:p.imageUrl||'', lien:p.lien||'' }); setShowCreate(true); };
-
-  const importerRzi = async (e) => {
-    const f = e.target.files?.[0]; e.target.value = '';
-    if (!f) return;
-    try {
-      const articles = JSON.parse(await f.text());
-      const creer = confirm('Créer aussi dans le stock Yakro les boissons RZI-Camp qui n\u2019existent pas encore ?\n\nOK = oui, Annuler = mettre à jour seulement les images des boissons existantes');
-      const r = await stocksAPI.importBoissons({ articles, creerManquants: creer });
-      qc.invalidateQueries(['produits']);
-      showToast(`✅ ${r.misAJour} mise(s) à jour · ${r.crees} créée(s)${r.sansMatch?` · ${r.sansMatch} sans correspondance`:''}${r.imagesIgnorees?` · ${r.imagesIgnorees} image(s) trop lourde(s)`:''}`);
-    } catch (err) { showToast('Fichier invalide ou erreur : ' + (err?.response?.data?.error || err.message), 'error'); }
-  };
-  const mvtMut = useMutation({
-    mutationFn: (data) => {
-      if (data.type === 'PERTE' && (!data.motif || !data.typeMotif)) return Promise.reject({ message: 'Motif obligatoire pour une perte' });
-      return stocksAPI.addMouvement(data);
-    },
-    onSuccess: () => { qc.invalidateQueries(['produits']); setShowMvt(null); showToast('Mouvement enregistré ✓'); },
-    onError: e => showToast(e?.message || 'Erreur', 'error'),
-  });
 
   const seedYakro = async () => {
     if (!confirm('Initialiser le stock Yakro Grill (articles déjà existants = ignorés) ?')) return;
@@ -229,10 +208,6 @@ export default function StocksPage() {
             disabled={seeding} onClick={seedYakro}>
             {seeding ? '⏳' : '🔥'} Init. Yakro
           </button>
-          {typeTab==='BOISSON' && <>
-            <input ref={importRzi} type="file" accept=".json,application/json" style={{ display:'none' }} onChange={importerRzi}/>
-            <button className="btn btn-ghost btn-sm" onClick={()=>importRzi.current?.click()}><ImagePlus size={13}/> Importer fichier RZI-Camp</button>
-          </>}
           <button className="btn btn-primary btn-sm" style={{ background:'#1a3f6f', border:'none' }}
             onClick={ouvrirCreation}><Plus size={13}/> {typeTab==='BOISSON' ? 'Boisson' : 'Ingrédient'}</button>
         </div>

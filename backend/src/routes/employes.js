@@ -4,6 +4,26 @@ const prisma = require('../lib/prisma');
 const { auth, requireRole } = require('../middleware/auth');
 
 // GET /api/employes
+// Restaurants Yakro Grill auxquels chaque employé est affecté (via son compte utilisateur)
+async function avecRestaurants(employes) {
+  try {
+    const ids = employes.map(e => e.utilisateurId).filter(Boolean);
+    if (!ids.length) return employes.map(e => ({ ...e, restaurants: [] }));
+    const [acces, users] = await Promise.all([
+      prisma.accesRestaurantYakro.findMany({ where: { utilisateurId: { in: ids } } }),
+      prisma.utilisateur.findMany({ where: { id: { in: ids } }, select: { id: true, role: true } }),
+    ]);
+    const restos = await prisma.restaurantYakro.findMany({ where: { id: { in: [...new Set(acces.map(a => a.restaurantId))] } }, select: { id: true, nom: true } });
+    const nom = Object.fromEntries(restos.map(r => [r.id, r.nom]));
+    const role = Object.fromEntries(users.map(u => [u.id, u.role]));
+    return employes.map(e => ({
+      ...e,
+      restaurants: ['DG', 'DIRECTEUR'].includes(role[e.utilisateurId]) ? ['Tous les restaurants']
+        : acces.filter(a => a.utilisateurId === e.utilisateurId).map(a => nom[a.restaurantId]).filter(Boolean),
+    }));
+  } catch { return employes.map(e => ({ ...e, restaurants: [] })); }
+}
+
 router.get('/', auth, async (req, res) => {
   try {
     const { filiale, statut, search, page = 1, limit = 20 } = req.query;
@@ -43,6 +63,7 @@ router.get('/', auth, async (req, res) => {
       ]);
     }
 
+    employes = await avecRestaurants(employes);
     res.json({ data: employes, total, page: Number(page), pages: Math.ceil(total / limit) });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -66,7 +87,7 @@ router.get('/:id', auth, async (req, res) => {
       }
     });
     if (!employe) return res.status(404).json({ error: 'Employé introuvable' });
-    res.json(employe);
+    res.json((await avecRestaurants([employe]))[0]);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
