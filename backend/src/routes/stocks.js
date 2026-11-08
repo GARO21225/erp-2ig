@@ -337,21 +337,28 @@ router.post('/maj-masse', auth, async (req, res) => {
 
 router.get('/mouvements', auth, async (req, res) => {
   try {
-    const { filiale, produitId, type, page = 1, limit = 30 } = req.query;
+    const { filiale, produitId, type, du, au, q, page = 1, limit = 30 } = req.query;
     const where = {};
     const f = filialeAutorisee(req, filiale);
     if (f) where.filiale = f;
     if (produitId) where.produitId = produitId;
     if (type) where.type = type;
+    if (du || au) { where.createdAt = {}; if (du) where.createdAt.gte = new Date(du); if (au) where.createdAt.lte = new Date(`${au}T23:59:59.999Z`); }
+    if (q) where.produit = { nom: { contains: String(q), mode: 'insensitive' } };
+    const take = Math.min(Number(limit) || 30, 1000);
 
     const data = await prisma.mouvementStock.findMany({
       where,
-      skip: (page - 1) * limit,
-      take: Number(limit),
+      skip: (page - 1) * take,
+      take,
       orderBy: { createdAt: 'desc' },
-      include: { produit: { select: { nom: true, reference: true } } }
+      include: { produit: { select: { nom: true, reference: true, unite: true, categorie: true } } }
     });
-    res.json(data);
+    // Nom de l'opérateur qui a enregistré le mouvement
+    const ids = [...new Set(data.map(m => m.operateurId).filter(Boolean))];
+    const users = ids.length ? await prisma.utilisateur.findMany({ where: { id: { in: ids } }, select: { id: true, prenom: true, nom: true } }) : [];
+    const nom = new Map(users.map(u => [u.id, `${u.prenom} ${u.nom}`]));
+    res.json(data.map(m => ({ ...m, operateur: nom.get(m.operateurId) || (m.operateurId ? '—' : 'Système') })));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
