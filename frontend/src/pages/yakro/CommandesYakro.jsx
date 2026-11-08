@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { yakroAPI } from '../../lib/api';
-import { ChefHat, CheckCircle, Eye, X, Printer } from 'lucide-react';
+import { ChefHat, CheckCircle, Eye, X, Printer, Clock } from 'lucide-react';
 import FilterBar from '../../components/ui/FilterBar';
 import ExportBar from '../../components/ui/ExportBar';
 import { exportTicketYakro, exportPDF } from '../../lib/export';
@@ -23,7 +23,7 @@ function DetailCommande({ commande, onClose, onUpdateStatut }) {
 
   const imprimerTicket = () => {
     const lignes = commande.lignes?.map(l => [
-      `${l.quantite}×`, l.produit?.nom || `Article #${l.id.slice(-4)}`,
+      `${l.quantite}×`, l.menu?.nom || l.produit?.nom || `Article #${String(l.id).slice(-4)}`,
       `${l.prixUnitaire?.toLocaleString('fr')} F`,
       `${(l.prixUnitaire * l.quantite)?.toLocaleString('fr')} F`,
     ]) || [];
@@ -56,7 +56,7 @@ function DetailCommande({ commande, onClose, onUpdateStatut }) {
             <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '0.5px solid #f0efe9' }}>
               <div>
                 <span style={{ fontWeight: 500, fontSize: 13 }}>{l.quantite}×</span>
-                <span style={{ fontSize: 13, marginLeft: 6 }}>{l.produit?.nom || `Article ${l.prixUnitaire}F`}</span>
+                <span style={{ fontSize: 13, marginLeft: 6 }}>{l.menu?.nom || l.produit?.nom || `Article ${l.prixUnitaire}F`}</span>
                 {l.notes && <div style={{ fontSize: 11, color: '#888', fontStyle: 'italic' }}>{l.notes}</div>}
               </div>
               <span style={{ fontWeight: 600, fontSize: 13, color: '#8B1A1A' }}>{(l.prixUnitaire * l.quantite).toLocaleString('fr')} F</span>
