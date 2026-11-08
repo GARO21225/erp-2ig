@@ -5,8 +5,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { stocksAPI, imgSrc } from '../../lib/api';
+import { exportExcel, parseExcel } from '../../lib/export';
 import { useAuthStore } from '../../store';
-import { Plus, AlertTriangle, X, Upload, Download, RefreshCw, BarChart2, Package, Pencil, ExternalLink, ImagePlus } from 'lucide-react';
+import { Plus, AlertTriangle, X, Upload, Download, RefreshCw, BarChart2, Package, Pencil, ExternalLink, ImagePlus, Check } from 'lucide-react';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmtF = n => n >= 1000000 ? `${(n/1000000).toFixed(1)}M F` : n >= 1000 ? `${Math.round(n/1000)}k F` : `${Math.round(n||0)} F`;
@@ -130,51 +131,49 @@ export default function StocksPage() {
     finally { setSeeding(false); }
   };
 
+  // ── Export / import Excel : le même fichier sert à exporter, corriger hors ligne puis réimporter ──
+  const ENTETES = ['Référence','Nom','Catégorie','Unité','Stock actuel','Entrée à ajouter','Prix achat','Prix vente','Seuil alerte','Seuil critique','Lien'];
   const handleExport = () => {
-    const rows = [['Référence','Nom','Catégorie','Unité','Stock','Seuil alerte','Seuil critique','Prix achat','Prix vente','Statut']];
-    filtered.forEach(p => {
-      const n = getNiveau(p);
-      rows.push([p.reference||'',p.nom,CATS_LABELS[p.categorie]||p.categorie,p.unite,p.stockTotal||0,p.stockAlert||0,p.stockMinimum||0,p.prixAchat||0,p.prixVente||0,n.label]);
-    });
-    const csv = '\uFEFF' + rows.map(r => r.join(';')).join('\r\n');
-    const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href=url; a.download=`stock_${filialeFilter}_${new Date().toISOString().slice(0,10)}.csv`; a.click();
-    URL.revokeObjectURL(url);
+    exportExcel(`stock_${typeTab==='BOISSON'?'boissons':'ingredients'}`, 'Stock', ENTETES,
+      filtered.map(p => [p.reference||'', p.nom, p.categorie, p.unite||'', p.stockTotal||0, '', p.prixAchat||0, p.prixVente||0, p.stockAlert||0, p.stockMinimum||0, p.lien||'']));
   };
-
+  const CLES = { 'reference':'reference','nom':'nom','categorie':'categorie','unite':'unite','stock actuel':'stock','stock':'stock','entree a ajouter':'entree','entree':'entree','prix achat':'prixAchat','prix vente':'prixVente','seuil alerte':'stockAlert','seuil critique':'stockMinimum','lien':'lien' };
+  const sansAccent = (t) => String(t).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+  const majMasse = useMutation({
+    mutationFn: (lignes) => stocksAPI.majMasse({ filiale: filialeFilter || 'YAKRO_GRILL', type: typeTab, lignes }),
+    onSuccess: (r) => {
+      qc.invalidateQueries(['produits']); setModifs({}); setModeEdition(false);
+      showToast(`✓ ${r.crees} créé(s), ${r.majs} modifié(s), ${r.mouvements} mouvement(s) de stock`);
+      if (r.erreurs?.length) alert(`${r.erreurs.length} ligne(s) ignorée(s) :\n` + r.erreurs.slice(0,10).map(e => `Ligne ${e.ligne} : ${e.message}`).join('\n'));
+    },
+    onError: e => showToast(e?.error || e?.response?.data?.error || 'Erreur', 'error'),
+  });
   const handleImport = async (e) => {
-    const file = e.target.files?.[0];
+    const file = e.target.files?.[0]; e.target.value = '';
     if (!file) return;
     try {
-      const text = await file.text();
-      const rows = text.split('\n').map(r => r.split(';').map(c => c.trim().replace(/^"(.*)"$/, '$1')));
-      const headers = rows[0].map(h => h.toLowerCase().replace(/[éèê]/g,'e').replace(/[àâ]/g,'a'));
-      const data = rows.slice(1).filter(r => r.some(c => c));
-      let created = 0;
-      for (const row of data) {
-        const get = (k) => row[headers.indexOf(k)] || '';
-        const nom = get('nom');
-        if (!nom) continue;
-        try {
-          await stocksAPI.createProduit({
-            nom, reference: get('reference') || `IMP-${Date.now().toString(36)}`,
-            categorie: get('categorie') || 'AUTRE',
-            unite: get('unite') || 'unité',
-            prixAchat: Number(get('prix achat') || get('prixachat') || 0),
-            prixVente: Number(get('prix vente') || get('prixvente') || 0),
-            stockAlert: Number(get('seuil alerte') || get('stockalert') || 5),
-            stockMinimum: Number(get('seuil critique') || get('stockminimum') || 3),
-            filiale: filialeFilter || 'YAKRO_GRILL',
-          });
-          created++;
-        } catch {}
-      }
-      qc.invalidateQueries(['produits']);
-      showToast(`${created} produit(s) importé(s) ✓`);
-    } catch (err) { showToast('Erreur import: ' + err.message, 'error'); }
-    e.target.value = '';
+      const { entetes, lignes } = await parseExcel(file);
+      const cles = entetes.map(h => CLES[sansAccent(h)]);
+      if (!cles.includes('nom') && !cles.includes('reference')) return showToast('Colonne « Nom » ou « Référence » introuvable : utilisez le fichier exporté', 'error');
+      majMasse.mutate(lignes.map(r => Object.fromEntries(cles.map((k,i) => [k, r[i]]).filter(([k]) => k))));
+    } catch (err) { showToast('Erreur import : ' + err.message, 'error'); }
   };
+
+  // ── Édition directe dans le tableau ──
+  const [modeEdition, setModeEdition] = useState(false);
+  const [modifs, setModifs] = useState({});
+  const nbModifs = Object.keys(modifs).length;
+  const champ = (p, k, def) => (
+    <input type="number" min="0" step="any" value={modifs[p.id]?.[k] ?? def ?? 0} aria-label={`${k} ${p.nom}`}
+      onChange={e => setModifs(m => ({ ...m, [p.id]: { ...m[p.id], [k]: e.target.value } }))}
+      style={{ width:76, padding:'5px 6px', textAlign:'right', border:'1px solid #cdd6e6', borderRadius:6, fontSize:12 }}/>
+  );
+  const enregistrerTableau = () => majMasse.mutate(Object.entries(modifs).map(([id, v]) => ({ id, ...v })));
+  const mvtMut = useMutation({
+    mutationFn: (d) => stocksAPI.addMouvement(d),
+    onSuccess: () => { qc.invalidateQueries(['produits']); setShowMvt(null); setMvtForm({ type:'ENTREE', quantite:'', motif:'', typeMotif:'' }); showToast('Mouvement enregistré ✓'); },
+    onError: e => showToast(e?.error || e?.response?.data?.error || 'Erreur', 'error'),
+  });
 
   return (
     <div className="page-enter">
@@ -187,23 +186,15 @@ export default function StocksPage() {
           </p>
         </div>
         <div style={{ display:'flex', gap:8 }}>
-          <button className="btn btn-ghost btn-sm" onClick={handleExport}><Download size={13}/> Exporter</button>
-          <input ref={importRef} type="file" accept=".csv,.xlsx" style={{ display:'none' }} onChange={handleImport}/>
-          <button className="btn btn-ghost btn-sm" style={{ color:'#1a3f6f', borderColor:'#1a3f6f30' }}
-            onClick={async () => {
-              // Template CSV stock
-              const headers = ['reference','nom','categorie','unite','prixAchat','prixVente','stockAlert','stockMinimum'];
-              const examples = [
-                ['YG-VIAN-001','Poulet de chair (kg)','VIANDES_PROTEINES','kg',2500,3500,10,5],
-                ['YG-BOI-001','Heineken (casier 24)','BOISSONS','casier',18000,30000,5,2],
-              ];
-              const csv = '\uFEFF' + [headers, ...examples].map(r => r.join(';')).join('\r\n');
-              const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a'); a.href=url; a.download='template_stock_2ig.csv'; a.click();
-              URL.revokeObjectURL(url);
-            }}>📥 Template</button>
-          <button className="btn btn-ghost btn-sm" onClick={()=>importRef.current?.click()}><Upload size={13}/> Importer</button>
+          <button className="btn btn-ghost btn-sm" onClick={handleExport}><Download size={13}/> Exporter Excel</button>
+          <input ref={importRef} type="file" accept=".xlsx,.xls,.csv" style={{ display:'none' }} onChange={handleImport}/>
+          <button className="btn btn-ghost btn-sm" disabled={majMasse.isPending} onClick={()=>importRef.current?.click()}><Upload size={13}/> Importer Excel</button>
+          {modeEdition
+            ? <>
+                <button className="btn btn-primary btn-sm" disabled={!nbModifs||majMasse.isPending} style={{ background:'#27500A', border:'none' }} onClick={enregistrerTableau}><Check size={13}/> Enregistrer ({nbModifs})</button>
+                <button className="btn btn-ghost btn-sm" onClick={()=>{setModeEdition(false);setModifs({});}}>Annuler</button>
+              </>
+            : <button className="btn btn-ghost btn-sm" style={{ color:'#1a3f6f', borderColor:'#1a3f6f30' }} onClick={()=>setModeEdition(true)}><Pencil size={13}/> Modifier le tableau</button>}
           <button className="btn btn-ghost btn-sm" style={{ color:'#8B1A1A', borderColor:'#8B1A1A20', background:'#FDF2F2' }}
             disabled={seeding} onClick={seedYakro}>
             {seeding ? '⏳' : '🔥'} Init. Yakro
@@ -326,6 +317,7 @@ export default function StocksPage() {
                     <th style={{ textAlign:'right' }}>🟠 Alerte</th>
                     <th style={{ textAlign:'right' }}>🔴 Critique</th>
                     <th style={{ textAlign:'right' }}>Prix achat</th>
+                    <th style={{ textAlign:'right' }}>Prix vente</th>
                     <th style={{ textAlign:'right' }}>Valeur</th>
                     <th></th>
                   </tr>
@@ -351,11 +343,12 @@ export default function StocksPage() {
                         </td>
                         <td><span style={{ fontSize:10, background:'#F7F7F5', borderRadius:6, padding:'2px 6px' }}>{CATS_LABELS[p.categorie]?.split(' ').slice(1).join(' ')||p.categorie}</span></td>
                         <td style={{ textAlign:'right', fontFamily:'Syne', fontWeight:800, fontSize:14, color:n.color }}>
-                          {p.stockTotal||0} <span style={{ fontSize:10, fontWeight:400 }}>{p.unite}</span>
+                          {modeEdition ? champ(p,'stock',p.stockTotal) : <>{p.stockTotal||0} <span style={{ fontSize:10, fontWeight:400 }}>{p.unite}</span></>}
                         </td>
-                        <td style={{ textAlign:'right', fontSize:11, color:'#888' }}>{p.stockAlert||0}</td>
-                        <td style={{ textAlign:'right', fontSize:11, color:'#888' }}>{p.stockMinimum||0}</td>
-                        <td style={{ textAlign:'right', fontSize:12 }}>{fmtF(p.prixAchat||0)}</td>
+                        <td style={{ textAlign:'right', fontSize:11, color:'#888' }}>{modeEdition ? champ(p,'stockAlert',p.stockAlert) : (p.stockAlert||0)}</td>
+                        <td style={{ textAlign:'right', fontSize:11, color:'#888' }}>{modeEdition ? champ(p,'stockMinimum',p.stockMinimum) : (p.stockMinimum||0)}</td>
+                        <td style={{ textAlign:'right', fontSize:12 }}>{modeEdition ? champ(p,'prixAchat',p.prixAchat) : fmtF(p.prixAchat||0)}</td>
+                        <td style={{ textAlign:'right', fontSize:12 }}>{modeEdition ? champ(p,'prixVente',p.prixVente) : fmtF(p.prixVente||0)}</td>
                         <td style={{ textAlign:'right', fontSize:12, fontWeight:600, color:'#1a3f6f' }}>
                           {fmtF((p.stockTotal||0)*(p.prixAchat||0))}
                         </td>
@@ -369,7 +362,7 @@ export default function StocksPage() {
                     );
                   })}
                   {filtered.length === 0 && (
-                    <tr><td colSpan={10}>
+                    <tr><td colSpan={11}>
                       <div className="empty-state">
                         <Package size={28} color="#ddd"/>
                         <p style={{ marginTop:8 }}>

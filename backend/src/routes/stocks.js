@@ -175,6 +175,25 @@ router.post('/sync-menu', auth, async (req, res) => {
 // Mouvements de stock
 const MOTIFS_PERTE = ['PEREMPTION', 'CASSE', 'VOL', 'CONSO_INTERNE', 'OFFERT_CLIENT'];
 
+/** Applique un mouvement au stock : ENTREE (+), SORTIE/PERTE (−, jamais sous zéro), INVENTAIRE (quantité réelle comptée). */
+async function appliquerMouvement(tx, { produitId, filiale, depot = 'Principal', type, qte }) {
+  const rows = await tx.stock.findMany({ where: { produitId, filiale } });
+  const total = rows.reduce((s, r) => s + r.quantite, 0);
+  const principal = rows.find(r => r.depot === depot)?.quantite || 0;
+  let nouveau;
+  if (type === 'ENTREE') nouveau = principal + qte;
+  else if (type === 'INVENTAIRE') nouveau = Math.max(0, qte - (total - principal));
+  else {
+    if (qte > total) { const e = new Error(`Stock insuffisant (disponible : ${total})`); e.statut = 400; throw e; }
+    nouveau = Math.max(0, principal - qte);
+  }
+  await tx.stock.upsert({
+    where: { produitId_filiale_depot: { produitId, filiale, depot } },
+    create: { produitId, filiale, depot, quantite: nouveau },
+    update: { quantite: nouveau },
+  });
+}
+
 router.post('/mouvements', auth, async (req, res) => {
   try {
     const { produitId, type, quantite, motif, typeMotif, depot = 'Principal' } = req.body;
@@ -202,13 +221,7 @@ router.post('/mouvements', auth, async (req, res) => {
         data: { produitId, filiale, type, quantite: qte, motif, typeMotif, operateurId: req.user.id }
       });
 
-      const delta = ['ENTREE', 'INVENTAIRE'].includes(type) ? qte : -qte;
-
-      await tx.stock.upsert({
-        where: { produitId_filiale_depot: { produitId, filiale, depot } },
-        create: { produitId, filiale, depot, quantite: Math.max(0, delta) },
-        update: { quantite: { increment: delta } }
-      });
+      await appliquerMouvement(tx, { produitId, filiale, depot, type, qte });
 
       // Audit
       await tx.auditLog.create({
@@ -229,8 +242,64 @@ router.post('/mouvements', auth, async (req, res) => {
 
     res.status(201).json(mouvement);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(e.statut || 500).json({ error: e.message });
   }
+});
+
+// Mise à jour en masse (import Excel et édition directe du tableau)
+// ligne : { id? reference? nom, categorie, unite, prixAchat, prixVente, stockAlert, stockMinimum, stock (quantité réelle comptée), entree (quantité reçue à ajouter) }
+router.post('/maj-masse', auth, async (req, res) => {
+  try {
+    const filiale = filialeAutorisee(req, req.body.filiale);
+    const type = req.body.type === 'BOISSON' ? 'BOISSON' : 'INGREDIENT';
+    const lignes = Array.isArray(req.body.lignes) ? req.body.lignes : [];
+    if (!filiale || !lignes.length) return res.status(400).json({ error: 'filiale et lignes requises' });
+    if (lignes.length > 2000) return res.status(400).json({ error: '2000 lignes maximum' });
+    const existants = await prisma.produit.findMany({ where: { filiale }, omit: { imageData: true } });
+    const parId = new Map(existants.map(p => [p.id, p]));
+    const parRef = new Map(existants.filter(p => p.reference).map(p => [p.reference.toLowerCase(), p]));
+    const parNom = new Map(existants.map(p => [norm(p.nom), p]));
+    const num = (v) => (v === '' || v == null || Number.isNaN(Number(v)) ? null : Number(v));
+    const res_ = { crees: 0, majs: 0, mouvements: 0, erreurs: [] };
+
+    for (const [i, l] of lignes.entries()) {
+      const ligne = i + 2; // numéro de ligne dans le fichier (en-tête = 1)
+      try {
+        const nom = String(l.nom || '').trim();
+        let p = (l.id && parId.get(l.id)) || (l.reference && parRef.get(String(l.reference).toLowerCase())) || (nom && parNom.get(norm(nom)));
+        const champs = {};
+        for (const k of ['prixAchat', 'prixVente', 'stockAlert', 'stockMinimum']) { const v = num(l[k]); if (v != null) { if (v < 0) throw new Error(`${k} négatif`); champs[k] = v; } }
+        if (l.unite) champs.unite = String(l.unite).trim();
+        if (l.categorie) champs.categorie = String(l.categorie).trim();
+        if (l.lien !== undefined && l.lien !== '') { if (!LIEN_OK(String(l.lien))) throw new Error('lien invalide'); champs.lien = String(l.lien); }
+        if (l.imageUrl !== undefined && l.imageUrl !== '') { if (!IMAGE_OK(String(l.imageUrl))) throw new Error('image invalide'); champs.imageUrl = String(l.imageUrl); }
+        if (nom && p && nom !== p.nom && (l.id || l.reference)) champs.nom = nom;
+
+        if (!p) {
+          if (!nom) throw new Error('nom manquant');
+          p = await prisma.produit.create({ data: { reference: l.reference ? String(l.reference).trim() : `IMP-${Date.now().toString(36)}${i}`, nom, filiale, type, categorie: champs.categorie || (type === 'BOISSON' ? 'BOISSONS' : 'AUTRE'), unite: champs.unite || (type === 'BOISSON' ? 'bouteille' : 'unité'), prixAchat: champs.prixAchat ?? 0, prixVente: champs.prixVente ?? 0, stockAlert: champs.stockAlert ?? 5, stockMinimum: champs.stockMinimum ?? 3, imageUrl: champs.imageUrl || null, lien: champs.lien || null }, omit: { imageData: true } });
+          parId.set(p.id, p); parNom.set(norm(p.nom), p); res_.crees++;
+        } else if (Object.keys(champs).length) {
+          await prisma.produit.update({ where: { id: p.id }, data: champs }); res_.majs++;
+        }
+        const entree = num(l.entree), stock = num(l.stock);
+        if (entree != null && entree < 0) throw new Error('entrée négative');
+        if (stock != null && stock < 0) throw new Error('stock négatif');
+        if (entree > 0) {
+          await prisma.$transaction(async (tx) => { await tx.mouvementStock.create({ data: { produitId: p.id, filiale, type: 'ENTREE', quantite: entree, motif: 'Entrée par fichier / tableau', operateurId: req.user.id } }); await appliquerMouvement(tx, { produitId: p.id, filiale, type: 'ENTREE', qte: entree }); });
+          res_.mouvements++;
+        } else if (stock != null) {
+          const actuel = (await prisma.stock.aggregate({ _sum: { quantite: true }, where: { produitId: p.id, filiale } }))._sum.quantite || 0;
+          if (stock !== actuel) {
+            await prisma.$transaction(async (tx) => { await tx.mouvementStock.create({ data: { produitId: p.id, filiale, type: 'INVENTAIRE', quantite: stock, motif: `Inventaire par fichier / tableau (${actuel} → ${stock})`, operateurId: req.user.id } }); await appliquerMouvement(tx, { produitId: p.id, filiale, type: 'INVENTAIRE', qte: stock }); });
+            res_.mouvements++;
+          }
+        }
+      } catch (e) { res_.erreurs.push({ ligne, message: e.message }); }
+    }
+    if (filiale === 'YAKRO_GRILL') await require('../lib/stock-menu').lierMenuStock().catch(() => {});
+    res.json(res_);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 router.get('/mouvements', auth, async (req, res) => {
