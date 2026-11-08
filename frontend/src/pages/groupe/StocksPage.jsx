@@ -4,7 +4,7 @@
  */
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { stocksAPI } from '../../lib/api';
+import { stocksAPI, imgSrc } from '../../lib/api';
 import { useAuthStore } from '../../store';
 import { Plus, AlertTriangle, X, Upload, Download, RefreshCw, BarChart2, Package, Pencil, ExternalLink, ImagePlus } from 'lucide-react';
 
@@ -341,7 +341,7 @@ export default function StocksPage() {
                         {typeTab==='BOISSON' && (
                           <td>
                             <button onClick={()=>setVue(p)} aria-label={`Voir ${p.nom}`} style={{ width:48, height:48, border:'none', borderRadius:10, background:'#F7F7F5', padding:0, cursor:'pointer', overflow:'hidden' }}>
-                              {p.imageUrl ? <img src={p.imageUrl} alt="" loading="lazy" style={{ width:'100%', height:'100%', objectFit:'cover' }}/> : <span style={{ fontSize:20 }}>🥤</span>}
+                              {p.imageUrl ? <img src={imgSrc(p.imageUrl)} alt="" loading="lazy" style={{ width:'100%', height:'100%', objectFit:'cover' }}/> : <span style={{ fontSize:20 }}>🥤</span>}
                             </button>
                           </td>
                         )}
@@ -419,7 +419,7 @@ export default function StocksPage() {
                 <div style={{ gridColumn:'1/-1', display:'grid', gap:8 }}>
                   <div style={{ display:'flex', gap:12, alignItems:'center' }}>
                     <div style={{ width:84, height:84, borderRadius:12, background:'#F7F7F5', overflow:'hidden', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                      {form.imageUrl ? <img src={form.imageUrl} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }}/> : <span style={{ fontSize:28 }}>🥤</span>}
+                      {form.imageUrl ? <img src={imgSrc(form.imageUrl)} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }}/> : <span style={{ fontSize:28 }}>🥤</span>}
                     </div>
                     <div style={{ display:'grid', gap:6, flex:1, minWidth:0 }}>
                       <label className="btn btn-sm btn-ghost" style={{ cursor:'pointer', justifySelf:'start' }}><ImagePlus size={13}/> {form.imageUrl ? 'Remplacer la photo' : 'Ajouter une photo'}
@@ -527,7 +527,7 @@ export default function StocksPage() {
               <h3 style={{ margin:0, fontFamily:'Syne', fontSize:16 }}>{vue.nom}</h3>
               <button onClick={()=>setVue(null)} aria-label="Fermer" style={{ background:'none', border:'none', cursor:'pointer' }}><X size={18}/></button>
             </div>
-            {vue.imageUrl ? <img src={vue.imageUrl} alt={vue.nom} style={{ width:'100%', maxHeight:380, objectFit:'contain', borderRadius:12, background:'#F7F7F5' }}/> : <div style={{ padding:40, fontSize:48, background:'#F7F7F5', borderRadius:12 }}>🥤</div>}
+            {vue.imageUrl ? <img src={imgSrc(vue.imageUrl)} alt={vue.nom} style={{ width:'100%', maxHeight:380, objectFit:'contain', borderRadius:12, background:'#F7F7F5' }}/> : <div style={{ padding:40, fontSize:48, background:'#F7F7F5', borderRadius:12 }}>🥤</div>}
             <div style={{ fontSize:12, color:'#888', marginTop:10 }}>{vue.reference} · {vue.unite} · Stock {vue.stockTotal||0}</div>
             <div style={{ display:'flex', gap:8, justifyContent:'center', marginTop:12 }}>
               {vue.lien && <a className="btn btn-sm btn-ghost" href={vue.lien} target="_blank" rel="noopener noreferrer"><ExternalLink size={13}/> Ouvrir le lien</a>}

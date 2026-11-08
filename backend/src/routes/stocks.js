@@ -7,9 +7,19 @@ const { auth } = require('../middleware/auth');
 // Cloisonnement : un utilisateur d'une filiale ne voit et ne modifie que le stock de sa filiale.
 const CATS_BOISSON = ['BOISSONS', 'ALCOOLS_BAR', 'BIERES', 'VINS', 'SPIRITUEUX'];
 const filialeAutorisee = (req, demandee) => (req.user.filiale === 'GROUPE' ? demandee : req.user.filiale);
-const IMAGE_OK = (v) => !v || /^https?:\/\//.test(v) || (/^data:image\/(png|jpeg|webp);base64,/.test(v) && v.length < 450000);
+const IMAGE_OK = (v) => !v || /^https?:\/\//.test(v) || /^\/api\/stocks\/image\/[\w-]+$/.test(v) || (/^data:image\/(png|jpeg|webp);base64,/.test(v) && v.length < 450000);
 const LIEN_OK = (v) => !v || /^https?:\/\//.test(v);
 const norm = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\(.*?\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
+
+// Photo d'une boisson (publique : lue par les balises <img>, sans en-tête d'authentification)
+router.get('/image/:id', async (req, res) => {
+  try {
+    const p = await prisma.produit.findUnique({ where: { id: req.params.id }, select: { imageData: true, imageType: true } });
+    if (!p?.imageData) return res.status(404).end();
+    res.set({ 'Content-Type': p.imageType || 'image/png', 'Cache-Control': 'public, max-age=604800', 'Cross-Origin-Resource-Policy': 'cross-origin' });
+    res.send(Buffer.from(p.imageData));
+  } catch { res.status(404).end(); }
+});
 
 router.get('/produits', auth, async (req, res) => {
   try {
@@ -24,7 +34,8 @@ router.get('/produits', auth, async (req, res) => {
     const produits = await prisma.produit.findMany({
       where,
       include: { stocks: true },
-      orderBy: { nom: 'asc' }
+      orderBy: { nom: 'asc' },
+      omit: { imageData: true },
     });
 
     // Enrichir avec alertes

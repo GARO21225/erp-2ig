@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { yakroAPI } from '../../lib/api';
+import { yakroAPI, imgSrc } from '../../lib/api';
 import { useYakro } from '../../lib/useYakro';
 import { Plus, X, Download, Edit2 } from 'lucide-react';
 
@@ -57,10 +57,15 @@ export default function MenuPage() {
       <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
         {isLoading ? <div style={{ padding: 40, textAlign: 'center', color: '#888', fontSize: 13 }}>Chargement...</div> : (
           <table className="table-erp">
-            <thead><tr><th>Article</th><th>Catégorie</th><th>Prix</th><th>Disponible</th><th></th></tr></thead>
+            <thead><tr><th style={{ width: 56 }}></th><th>Article</th><th>Catégorie</th><th>Prix</th><th>Disponible</th><th></th></tr></thead>
             <tbody>
               {items.map(item => (
                 <tr key={item.id}>
+                  <td style={{ width: 56 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 8, background: '#F7F1E8', overflow: 'hidden', display: 'grid', placeItems: 'center' }}>
+                      {item.image ? <img src={imgSrc(item.image)} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 18, opacity: .5 }}>🍽</span>}
+                    </div>
+                  </td>
                   <td>
                     <div style={{ fontWeight: 500, fontSize: 13 }}>{item.nom}</div>
                     {item.description && <div style={{ fontSize: 11, color: '#888' }}>{item.description}</div>}
@@ -83,7 +88,7 @@ export default function MenuPage() {
                   </td>
                 </tr>
               ))}
-              {items.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', color: '#ccc', padding: 40, fontSize: 13 }}>Menu vide. Importez depuis le PDF ou créez des articles.</td></tr>}
+              {items.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: '#ccc', padding: 40, fontSize: 13 }}>Menu vide. Importez depuis le PDF ou créez des articles.</td></tr>}
             </tbody>
           </table>
         )}

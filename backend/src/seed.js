@@ -140,6 +140,14 @@ async function seed() {
     console.log(`✅ Boissons RZI-Camp : ${r.crees} ajoutée(s) sur ${r.total}`);
   } catch (e) { console.error('⚠ Boissons RZI-Camp :', e.message); }
 
+  // Photos : copie unique dans la base Yakro, puis liaison avec le menu
+  try {
+    const I = require('./lib/images-boissons');
+    const a = await I.rapatrierImages();
+    const b = await I.lierImagesMenu();
+    console.log(`✅ Photos boissons : ${a.ok} copiée(s), ${a.echec} échec(s) · menu : ${b.lies}/${b.boissonsMenu} liée(s)`);
+  } catch (e) { console.error('⚠ Photos boissons :', e.message); }
+
   console.log('🎉 Init terminée');
 }
 

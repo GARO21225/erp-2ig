@@ -406,3 +406,10 @@ export const facturationAPI = {
   params: (filiale) => api.get('/toptelsig/facturation/params', { params: { filiale } }),
   updateParams: (filiale, data) => api.put('/toptelsig/facturation/params', { filiale, ...data }),
 };
+
+/** URL affichable d'une image : les photos stockées par Yakro (/api/...) passent par l'API, les autres restent telles quelles. */
+export function imgSrc(u) {
+  if (!u) return '';
+  if (u.startsWith('/api/')) return (api.defaults.baseURL || '').replace(/\/api\/?$/, '') + u;
+  return u;
+}

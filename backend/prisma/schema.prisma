@@ -371,6 +371,8 @@ model Produit {
   type        String   @default("INGREDIENT") // BOISSON | INGREDIENT
   imageUrl    String?  // URL externe ou data:image/... (boissons)
   lien        String?  // lien de visualisation de l'article
+  imageData   Bytes?   // photo conservée dans Yakro (aucune dépendance à un site externe)
+  imageType   String?
   unite       String   @default("unité")
   filiale     Filiale
   prixAchat   Float    @default(0)
