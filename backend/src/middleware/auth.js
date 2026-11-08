@@ -116,7 +116,7 @@ const requireMinRole = (minRole) => (req, res, next) => {
 const requireFiliale = (...filiales) => (req, res, next) => {
   if (!req.user) return res.status(401).json({ error: 'Non authentifié' });
   const userFiliale = req.user.filiale;
-  if (userFiliale === 'GROUPE') return next(); // GROUPE = accès transversal
+  if (userFiliale === 'GROUPE' || req.user.role === 'DG') return next(); // GROUPE et DG = accès transversal
   if (filiales.includes(userFiliale)) return next();
   logger.warn('[RBAC] Accès filiale refusé', {
     userId: req.user.id, filiale: userFiliale, filialesRequises: filiales
@@ -129,7 +129,7 @@ const requireFiliale = (...filiales) => (req, res, next) => {
 
 // ── Vérifier accès filiale (helper sans middleware) ──────────────────────────
 const canAccessFiliale = (user, filiale) => {
-  if (user.filiale === 'GROUPE') return true;
+  if (user.filiale === 'GROUPE' || user.role === 'DG') return true;
   return user.filiale === filiale;
 };
 

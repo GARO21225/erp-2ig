@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import QRCode from 'qrcode';
 import { Clock, Users, QrCode, History, Plus, X, AlertTriangle } from 'lucide-react';
@@ -99,11 +99,13 @@ function ModalManuel({ restaurantId, cible, onClose, onDone }) {
   );
 }
 
-export default function PointagePage() {
+export default function PointagePage({ histo = false }) {
   const qc = useQueryClient();
   const { courant, peut } = useYakro();
   const voir = peut('pointage.voir'), gerer = peut('pointage.gerer');
-  const [onglet, setOnglet] = useState(voir ? 'presences' : 'moi');
+  const touche = useRef(false);
+  const [onglet, setOnglet] = useState(histo ? 'historique' : voir ? 'presences' : 'moi');
+  useEffect(() => { if (!histo && voir) setOnglet(o => (o === 'moi' && !touche.current ? 'presences' : o)); }, [voir]);
   const [du, setDu] = useState(new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10));
   const [au, setAu] = useState(aujourdhui());
   const [modal, setModal] = useState(null); // { cible? }
@@ -115,18 +117,18 @@ export default function PointagePage() {
   const pres = useQuery({ queryKey: ['pointage', 'presences', courant?.id], queryFn: yakroAPI.pointagePresences, enabled: voir && onglet === 'presences', refetchInterval: 30000 });
   const hist = useQuery({ queryKey: ['pointage', 'hist', courant?.id, du, au], queryFn: () => yakroAPI.pointageHistorique({ du, au }), enabled: voir && onglet === 'historique' });
 
-  const onglets = [['moi', 'Mon pointage', Clock], ...(voir ? [['presences', 'En service', Users], ['historique', 'Historique', History]] : []), ...(gerer ? [['borne', 'QR du restaurant', QrCode]] : [])];
+  const onglets = [['moi', 'Mon pointage', Clock], ...(voir ? [['presences', 'En service', Users]] : []), ...(gerer ? [['borne', 'QR du restaurant', QrCode]] : [])];
 
   return (
     <div className="page-enter">
-      <div className="yk-head">
+      {!histo && <div className="yk-head">
         <div><h1 className="yk-title">Pointage du personnel</h1><div className="yk-sub">{courant?.nom} · arrivée et départ par QR code</div></div>
         {gerer && <button className="btn btn-sm" style={{ background: ROUGE, color: 'white', border: 'none' }} onClick={() => setModal({})}><Plus size={13} /> Pointage manuel</button>}
-      </div>
+      </div>}
 
-      <div className="yk-chips" role="tablist" style={{ marginBottom: 14 }}>
-        {onglets.map(([k, l, Icon]) => <button key={k} role="tab" className="yk-chip" aria-pressed={onglet === k} onClick={() => setOnglet(k)}><Icon size={14} style={{ verticalAlign: -2, marginRight: 6 }} />{l}</button>)}
-      </div>
+      {!histo && <div className="yk-chips" role="tablist" style={{ marginBottom: 14 }}>
+        {onglets.map(([k, l, Icon]) => <button key={k} role="tab" className="yk-chip" aria-pressed={onglet === k} onClick={() => { touche.current = true; setOnglet(k); }}><Icon size={14} style={{ verticalAlign: -2, marginRight: 6 }} />{l}</button>)}
+      </div>}
 
       {onglet === 'moi' && (
         <div className="card">

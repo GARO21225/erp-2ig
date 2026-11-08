@@ -8,6 +8,7 @@ import Layout from './components/layout/Layout';
 import LoginPage from './pages/LoginPage';
 import PointerPage from './pages/yakro/PointerPage';
 import PointagePage from './pages/yakro/PointagePage';
+import HistoriquesPage from './pages/yakro/HistoriquesPage';
 import PortailPage from './pages/PortailPage';
 import GestionProjetPage from './pages/toptelsig/GestionProjetPage';
 import CRMPage from './pages/toptelsig/CRMPage';
@@ -113,6 +114,7 @@ export default function App() {
             <Route path="yakro/pos" element={<POS />} />
             <Route path="yakro/pointage" element={<PointagePage />} />
             <Route path="yakro/commandes" element={<CommandesYakro />} />
+            <Route path="yakro/historiques" element={<HistoriquesPage />} />
             <Route path="yakro/menu" element={<MenuPage />} />
             <Route path="yakro/tables" element={<TablesPage />} />
             <Route path="yakro/assignations" element={<AssignationsPage />} />

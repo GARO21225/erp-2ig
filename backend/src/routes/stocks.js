@@ -6,7 +6,7 @@ const { auth } = require('../middleware/auth');
 
 // Cloisonnement : un utilisateur d'une filiale ne voit et ne modifie que le stock de sa filiale.
 const CATS_BOISSON = ['BOISSONS', 'ALCOOLS_BAR', 'BIERES', 'VINS', 'SPIRITUEUX'];
-const filialeAutorisee = (req, demandee) => (req.user.filiale === 'GROUPE' ? demandee : req.user.filiale);
+const filialeAutorisee = (req, demandee) => ((req.user.filiale === 'GROUPE' || req.user.role === 'DG') ? demandee : req.user.filiale);
 const IMAGE_OK = (v) => !v || /^https?:\/\//.test(v) || /^\/api\/stocks\/image\/[\w-]+$/.test(v) || (/^data:image\/(png|jpeg|webp);base64,/.test(v) && v.length < 450000);
 const LIEN_OK = (v) => !v || /^https?:\/\//.test(v);
 const norm = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\(.*?\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();

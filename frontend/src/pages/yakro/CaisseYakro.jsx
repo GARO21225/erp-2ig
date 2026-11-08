@@ -88,8 +88,8 @@ function LigneCommande({ cmd }) {
   );
 }
 
-export default function CaisseYakro() {
-  const [onglet, setOnglet] = useState('resume');
+export default function CaisseYakro({ histo = false }) {
+  const [onglet, setOnglet] = useState(histo ? 'historique' : 'resume');
   const [dateFilter, setDateFilter] = useState(new Date().toISOString().slice(0,10));
 
   const { data, isLoading, refetch } = useQuery({
@@ -158,8 +158,8 @@ export default function CaisseYakro() {
       </div>
 
       {/* Onglets */}
-      <div style={{ display:'flex', gap:4, borderBottom:'1px solid #e8e7e1', marginBottom:20 }}>
-        {[['resume','📊 Résumé'],['historique','🧾 Historique passages']].map(([k,v])=>(
+      {!histo && <div style={{ display:'flex', gap:4, borderBottom:'1px solid #e8e7e1', marginBottom:20 }}>
+        {[['resume','📊 Résumé']].map(([k,v])=>(
           <button key={k} onClick={()=>setOnglet(k)}
             style={{ padding:'8px 16px', border:'none', background:'none', cursor:'pointer', fontSize:12,
               fontWeight:onglet===k?600:400, color:onglet===k?'#8B1A1A':'#888',
@@ -167,7 +167,7 @@ export default function CaisseYakro() {
             {v}
           </button>
         ))}
-      </div>
+      </div>}
 
       {/* Onglet Résumé */}
       {onglet === 'resume' && (

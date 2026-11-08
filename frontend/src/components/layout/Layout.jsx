@@ -64,7 +64,7 @@ const NAV = {
     { id: 'pos',             label: 'Plan de Salle (POS)', to: '/yakro/pos',              icon: Layers },
     { id: 'pointage',        label: 'Pointage du personnel', to: '/yakro/pointage',       icon: Clock },
     { id: 'menu',            label: 'Menu & Carte',        to: '/yakro/menu',             icon: BookOpen },
-    { id: 'commandes',       label: 'Historique commandes',to: '/yakro/commandes',        icon: ClipboardList },
+    { id: 'commandes',       label: 'Historiques',         to: '/yakro/historiques',      icon: ClipboardList },
     { id: 'caisse',          label: 'Caisse du jour',      to: '/yakro/caisse',           icon: Wallet },
     { id: 'gestion-caisse',  label: 'Gestion Caisse',      to: '/yakro/gestion-caisse',   icon: BarChart2 },
     { id: 'reservations',    label: 'Réservations',        to: '/yakro/reservations',     icon: Calendar },

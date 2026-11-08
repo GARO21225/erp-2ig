@@ -6,9 +6,9 @@ import { CheckCircle, AlertTriangle, X, Check } from 'lucide-react';
 const fmtF = n => Math.round(n||0).toLocaleString('fr') + ' F';
 const fmtD = d => d ? new Date(d).toLocaleString('fr', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '—';
 
-export default function GestionCaissePage() {
+export default function GestionCaissePage({ histo = false }) {
   const qc = useQueryClient();
-  const [onglet, setOnglet] = useState('caisse');
+  const [onglet, setOnglet] = useState(histo ? 'historique' : 'caisse');
   const [montantOuv, setMontantOuv] = useState('');
   const [montantReel, setMontantReel] = useState('');
   const [notesCloture, setNotesCloture] = useState('');
@@ -34,14 +34,14 @@ export default function GestionCaissePage() {
       </div>
 
       {/* Onglets */}
-      <div style={{ display:'flex', gap:4, borderBottom:'1px solid #e8e7e1', marginBottom:20 }}>
-        {[['caisse','💰 Caisse'],['annulations','❌ Annulations'],['remises','🏷️ Remises'],['historique','📋 Historique']].map(([k,v])=>(
+      {!histo && <div style={{ display:'flex', gap:4, borderBottom:'1px solid #e8e7e1', marginBottom:20 }}>
+        {[['caisse','💰 Caisse'],['annulations','❌ Annulations'],['remises','🏷️ Remises']].map(([k,v])=>(
           <button key={k} onClick={()=>setOnglet(k)}
             style={{ padding:'8px 14px', border:'none', background:'none', borderBottom:onglet===k?'2px solid #8B1A1A':'2px solid transparent', color:onglet===k?'#8B1A1A':'#888', fontSize:12, fontWeight:onglet===k?600:400, cursor:'pointer' }}>
             {v}
           </button>
         ))}
-      </div>
+      </div>}
 
       {/* Onglet Caisse */}
       {onglet === 'caisse' && (
