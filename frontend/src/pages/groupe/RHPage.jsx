@@ -7,6 +7,7 @@ import { Plus, Search, ChevronRight, X } from 'lucide-react';
 import ExportBar from '../../components/ui/ExportBar';
 import GEDPanel from '../../components/ui/GEDPanel';
 import { exportExcel } from '../../lib/export';
+import CongesYakroPage from '../yakro/CongesYakroPage';
 
 const FILIALES_LABELS = { YAKRO_GRILL:'Yakro Grill', TOPTELSIG:'TOPTELSIG', LIYA:'LiYA', GROUPE:'Groupe' };
 const FILIALES_COLORS = { YAKRO_GRILL:'#8B1A1A', TOPTELSIG:'#1a3f6f', LIYA:'#E85D04', GROUPE:'#444' };
@@ -355,7 +356,7 @@ function EmployeDetail({ employe, onClose, onEdit, onSuspend, onReintegre, onQui
 }
 
 // ── Page principale ───────────────────────────────────────────────────────────
-export default function RHPage() {
+function RHEmployes() {
   const { filiale } = useAuthStore();
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
@@ -582,6 +583,25 @@ export default function RHPage() {
           {toast.msg}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Ressources Humaines : employés + congés des agents Yakro Grill */
+export default function RHPage() {
+  const [vue, setVue] = useState('employes');
+  const filiale = useAuthStore(s => s.filiale);
+  const conges = filiale === 'YAKRO_GRILL' || filiale === 'GROUPE';
+  return (
+    <div>
+      {conges && (
+        <div style={{ display:'flex', gap:8, padding:'12px 16px 0' }}>
+          {[['employes','Employés'],['conges','Congés Yakro Grill']].map(([k,l]) => (
+            <button key={k} onClick={() => setVue(k)} style={{ padding:'6px 14px', border:'none', background:'none', cursor:'pointer', fontSize:13, fontWeight:vue===k?700:400, color:vue===k?'#1a1a1a':'#888', borderBottom:vue===k?'2px solid #8B1A1A':'2px solid transparent' }}>{l}</button>
+          ))}
+        </div>
+      )}
+      {vue === 'conges' && conges ? <CongesYakroPage/> : <RHEmployes/>}
     </div>
   );
 }

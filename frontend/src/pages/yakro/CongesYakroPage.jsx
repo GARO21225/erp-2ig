@@ -85,7 +85,7 @@ export default function CongesYakroPage() {
   const [nouveau, setNouveau] = useState(false);
   const [ouvert, setOuvert] = useState(null);
   const global = porteeGlobale();
-  const { data = [], isLoading, isError, error } = useQuery({ queryKey: ['conges-yakro'], queryFn: () => yakroAPI.conges().then(r => r.data), refetchInterval: 30000 });
+  const { data = [], isLoading, isError, error } = useQuery({ queryKey: ['conges-yakro'], queryFn: () => yakroAPI.conges().then(r => (Array.isArray(r) ? r : [])), refetchInterval: 30000 });
   const annuler = useMutation({ mutationFn: (id) => yakroAPI.annulerConge(id), onSuccess: () => qc.invalidateQueries({ queryKey: ['conges-yakro'] }) });
   const attente = data.filter(c => c.statut === 'DEMANDE');
 
