@@ -134,6 +134,12 @@ async function seed() {
     console.log(`⏭ Menu déjà présent`);
   }
 
+  // Boissons de RZI-Camp (photos incluses) dans le stock Yakro Grill — idempotent
+  try {
+    const r = await require('./lib/boissons-rzi').integrerBoissonsRzi();
+    console.log(`✅ Boissons RZI-Camp : ${r.crees} ajoutée(s) sur ${r.total}`);
+  } catch (e) { console.error('⚠ Boissons RZI-Camp :', e.message); }
+
   console.log('🎉 Init terminée');
 }
 
