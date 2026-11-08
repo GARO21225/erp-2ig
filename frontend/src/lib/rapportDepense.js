@@ -19,7 +19,7 @@ export async function rapportDepensePDF(d, recu, restaurant = '') {
   doc.setDrawColor(139, 26, 26); doc.setLineWidth(0.8); doc.line(14, 30, W - 14, 30);
   doc.setTextColor(30); doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.text(d.description, 14, 40);
   doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(110);
-  doc.text(`N° ${d.id}   ·   Statut : ${STATUTS[d.statut] || d.statut}`, 14, 46);
+  doc.text(`N° ${d.numero || d.id}   ·   Statut : ${STATUTS[d.statut] || d.statut}`, 14, 46);
 
   const ecart = d.montantJustifie != null ? d.montant - d.montantJustifie : null;
   autoTable(doc, {
@@ -62,6 +62,6 @@ export async function rapportDepensePDF(d, recu, restaurant = '') {
 
 /** Rapport détaillé de l'historique des dépenses (Excel, une ligne par dépense avec tout le circuit). */
 export function rapportDepensesExcel(liste) {
-  exportExcel('rapport_depenses_yakro', 'Dépenses', ['Date', 'Catégorie', 'Nature', 'Description', 'Bénéficiaire', 'Montant', 'Statut', 'Mode', 'Référence', 'Montant justifié', 'Écart', 'Émise par', 'Validée/Rejetée par', 'Date validation', 'Motif rejet', 'Décaissée par', 'Date décaissement', 'Justifiée par', 'Date justification', 'Note justification', 'Clôturée par', 'Date clôture'],
-    liste.map(d => [new Date(d.date || d.createdAt).toLocaleDateString('fr'), d.categorie, d.nature === 'FIXE' ? 'Fixe' : 'Autre', d.description, d.beneficiaire || '', d.montant, STATUTS[d.statut] || d.statut, (d.typePaiement || '').replace(/_/g, ' '), d.reference || '', d.montantJustifie ?? '', d.montantJustifie != null ? d.montant - d.montantJustifie : '', d.creeParNom || '', d.valideParNom || '', D(d.valideLe), d.motifRejet || '', d.payeParNom || '', D(d.payeLe), d.justifieParNom || '', D(d.justifieLe), d.noteJustification || '', d.clotureParNom || '', D(d.clotureLe)]));
+  exportExcel('rapport_depenses_yakro', 'Dépenses', ['Date', 'N°', 'Catégorie', 'Nature', 'Description', 'Bénéficiaire', 'Montant', 'Statut', 'Mode', 'Référence', 'Montant justifié', 'Écart', 'Émise par', 'Validée/Rejetée par', 'Date validation', 'Motif rejet', 'Décaissée par', 'Date décaissement', 'Justifiée par', 'Date justification', 'Note justification', 'Clôturée par', 'Date clôture'],
+    liste.map(d => [new Date(d.date || d.createdAt).toLocaleDateString('fr'), d.numero || '', d.categorie, d.nature === 'FIXE' ? 'Fixe' : 'Autre', d.description, d.beneficiaire || '', d.montant, STATUTS[d.statut] || d.statut, (d.typePaiement || '').replace(/_/g, ' '), d.reference || '', d.montantJustifie ?? '', d.montantJustifie != null ? d.montant - d.montantJustifie : '', d.creeParNom || '', d.valideParNom || '', D(d.valideLe), d.motifRejet || '', d.payeParNom || '', D(d.payeLe), d.justifieParNom || '', D(d.justifieLe), d.noteJustification || '', d.clotureParNom || '', D(d.clotureLe)]));
 }

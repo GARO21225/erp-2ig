@@ -72,8 +72,11 @@ router.post('/', auth, yakro, resto, can('depenses.saisir'), async (req, res) =>
       employeNom = `${e.prenom} ${e.nom}`; beneficiaire = employeNom; periode = /^\d{4}-\d{2}$/.test(periode || '') ? periode : moisCourant();
     } else { employeId = null; periode = null; }
     const nature = ['FIXE', 'VARIABLE'].includes(req.body.nature) ? req.body.nature : natureDe(categorie);
+    const an = new Date().getFullYear();
+    const dernier = await prisma.depenseYakro.findFirst({ where: { numero: { startsWith: `DEP-${an}-` } }, orderBy: { numero: 'desc' }, select: { numero: true } });
+    const numero = `DEP-${an}-${String((parseInt(dernier?.numero?.split('-')[2], 10) || 0) + 1).padStart(4, '0')}`;
     const d = await prisma.depenseYakro.create({
-      data: { restaurantId: req.restaurantId, categorie, description, montant: Number(montant), beneficiaire, typePaiement, notes, nature, employeId, employeNom, periode, recu: recu || null, creePar: req.user.id, creeParNom: `${req.user.prenom} ${req.user.nom}` },
+      data: { numero, restaurantId: req.restaurantId, categorie, description, montant: Number(montant), beneficiaire, typePaiement, notes, nature, employeId, employeNom, periode, recu: recu || null, creePar: req.user.id, creeParNom: `${req.user.prenom} ${req.user.nom}` },
       omit: { recu: true },
     });
     res.status(201).json(d);

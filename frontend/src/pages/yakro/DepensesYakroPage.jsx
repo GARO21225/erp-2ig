@@ -249,6 +249,7 @@ export default function DepensesYakroPage({ histo = false }) {
                 <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3, flexWrap:'wrap' }}>
                   <span style={{ fontSize:10, background:st.color+'18', color:st.color, borderRadius:10, padding:'1px 7px', fontWeight:500 }}>{st.label}</span>
                   <span style={{ fontSize:10, background:nt.color+'18', color:nt.color, borderRadius:10, padding:'1px 7px', fontWeight:500 }}>{nt.label}</span>
+                  <span style={{ fontSize:10, color:'#888', fontFamily:'monospace' }}>{d.numero}</span>
                   <span style={{ fontSize:11, color:'#888' }}>{d.categorie}{d.periode ? ` · ${d.periode}` : ''}</span>
                 </div>
                 <div style={{ fontWeight:500, fontSize:13 }}>{d.description}</div>

@@ -1481,6 +1481,7 @@ model DepenseYakro {
   employeNom     String?
   periode        String?  // salaire : mois concerné (AAAA-MM)
   recu           String?  // reçu (image ou PDF en data URI)
+  numero            String?  // référence lisible : DEP-AAAA-0001
   valideLe          DateTime?
   motifRejet        String?
   payeLe            DateTime?
