@@ -133,6 +133,32 @@ router.post('/import-boissons', auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Synchronise le stock des boissons avec le menu Yakro : toute boisson du menu (BOISSON, BIERE, VIN, COCKTAIL)
+// absente du stock y est créée (stock 0, image du menu reprise). Sans effet sur les boissons déjà présentes.
+router.post('/sync-menu', auth, async (req, res) => {
+  try {
+    const filiale = 'YAKRO_GRILL';
+    if (req.user.filiale !== 'GROUPE' && req.user.filiale !== filiale) return res.status(403).json({ error: 'Réservé à Yakro Grill' });
+    const CAT = { BOISSON: 'BOISSONS', BIERE: 'BIERES', VIN: 'VINS', COCKTAIL: 'SPIRITUEUX' };
+    const menu = await prisma.menuYakro.findMany({ where: { categorie: { in: Object.keys(CAT) } } });
+    const existants = await prisma.produit.findMany({ where: { filiale, type: 'BOISSON' } });
+    const noms = new Set(existants.map(p => norm(p.nom)));
+    let crees = 0, images = 0;
+    for (const m of menu) {
+      const n = norm(m.nom);
+      if (noms.has(n)) {
+        const ex = existants.find(p => norm(p.nom) === n);
+        if (ex && !ex.imageUrl && m.image && IMAGE_OK(m.image)) { await prisma.produit.update({ where: { id: ex.id }, data: { imageUrl: m.image } }); images++; }
+        continue;
+      }
+      const prod = await prisma.produit.create({ data: { reference: `YG-MENU-${m.id.slice(-8)}`, nom: m.nom, categorie: CAT[m.categorie], type: 'BOISSON', unite: 'bouteille', filiale, prixVente: m.prix, prixAchat: m.coutRevient || 0, imageUrl: m.image && IMAGE_OK(m.image) ? m.image : null } });
+      await prisma.stock.create({ data: { produitId: prod.id, filiale, quantite: 0, depot: 'Principal' } });
+      noms.add(n); crees++;
+    }
+    res.json({ crees, images, totalMenu: menu.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Mouvements de stock
 const MOTIFS_PERTE = ['PEREMPTION', 'CASSE', 'VOL', 'CONSO_INTERNE', 'OFFERT_CLIENT'];
 

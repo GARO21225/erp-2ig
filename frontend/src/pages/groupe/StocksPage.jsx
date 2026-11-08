@@ -2,7 +2,7 @@
  * Stocks & Approvisionnements
  * Dashboard · Seuils visuels 🟢🟠🔴⚫ · Import/Export · Seed Yakro
  */
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { stocksAPI } from '../../lib/api';
 import { useAuthStore } from '../../store';
@@ -58,6 +58,11 @@ export default function StocksPage() {
   const [vue, setVue] = useState(null); // article affiché en grand
   const [edition, setEdition] = useState(null); // produit en cours de modification
   const importRzi = useRef(null);
+  // Les boissons du menu Yakro doivent toutes figurer au stock : synchronisation automatique (sans effet si déjà fait)
+  useEffect(() => {
+    if (filiale === 'TOPTELSIG' || filiale === 'LIYA') return;
+    stocksAPI.syncMenu().then(r => { if (r?.crees || r?.images) qc.invalidateQueries(['produits']); }).catch(() => {});
+  }, []);
   const [catFilter, setCatFilter] = useState('');
   const [niveauFilter, setNiveauFilter] = useState('');
   const [search, setSearch] = useState('');
@@ -226,7 +231,7 @@ export default function StocksPage() {
           </button>
           {typeTab==='BOISSON' && <>
             <input ref={importRzi} type="file" accept=".json,application/json" style={{ display:'none' }} onChange={importerRzi}/>
-            <button className="btn btn-ghost btn-sm" onClick={()=>importRzi.current?.click()}><ImagePlus size={13}/> Images RZI-Camp</button>
+            <button className="btn btn-ghost btn-sm" onClick={()=>importRzi.current?.click()}><ImagePlus size={13}/> Importer fichier RZI-Camp</button>
           </>}
           <button className="btn btn-primary btn-sm" style={{ background:'#1a3f6f', border:'none' }}
             onClick={ouvrirCreation}><Plus size={13}/> {typeTab==='BOISSON' ? 'Boisson' : 'Ingrédient'}</button>

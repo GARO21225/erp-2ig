@@ -102,6 +102,7 @@ export const stocksAPI = {
   produits: (params) => api.get('/stocks/produits', { params }),
   createProduit: (data) => api.post('/stocks/produits', data),
   majProduit: (id, data) => api.put(`/stocks/produits/${id}`, data),
+  syncMenu: () => api.post('/stocks/sync-menu'),
   importBoissons: (data) => api.post('/stocks/import-boissons', data),
   mouvements: (params) => api.get('/stocks/mouvements', { params }),
   addMouvement: (data) => api.post('/stocks/mouvements', data),
