@@ -1,4 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { useLocation } from 'react-router-dom';
 import { Store } from 'lucide-react';
 import { useRestoStore } from '../../store';
 import { useYakro } from '../../lib/useYakro';
@@ -6,7 +7,8 @@ import { useYakro } from '../../lib/useYakro';
 /** Choix du restaurant Yakro Grill dans la barre du haut (masqué s'il n'y en a qu'un). */
 export default function SelecteurRestaurant() {
   const qc = useQueryClient();
-  const setRestaurant = useRestoStore(s => s.setRestaurant);
+  const { setRestaurant, setGlobal, global } = useRestoStore();
+  const surDashboard = useLocation().pathname.startsWith('/yakro/dashboard');
   const { restaurants, courant, isLoading } = useYakro();
   const pastille = { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, flexShrink: 0, fontSize: 12, fontWeight: 600, maxWidth: 170 };
   if (isLoading) return null;
@@ -14,8 +16,9 @@ export default function SelecteurRestaurant() {
   // Un seul restaurant (cas d'un employé affecté) : on l'affiche, sans choix possible
   if (restaurants.length === 1) return <span style={{ ...pastille, background: '#FDF2F2', color: '#8B1A1A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><Store size={13} style={{ flexShrink: 0 }} />{courant?.nom}</span>;
 
+  const globalActif = surDashboard && (global ?? restaurants.length > 1);
   const changer = (id) => {
-    setRestaurant(id);
+    if (id === 'TOUS') setGlobal(); else setRestaurant(id);
     // Toutes les données affichées dépendent du restaurant : on recharge tout
     qc.invalidateQueries({ predicate: q => q.queryKey[0] !== 'yakro-moi' });
   };
@@ -23,9 +26,10 @@ export default function SelecteurRestaurant() {
   return (
     <label style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: '#FDF2F2', border: '1px solid #8B1A1A30', borderRadius: 20, flexShrink: 0, minWidth: 0 }}>
       <Store size={13} color="#8B1A1A" style={{ flexShrink: 0 }} />
-      <select value={courant?.id || ''} onChange={e => changer(e.target.value)}
+      <select value={globalActif ? 'TOUS' : (courant?.id || '')} onChange={e => changer(e.target.value)}
         aria-label="Restaurant"
         style={{ border: 'none', background: 'transparent', fontSize: 12, fontWeight: 600, color: '#8B1A1A', outline: 'none', cursor: 'pointer', maxWidth: 150, textOverflow: 'ellipsis' }}>
+        {surDashboard && <option value="TOUS">Tous les restaurants</option>}
         {restaurants.map(r => <option key={r.id} value={r.id}>{r.nom}</option>)}
       </select>
     </label>

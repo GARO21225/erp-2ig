@@ -31,7 +31,9 @@ export const useRestoStore = create(
   persist(
     (set) => ({
       restaurantId: null,
-      setRestaurant: (restaurantId) => set({ restaurantId }),
+      global: null, // dashboard : true = tous les restaurants, false = un seul, null = par défaut (global si plusieurs)
+      setRestaurant: (restaurantId) => set({ restaurantId, global: false }),
+      setGlobal: () => set({ global: true }),
     }),
     { name: '2ig-resto' }
   )

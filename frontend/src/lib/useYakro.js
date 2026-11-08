@@ -12,7 +12,7 @@ export function useYakro() {
 
   // Restaurant mémorisé devenu inaccessible → on prend le premier
   useEffect(() => {
-    if (courant && courant.id !== restaurantId) setRestaurant(courant.id);
+    if (courant && courant.id !== restaurantId) useRestoStore.setState({ restaurantId: courant.id });
   }, [courant?.id, restaurantId]);
 
   const permissions = courant?.permissions || [];

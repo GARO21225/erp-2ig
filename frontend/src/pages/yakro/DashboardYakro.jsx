@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { yakroAPI } from '../../lib/api';
 import { useYakro } from '../../lib/useYakro';
+import { useRestoStore } from '../../store';
 import {
   BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
@@ -43,10 +44,12 @@ function KPI({ label, value, sub, color='#8B1A1A', icon:Icon, trend }) {
 export default function DashboardYakro() {
   const [periode, setPeriode] = useState('jour');
   const { restaurants, isLoading: chargeResto } = useYakro();
-  const [choix, setChoix] = useState(null); // 'TOUS' ou id d'un restaurant
-  // Plusieurs restaurants : vue globale par défaut, puis détail au choix
-  const portee = choix ?? (restaurants.length > 1 ? 'TOUS' : restaurants[0]?.id);
-  const global = portee === 'TOUS';
+  // Même choix que le sélecteur de la barre du haut (état partagé)
+  const { global: choixGlobal, setGlobal, setRestaurant, restaurantId } = useRestoStore();
+  const global = choixGlobal ?? restaurants.length > 1;
+  const courantId = restaurants.find(r => r.id === restaurantId)?.id || restaurants[0]?.id;
+  const portee = global ? 'TOUS' : courantId;
+  const setChoix = (v) => (v === 'TOUS' ? setGlobal() : setRestaurant(v));
   const nomResto = restaurants.find(r => r.id === portee)?.nom;
   const { data: dash, isLoading, refetch } = useQuery({
     queryKey: ['dashboard-yakro', periode, portee],
