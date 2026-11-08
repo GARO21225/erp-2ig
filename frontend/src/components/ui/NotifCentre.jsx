@@ -26,8 +26,14 @@ const FILIALE_ROUTE = {
   GROUPE: '/dashboard',
 };
 
+const lireLS = (k) => { try { return JSON.parse(localStorage.getItem(k) || '{}'); } catch { return {}; } };
+const cleA = (a) => `${a.filiale}|${a.message}|${a.detail || ''}`;
+
 export default function NotifCentre({ color = '#1a3f6f' }) {
   const [open, setOpen] = useState(false);
+  const cleLS = `notif_etat_${useAuthStore.getState().user?.id || 'x'}`;
+  const [etat, setEtat] = useState(() => lireLS(cleLS)); // { cle: 'lu' | 'efface' }
+  const marquer = (cle, v) => setEtat(e => { const n = { ...e, [cle]: v }; try { localStorage.setItem(cleLS, JSON.stringify(n)); } catch { /* ignore */ } return n; });
   const navigate = useNavigate();
   const filialeActive = useAuthStore(s => s.filiale);
   const dashboardEspace = DASHBOARD_ESPACE[filialeActive] || '/dashboard';
@@ -43,8 +49,18 @@ export default function NotifCentre({ color = '#1a3f6f' }) {
     refetchInterval: 120000, // refresh toutes les 2 minutes
   });
 
-  const alertes = data?.alertes || [];
-  const critiques = (data?.critiques || 0) + perso.length;
+  const toutes = data?.alertes || [];
+  const alertes = toutes.filter(a => etat[cleA(a)] !== 'efface');
+  const persoVisibles = perso.filter(n => etat[n.id] !== 'efface');
+  const nbLues = persoVisibles.filter(n => etat[n.id] === 'lu').length + alertes.filter(a => etat[cleA(a)] === 'lu').length;
+  const nonLuesAlertes = alertes.filter(a => etat[cleA(a)] !== 'lu' && a.gravite === 'CRITIQUE').length;
+  const critiques = nonLuesAlertes + persoVisibles.filter(n => etat[n.id] !== 'lu').length;
+  const effacerLues = () => setEtat(e => {
+    const n = { ...e };
+    [...persoVisibles.map(x => x.id), ...alertes.map(cleA)].forEach(k => { if (n[k] === 'lu') n[k] = 'efface'; });
+    try { localStorage.setItem(cleLS, JSON.stringify(n)); } catch { /* ignore */ }
+    return n;
+  });
 
   return (
     <div style={{ position:'relative' }}>
@@ -65,15 +81,16 @@ export default function NotifCentre({ color = '#1a3f6f' }) {
             <div style={{ padding:'12px 16px', borderBottom:'1px solid #e8e7e1', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
               <div style={{ fontFamily:'Syne', fontWeight:700, fontSize:13 }}>🔔 Alertes</div>
               <span style={{ fontSize:11, color:'#888', display:'flex', alignItems:'center', gap:8 }}>
-                {perso.length + alertes.length} élément(s)
+                {persoVisibles.length + alertes.length} élément(s)
+                {nbLues > 0 && <button type="button" onClick={effacerLues} style={{ fontSize:11, color:'#A32D2D', background:'none', border:'none', cursor:'pointer', fontWeight:700 }}>🗑 Effacer les lues ({nbLues})</button>}
                 {filialeActive === 'YAKRO_GRILL' && <button type="button" onClick={basculer} aria-pressed={son} aria-label={son ? 'Couper le son et la vibration' : 'Activer le son et la vibration'} title={son ? 'Son et vibration activés' : 'Son coupé'} style={{ background:'none', border:'none', cursor:'pointer', padding:4, color: son ? '#8B1A1A' : '#aaa', display:'flex' }}>{son ? <Volume2 size={16}/> : <VolumeX size={16}/>}</button>}
               </span>
             </div>
             <div style={{ maxHeight:360, overflowY:'auto' }}>
-              {perso.length > 0 && <div style={{ padding:'6px 16px', fontSize:10, fontWeight:700, letterSpacing:.5, color:'#8B1A1A', background:'#FDF2F2' }}>POUR VOUS</div>}
-              {perso.map((n) => (
-                <div key={n.id} onClick={()=>{ navigate(n.lien || dashboardEspace); setOpen(false); }}
-                  style={{ padding:'10px 16px', borderBottom:'0.5px solid #f0efe9', cursor:'pointer', background:'white', display:'flex', gap:10, alignItems:'flex-start' }}>
+              {persoVisibles.length > 0 && <div style={{ padding:'6px 16px', fontSize:10, fontWeight:700, letterSpacing:.5, color:'#8B1A1A', background:'#FDF2F2' }}>POUR VOUS</div>}
+              {persoVisibles.map((n) => (
+                <div key={n.id} onClick={()=>{ marquer(n.id, 'lu'); navigate(n.lien || dashboardEspace); setOpen(false); }}
+                  style={{ padding:'10px 16px', borderBottom:'0.5px solid #f0efe9', cursor:'pointer', background:'white', display:'flex', gap:10, alignItems:'flex-start', opacity: etat[n.id] === 'lu' ? .5 : 1 }}>
                   <div style={{ width:8, height:8, borderRadius:'50%', background: n.niveau === 'alerte' ? '#A32D2D' : '#BA7517', marginTop:4, flexShrink:0 }}/>
                   <div>
                     <div style={{ fontSize:12, fontWeight:700, color:'#333' }}>{n.titre}</div>
@@ -81,14 +98,14 @@ export default function NotifCentre({ color = '#1a3f6f' }) {
                   </div>
                 </div>
               ))}
-              {perso.length > 0 && alertes.length > 0 && <div style={{ padding:'6px 16px', fontSize:10, fontWeight:700, letterSpacing:.5, color:'#888', background:'#F7F7F5' }}>ALERTES</div>}
-              {alertes.length === 0 && perso.length === 0 ? (
+              {persoVisibles.length > 0 && alertes.length > 0 && <div style={{ padding:'6px 16px', fontSize:10, fontWeight:700, letterSpacing:.5, color:'#888', background:'#F7F7F5' }}>ALERTES</div>}
+              {alertes.length === 0 && persoVisibles.length === 0 ? (
                 <div style={{ padding:20, textAlign:'center', color:'#888', fontSize:13 }}>✅ Aucune alerte</div>
               ) : alertes.map((a, i) => {
                 const st = GRAVITE[a.gravite] || GRAVITE.INFO;
                 return (
-                  <div key={i} onClick={()=>{ navigate(FILIALE_ROUTE[a.filiale]||dashboardEspace); setOpen(false); }}
-                    style={{ padding:'10px 16px', borderBottom:'0.5px solid #f0efe9', cursor:'pointer', background:'white', display:'flex', gap:10, alignItems:'flex-start' }}
+                  <div key={i} onClick={()=>{ marquer(cleA(a), 'lu'); navigate(FILIALE_ROUTE[a.filiale]||dashboardEspace); setOpen(false); }}
+                    style={{ padding:'10px 16px', borderBottom:'0.5px solid #f0efe9', cursor:'pointer', background:'white', display:'flex', gap:10, alignItems:'flex-start', opacity: etat[cleA(a)] === 'lu' ? .5 : 1 }}
                     onMouseEnter={e=>e.currentTarget.style.background='#F7F7F5'}
                     onMouseLeave={e=>e.currentTarget.style.background='white'}>
                     <div style={{ width:8, height:8, borderRadius:'50%', background:st.badge, marginTop:4, flexShrink:0 }}/>
