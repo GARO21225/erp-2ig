@@ -302,15 +302,15 @@ function OngletEquipe({ r }) {
 // ── Page ───────────────────────────────────────────────────────────────────
 export default function ParametrageRestaurantPage() {
   const { courant, restaurants, peut, isLoading } = useYakro();
-  const [onglet, setOnglet] = useState('general');
+  const [onglet, setOnglet] = useState('restaurants');
 
   const onglets = [
+    { id: 'restaurants', label: 'Mes restaurants', visible: peut('restaurants.gerer') },
     { id: 'general', label: 'Général', visible: peut('parametres.gerer') },
     { id: 'prix', label: 'Prix', visible: peut('prix.gerer') || peut('menu.voir') },
     { id: 'parametres', label: 'Paramètres', visible: peut('parametres.gerer') },
     { id: 'equipe', label: 'Équipe & profils', visible: peut('equipe.gerer') },
     { id: 'tables', label: 'Plan de salle', visible: peut('parametres.gerer') },
-    { id: 'restaurants', label: 'Mes restaurants', visible: peut('restaurants.gerer') },
   ].filter(o => o.visible);
   const actif = onglets.find(o => o.id === onglet) || onglets[0];
 
