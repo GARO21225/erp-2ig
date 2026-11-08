@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useRestoStore } from '../../store';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { employesAPI, yakroAPI } from '../../lib/api';
 import { Users, Coffee, CreditCard, ChefHat, Clock } from 'lucide-react';
@@ -49,6 +50,7 @@ function EmployeCard({ employe, selected, onToggle, service, onServiceChange }) 
 export default function AssignationsPage() {
   const qc = useQueryClient();
   const [roleFilter, setRoleFilter] = useState('SERVEUR');
+  const restaurantId = useRestoStore(s => s.restaurantId);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [assignes, setAssignes] = useState({}); // { employeId: service }
   const [saving, setSaving] = useState(false);
@@ -56,8 +58,8 @@ export default function AssignationsPage() {
   const showToast = (msg, type='success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
 
   const { data: employes } = useQuery({
-    queryKey: ['employes-yakro', roleFilter],
-    queryFn: () => employesAPI.list({ filiale: 'YAKRO_GRILL', statut: 'ACTIF', limit: 100 }),
+    queryKey: ['employes-yakro', roleFilter, restaurantId],
+    queryFn: () => employesAPI.list({ filiale: 'YAKRO_GRILL', statut: 'ACTIF', limit: 100, restaurantId: restaurantId || undefined }),
   });
 
   const { data: tables } = useQuery({ queryKey: ['tables'], queryFn: yakroAPI.tables });

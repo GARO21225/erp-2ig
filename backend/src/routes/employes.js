@@ -26,8 +26,13 @@ async function avecRestaurants(employes) {
 
 router.get('/', auth, async (req, res) => {
   try {
-    const { filiale, statut, search, page = 1, limit = 20 } = req.query;
+    const { filiale, statut, search, page = 1, limit = 20, restaurantId } = req.query;
     const where = {};
+    // Seulement le personnel affecté à ce restaurant Yakro Grill
+    if (restaurantId) {
+      const acces = await prisma.accesRestaurantYakro.findMany({ where: { restaurantId }, select: { utilisateurId: true } });
+      where.utilisateurId = { in: acces.map(a => a.utilisateurId) };
+    }
     if (filiale) where.filiale = filiale;
     if (statut) where.statut = statut;
     if (search) {
