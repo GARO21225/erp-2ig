@@ -143,6 +143,13 @@ export default function Layout() {
     return () => document.removeEventListener('keydown', h);
   }, []);
 
+  // Après actualisation (F5) l'espace est déduit de l'adresse : /yakro → Yakro Grill, etc.
+  useEffect(() => {
+    const p = location.pathname;
+    const f = p.startsWith('/yakro') ? 'YAKRO_GRILL' : p.startsWith('/liya') ? 'LIYA' : p.startsWith('/toptelsig') ? 'TOPTELSIG' : null;
+    if (f && f !== filiale) setFiliale(f);
+  }, [location.pathname]);
+
   // Mémoriser l'espace courant à chaque changement de filiale
   useEffect(() => {
     if (setDernierEspace) setDernierEspace(filiale);
