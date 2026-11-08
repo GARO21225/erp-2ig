@@ -114,12 +114,15 @@ router.post('/import-boissons', auth, async (req, res) => {
       let image = a.image_url || a.imageUrl || '';
       if (image && !IMAGE_OK(image)) { image = ''; r.imagesIgnorees++; }
       const lien = LIEN_OK(a.lien) ? (a.lien || null) : null;
-      const ex = parNom.get(norm(nom));
+      const n = norm(nom);
+      // Rattachement : nom identique, sinon l'un commence par l'autre (« Heineken 50cl » ↔ « Heineken (casier 24) »)
+      const ex = parNom.get(n) || existants.find(p => { const m = norm(p.nom); return m.length >= 4 && n.length >= 4 && (n.startsWith(m + ' ') || m.startsWith(n + ' ')); });
       if (ex) {
         await prisma.produit.update({ where: { id: ex.id }, data: { ...(image ? { imageUrl: image } : {}), ...(lien ? { lien } : {}) } });
         r.misAJour++;
       } else if (creerManquants) {
-        const cat = ['BIERES', 'VINS', 'SPIRITUEUX', 'ALCOOLS_BAR'].includes(String(a.categorie).toUpperCase()) ? String(a.categorie).toUpperCase() : 'BOISSONS';
+        const CAT_RZI = { biere: 'BIERES', vin: 'VINS', spiritueux: 'SPIRITUEUX', alcool: 'ALCOOLS_BAR', whisky: 'SPIRITUEUX', champagne: 'VINS' };
+        const cat = CAT_RZI[String(a.categorie || '').toLowerCase()] || (['BIERES', 'VINS', 'SPIRITUEUX', 'ALCOOLS_BAR'].includes(String(a.categorie).toUpperCase()) ? String(a.categorie).toUpperCase() : 'BOISSONS');
         const prod = await prisma.produit.create({ data: { reference: `YG-RZI-${Date.now().toString(36)}-${r.crees}`, nom, categorie: cat, type: 'BOISSON', unite: a.unite || 'bouteille', filiale, prixVente: Number(a.prix) || 0, imageUrl: image || null, lien } });
         await prisma.stock.create({ data: { produitId: prod.id, filiale, quantite: 0, depot: 'Principal' } });
         r.crees++;
