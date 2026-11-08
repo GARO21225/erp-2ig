@@ -39,7 +39,7 @@ router.post('/cloturer', auth, yakro, resto, can('caisse.session'), async (req, 
     });
     const depenses = await prisma.depenseYakro.aggregate({
       _sum: { montant: true },
-      where: { statut: 'PAYEE', createdAt: { gte: session.ouvertLe }, ...sc(req) }
+      where: { statut: { in: ['PAYEE', 'JUSTIFIEE', 'CLOTUREE'] }, createdAt: { gte: session.ouvertLe }, ...sc(req) }
     });
     const montantTheorique = session.montantOuverture + (ca._sum.montant||0) - (depenses._sum.montant||0);
     const ecart = Number(montantReel||0) - montantTheorique;

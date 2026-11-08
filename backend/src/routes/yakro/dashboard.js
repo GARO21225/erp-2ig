@@ -181,7 +181,7 @@ router.get('/', auth, yakro, portee, async (req, res) => {
     const pourboires = (await safe(() => prisma.commandeYakro.aggregate({ _sum: { pourboire: true }, where: wherePayee })))?._sum?.pourboire || 0;
 
     // Charges de la période : fixes (salaires, loyer, énergie…) et autres (achats, transport…)
-    const parNature = await safe(() => prisma.depenseYakro.groupBy({ by: ['nature'], _sum: { montant: true }, where: { date: { gte: debut, lte: fin }, ...scD(req) } })) || [];
+    const parNature = await safe(() => prisma.depenseYakro.groupBy({ by: ['nature'], _sum: { montant: true }, where: { statut: { not: 'REJETEE' }, date: { gte: debut, lte: fin }, ...scD(req) } })) || [];
     const chargesFixes = parNature.find(x => x.nature === 'FIXE')?._sum.montant || 0;
     const autresCharges = parNature.find(x => x.nature === 'VARIABLE')?._sum.montant || 0;
 
@@ -192,7 +192,7 @@ router.get('/', auth, yakro, portee, async (req, res) => {
         const [ca, tickets, ch] = await Promise.all([
           safe(() => prisma.paiementYakro.aggregate({ _sum: { montant: true }, where: { createdAt: { gte: debut, lte: fin }, commande: { restaurantId: r.id } } })),
           safe(() => prisma.commandeYakro.count({ where: { statut: 'PAYEE', createdAt: { gte: debut, lte: fin }, restaurantId: r.id } })),
-          safe(() => prisma.depenseYakro.groupBy({ by: ['nature'], _sum: { montant: true }, where: { date: { gte: debut, lte: fin }, restaurantId: r.id } })),
+          safe(() => prisma.depenseYakro.groupBy({ by: ['nature'], _sum: { montant: true }, where: { statut: { not: 'REJETEE' }, date: { gte: debut, lte: fin }, restaurantId: r.id } })),
         ]);
         const fixes = (ch || []).find(x => x.nature === 'FIXE')?._sum.montant || 0;
         const autres = (ch || []).find(x => x.nature === 'VARIABLE')?._sum.montant || 0;

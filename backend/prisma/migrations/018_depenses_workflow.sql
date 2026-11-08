@@ -1,0 +1,10 @@
+ALTER TABLE depenses_yakro ADD COLUMN IF NOT EXISTS "valideLe" TIMESTAMP(3);
+ALTER TABLE depenses_yakro ADD COLUMN IF NOT EXISTS "motifRejet" TEXT;
+ALTER TABLE depenses_yakro ADD COLUMN IF NOT EXISTS "payeLe" TIMESTAMP(3);
+ALTER TABLE depenses_yakro ADD COLUMN IF NOT EXISTS "justifiePar" TEXT;
+ALTER TABLE depenses_yakro ADD COLUMN IF NOT EXISTS "justifieParNom" TEXT;
+ALTER TABLE depenses_yakro ADD COLUMN IF NOT EXISTS "justifieLe" TIMESTAMP(3);
+ALTER TABLE depenses_yakro ADD COLUMN IF NOT EXISTS "montantJustifie" DOUBLE PRECISION;
+ALTER TABLE depenses_yakro ADD COLUMN IF NOT EXISTS "noteJustification" TEXT;
+ALTER TABLE depenses_yakro ADD COLUMN IF NOT EXISTS "clotureLe" TIMESTAMP(3);
+ALTER TABLE depenses_yakro ADD COLUMN IF NOT EXISTS "clotureParNom" TEXT;

@@ -3,14 +3,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { yakroAPI, employesAPI } from '../../lib/api';
 import { useYakro } from '../../lib/useYakro';
 import { Plus, X, Check, Paperclip, FileText, Upload } from 'lucide-react';
+import { useAuthStore } from '../../store';
 
 const MODES = ['ESPECES','ORANGE_MONEY','MTN_MONEY','MOOV_MONEY','WAVE','BANQUE'];
 const STATUT_CONFIG = {
-  BROUILLON: { color:'#888', label:'Brouillon' },
-  EN_ATTENTE: { color:'#BA7517', label:'En attente' },
-  VALIDEE: { color:'#1a3f6f', label:'Validée' },
-  PAYEE: { color:'#27500A', label:'Payée' },
-  CLOTUREE: { color:'#5F5E5A', label:'Clôturée' },
+  BROUILLON: { color:'#BA7517', label:'① Émise · à valider (DG)' },
+  VALIDEE: { color:'#1a3f6f', label:'② Validée · à décaisser' },
+  REJETEE: { color:'#A32D2D', label:'Rejetée' },
+  PAYEE: { color:'#0F6E56', label:'③ Décaissée · à justifier' },
+  JUSTIFIEE: { color:'#6B3FA0', label:'④ Justifiée · à clôturer' },
+  CLOTUREE: { color:'#27500A', label:'⑤ Clôturée' },
 };
 const NATURE = { FIXE: { label:'Charge fixe', color:'#1a3f6f' }, VARIABLE: { label:'Autre charge', color:'#BA7517' } };
 const FIXES = ['Salaires','Loyer','Électricité','Eau','Internet / Téléphone','Assurance'];
@@ -70,6 +72,62 @@ function VoirRecu({ depense, peutModifier, onClose, onChange }) {
   );
 }
 
+/** Étapes du circuit : rejet (motif), décaissement (mode + référence), justification (montant réel + reçu). */
+function EtapeModal({ etape, depense, onClose, onDone }) {
+  const [motif, setMotif] = useState('');
+  const [mode, setMode] = useState(depense.typePaiement || 'ESPECES');
+  const [reference, setReference] = useState('');
+  const [montant, setMontant] = useState(depense.montant);
+  const [recu, setRecu] = useState('');
+  const [recuNom, setRecuNom] = useState('');
+  const [erreur, setErreur] = useState('');
+  const m = useMutation({
+    mutationFn: () => etape === 'rejeter' ? yakroAPI.rejeterDepenseYakro(depense.id, motif)
+      : etape === 'payer' ? yakroAPI.payerDepenseYakro(depense.id, { typePaiement: mode, reference })
+      : yakroAPI.justifierDepenseYakro(depense.id, { montantJustifie: Number(montant), note: motif, recu: recu || undefined }),
+    onSuccess: () => { onDone(); onClose(); },
+    onError: (e) => setErreur(e?.error || e?.response?.data?.error || e.message),
+  });
+  const titre = { rejeter: 'Rejeter la dépense', payer: 'Décaisser', justifier: 'Justifier la dépense' }[etape];
+  const ecart = etape === 'justifier' && Number(montant) !== depense.montant;
+  const ok = etape === 'rejeter' ? motif.trim() : etape === 'justifier' ? (depense.aRecu || recu) && (!ecart || motif.trim()) : true;
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth:440 }} onClick={e=>e.stopPropagation()}>
+        <div style={{ display:'flex', justifyContent:'space-between', marginBottom:12 }}>
+          <h3 style={{ margin:0, fontFamily:'Syne', fontSize:15 }}>{titre} — {fmtFull(depense.montant)}</h3>
+          <button onClick={onClose} aria-label="Fermer" style={{ background:'none', border:'none', cursor:'pointer' }}><X size={18}/></button>
+        </div>
+        <p style={{ fontSize:12, color:'#888', margin:'0 0 10px' }}>{depense.description}</p>
+        {etape === 'rejeter' && <><label className="label">Motif du rejet *</label><textarea className="input" rows={3} value={motif} onChange={e=>setMotif(e.target.value)}/></>}
+        {etape === 'payer' && (
+          <div className="form-grid">
+            <div><label className="label">Mode de décaissement</label><select className="input" value={mode} onChange={e=>setMode(e.target.value)}>{MODES.map(x=><option key={x} value={x}>{x.replace(/_/g,' ')}</option>)}</select></div>
+            <div><label className="label">Référence (n° transaction, chèque…)</label><input className="input" value={reference} onChange={e=>setReference(e.target.value)}/></div>
+          </div>
+        )}
+        {etape === 'justifier' && (
+          <div className="form-grid">
+            <div><label className="label">Montant réellement dépensé (FCFA)</label><input className="input" type="number" min="0" value={montant} onChange={e=>setMontant(e.target.value)}/></div>
+            <div><label className="label">Justificatif *</label>
+              {depense.aRecu && !recu ? <span style={{ fontSize:12, color:'#27500A' }}>✓ Reçu déjà joint</span> : null}
+              <label className="btn btn-sm btn-ghost" style={{ cursor:'pointer' }}><Paperclip size={13}/> {recu ? 'Remplacer' : depense.aRecu ? 'Changer' : 'Joindre'}
+                <input type="file" accept="image/*,application/pdf" style={{ display:'none' }} onChange={e=>{ const f=e.target.files?.[0]; e.target.value=''; lireRecu(f, (r,n)=>{ setRecu(r); setRecuNom(n); }, setErreur); }}/>
+              </label>{recuNom && <span style={{ fontSize:12, marginLeft:6 }}>✓ {recuNom}</span>}
+            </div>
+            <div className="full"><label className="label">{ecart ? `Écart de ${fmtFull(Math.abs(depense.montant - Number(montant)))} — explication *` : 'Note (facultatif)'}</label><textarea className="input" rows={2} value={motif} onChange={e=>setMotif(e.target.value)}/></div>
+          </div>
+        )}
+        {erreur && <p role="alert" style={{ color:'#A32D2D', fontSize:13, marginTop:8 }}>{erreur}</p>}
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:14 }}>
+          <button className="btn btn-ghost" onClick={onClose}>Annuler</button>
+          <button className="btn btn-primary" disabled={!ok || m.isPending} style={{ background: etape==='rejeter' ? '#A32D2D' : '#8B1A1A', border:'none' }} onClick={()=>{ setErreur(''); m.mutate(); }}>{m.isPending ? '...' : titre}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DepensesYakroPage({ histo = false }) {
   const qc = useQueryClient();
   const { courant, peut } = useYakro();
@@ -83,6 +141,8 @@ export default function DepensesYakroPage({ histo = false }) {
   const [form, setForm] = useState(FORM_VIDE());
   const [erreur, setErreur] = useState('');
   const [recuVu, setRecuVu] = useState(null);
+  const [etape, setEtape] = useState(null); // { type, depense }
+  const estDG = ['DG','DIRECTEUR'].includes(useAuthStore.getState().user?.role);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
   const rafraichir = () => { qc.invalidateQueries({ queryKey:['depenses-yakro'] }); qc.invalidateQueries({ queryKey:['stats-depenses-yakro'] }); qc.invalidateQueries({ queryKey:['recu-depense'] }); };
 
@@ -103,7 +163,7 @@ export default function DepensesYakroPage({ histo = false }) {
     onError: (e) => setErreur(e?.error || e?.response?.data?.error || e.message),
   });
   const validerMut = useMutation({ mutationFn:(id)=>yakroAPI.validerDepenseYakro(id), onSuccess:rafraichir });
-  const payerMut = useMutation({ mutationFn:(id)=>yakroAPI.payerDepenseYakro(id), onSuccess:rafraichir });
+  const cloturerMut = useMutation({ mutationFn:(id)=>yakroAPI.cloturerDepenseYakro(id), onSuccess:rafraichir });
 
   const depenses = data?.data || [];
   const choisirCategorie = (c) => setForm(f => ({ ...f, categorie:c, nature: FIXES.includes(c) ? 'FIXE' : 'VARIABLE', employeId:'', description: c === 'Salaires' ? 'Salaire' : f.description }));
@@ -133,8 +193,10 @@ export default function DepensesYakroPage({ histo = false }) {
             { label:'Ce mois', value:fmtF(stats?.mois||0), color:'#E87722' },
             { label:'Charges fixes (mois)', value:fmtF(stats?.moisFixes||0), color:'#1a3f6f' },
             { label:'Autres charges (mois)', value:fmtF(stats?.moisVariables||0), color:'#BA7517' },
-            { label:'À valider', value:depenses.filter(d=>d.statut==='BROUILLON').length, color:'#5F5E5A' },
-            { label:'À payer', value:depenses.filter(d=>d.statut==='VALIDEE').length, color:'#27500A' },
+            { label:'À valider (DG)', value:depenses.filter(d=>d.statut==='BROUILLON').length, color:'#BA7517' },
+            { label:'À décaisser', value:depenses.filter(d=>d.statut==='VALIDEE').length, color:'#1a3f6f' },
+            { label:'À justifier', value:depenses.filter(d=>d.statut==='PAYEE').length, color:'#0F6E56' },
+            { label:'À clôturer', value:depenses.filter(d=>d.statut==='JUSTIFIEE').length, color:'#6B3FA0' },
           ].map((k,i)=>(
             <div key={i} className="kpi" style={{ borderTop:`3px solid ${k.color}` }}>
               <div className="kpi-label">{k.label}</div>
@@ -164,7 +226,7 @@ export default function DepensesYakroPage({ histo = false }) {
       )}
 
       <div style={{ display:'flex', gap:6, marginBottom:12, flexWrap:'wrap' }}>
-        {[['','Toutes'],['BROUILLON','Brouillon'],['VALIDEE','Validées'],['PAYEE','Payées']].map(([k,v])=>(
+        {[['','Toutes'],['BROUILLON','À valider'],['VALIDEE','À décaisser'],['PAYEE','À justifier'],['JUSTIFIEE','À clôturer'],['CLOTUREE','Clôturées'],['REJETEE','Rejetées']].map(([k,v])=>(
           <button key={k} onClick={()=>setStatutFilter(k)} className={`filter-btn ${statutFilter===k?'active':''}`}
             style={{ background:statutFilter===k?'#8B1A1A':undefined, color:statutFilter===k?'white':undefined }}>{v}</button>
         ))}
@@ -190,6 +252,15 @@ export default function DepensesYakroPage({ histo = false }) {
                 <div style={{ fontWeight:500, fontSize:13 }}>{d.description}</div>
                 {d.beneficiaire && <div style={{ fontSize:11, color:'#888' }}>{d.employeId ? 'Salarié' : 'Bénéficiaire'}: {d.beneficiaire}</div>}
                 {d.notes && <div style={{ fontSize:11, color:'#aaa', fontStyle:'italic' }}>{d.notes}</div>}
+                <div style={{ fontSize:10, color:'#999', marginTop:3, lineHeight:1.5 }}>
+                  Émise par {d.creeParNom}
+                  {d.valideParNom && ` · ${d.statut==='REJETEE'?'rejetée':'validée'} par ${d.valideParNom}`}
+                  {d.payeParNom && ` · décaissée par ${d.payeParNom}${d.reference ? ` (réf. ${d.reference})` : ''}`}
+                  {d.justifieParNom && ` · justifiée par ${d.justifieParNom}${d.montantJustifie!=null && d.montantJustifie!==d.montant ? ` (réel ${fmtFull(d.montantJustifie)})` : ''}`}
+                  {d.clotureParNom && ` · clôturée par ${d.clotureParNom}`}
+                </div>
+                {d.motifRejet && <div style={{ fontSize:11, color:'#A32D2D' }}>Motif du rejet : {d.motifRejet}</div>}
+                {d.noteJustification && <div style={{ fontSize:11, color:'#6B3FA0', fontStyle:'italic' }}>Justification : {d.noteJustification}</div>}
               </div>
               <div style={{ textAlign:'right', flexShrink:0 }}>
                 <div style={{ fontFamily:'Syne', fontWeight:800, fontSize:15, color:'#8B1A1A' }}>{fmtF(d.montant)}</div>
@@ -199,11 +270,18 @@ export default function DepensesYakroPage({ histo = false }) {
                 <button className="btn btn-sm btn-ghost" style={{ fontSize:11, color:d.aRecu?'#27500A':'#888' }} onClick={()=>setRecuVu(d)} aria-label="Reçu">
                   {d.aRecu ? <FileText size={12}/> : <Paperclip size={12}/>} {d.aRecu ? 'Reçu' : saisir ? 'Ajouter reçu' : 'Pas de reçu'}
                 </button>
-                {!histo && d.statut==='BROUILLON' && peut('depenses.valider') && (
+                {!histo && d.statut==='BROUILLON' && estDG && (<>
                   <button className="btn btn-sm" style={{ background:'#1a3f6f', color:'white', border:'none', fontSize:11 }} onClick={()=>validerMut.mutate(d.id)}><Check size={11}/> Valider</button>
+                  <button className="btn btn-sm btn-ghost" style={{ fontSize:11, color:'#A32D2D' }} onClick={()=>setEtape({ type:'rejeter', depense:d })}>Rejeter</button>
+                </>)}
+                {!histo && d.statut==='VALIDEE' && peut('depenses.decaisser') && (
+                  <button className="btn btn-sm" style={{ background:'#0F6E56', color:'white', border:'none', fontSize:11 }} onClick={()=>setEtape({ type:'payer', depense:d })}>Décaisser</button>
                 )}
-                {!histo && d.statut==='VALIDEE' && peut('depenses.valider') && (
-                  <button className="btn btn-sm" style={{ background:'#27500A', color:'white', border:'none', fontSize:11 }} onClick={()=>payerMut.mutate(d.id)}><Check size={11}/> Payer</button>
+                {!histo && d.statut==='PAYEE' && (saisir || peut('depenses.decaisser')) && (
+                  <button className="btn btn-sm" style={{ background:'#6B3FA0', color:'white', border:'none', fontSize:11 }} onClick={()=>setEtape({ type:'justifier', depense:d })}>Justifier</button>
+                )}
+                {!histo && d.statut==='JUSTIFIEE' && peut('depenses.cloturer') && (
+                  <button className="btn btn-sm" style={{ background:'#27500A', color:'white', border:'none', fontSize:11 }} onClick={()=>cloturerMut.mutate(d.id)}><Check size={11}/> Clôturer</button>
                 )}
               </div>
             </div>
@@ -212,6 +290,7 @@ export default function DepensesYakroPage({ histo = false }) {
         {depenses.length===0 && <div className="empty-state"><p>Aucune dépense</p></div>}
       </div>
 
+      {etape && <EtapeModal etape={etape.type} depense={etape.depense} onClose={()=>setEtape(null)} onDone={rafraichir}/>}
       {recuVu && <VoirRecu depense={recuVu} peutModifier={saisir} onClose={()=>setRecuVu(null)} onChange={rafraichir}/>}
 
       {showCreate && (

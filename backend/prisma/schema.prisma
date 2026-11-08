@@ -1467,7 +1467,7 @@ model DepenseYakro {
   typePaiement   TypePaiement?
   beneficiaire   String?
   date           DateTime @default(now())
-  statut         String   @default("BROUILLON") // BROUILLON | EN_ATTENTE | VALIDEE | PAYEE | CLOTUREE
+  statut         String   @default("BROUILLON") // BROUILLON(émise) | VALIDEE(DG) | REJETEE | PAYEE(décaissée) | JUSTIFIEE | CLOTUREE
   validePar      String?
   valideParNom   String?
   payePar        String?
@@ -1479,6 +1479,16 @@ model DepenseYakro {
   employeNom     String?
   periode        String?  // salaire : mois concerné (AAAA-MM)
   recu           String?  // reçu (image ou PDF en data URI)
+  valideLe          DateTime?
+  motifRejet        String?
+  payeLe            DateTime?
+  justifiePar       String?
+  justifieParNom    String?
+  justifieLe        DateTime?
+  montantJustifie   Float?
+  noteJustification String?
+  clotureLe         DateTime?
+  clotureParNom     String?
   creePar        String
   creeParNom     String
   createdAt      DateTime @default(now())

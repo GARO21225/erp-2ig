@@ -364,6 +364,53 @@ router.get('/mouvements', auth, async (req, res) => {
   }
 });
 
+// Bilan de stock sur une période : stock début, entrées (achats), ventes, pertes, stock fin, stock actuel.
+// Le stock aux bornes est reconstitué en remontant les mouvements depuis le stock actuel ;
+// un inventaire (quantité comptée) coupe la chaîne : le chiffre antérieur est alors inconnu (null).
+const delta = (m) => (m.type === 'ENTREE' ? m.quantite : m.type === 'SORTIE' || m.type === 'PERTE' ? -m.quantite : 0);
+const estRetour = (m) => m.type === 'ENTREE' && /^(Annulation|Retour)/i.test(m.motif || '');
+const jourDe = (d) => new Date(d).toISOString().slice(0, 10);
+
+router.get('/bilan', auth, async (req, res) => {
+  try {
+    const filiale = filialeAutorisee(req, req.query.filiale);
+    const du = req.query.du ? new Date(req.query.du) : new Date(Date.now() - 29 * 86400000);
+    const au = req.query.au ? new Date(`${req.query.au}T23:59:59.999Z`) : new Date();
+    const unSeul = req.query.produitId || null;
+    const produits = await prisma.produit.findMany({ where: { filiale, ...(unSeul ? { id: unSeul } : {}) }, include: { stocks: true }, omit: { imageData: true }, orderBy: { nom: 'asc' } });
+    const mvts = await prisma.mouvementStock.findMany({ where: { filiale, createdAt: { gte: du }, ...(unSeul ? { produitId: unSeul } : {}) }, orderBy: { createdAt: 'desc' }, take: 20000 });
+    const par = new Map();
+    for (const m of mvts) { if (!par.has(m.produitId)) par.set(m.produitId, []); par.get(m.produitId).push(m); }
+    const lignes = produits.map((p) => {
+      const actuel = p.stocks.reduce((t, x) => t + x.quantite, 0);
+      const liste = par.get(p.id) || []; // du plus récent au plus ancien
+      let etat = actuel, fin = actuel;
+      const jours = new Map();
+      const t = { entrees: 0, retours: 0, ventes: 0, pertes: 0, inventaires: 0, achats: [] };
+      let finTrouve = false;
+      for (const m of liste) {
+        if (!finTrouve && m.createdAt <= au) { fin = etat; finTrouve = true; }
+        const dansPeriode = m.createdAt <= au;
+        if (dansPeriode) {
+          const j = jourDe(m.createdAt);
+          if (!jours.has(j)) jours.set(j, { date: j, entrees: 0, ventes: 0, pertes: 0, retours: 0, inventaire: null, stockFin: etat });
+          const ligneJ = jours.get(j);
+          if (m.type === 'ENTREE') { if (estRetour(m)) { t.retours += m.quantite; ligneJ.retours += m.quantite; } else { t.entrees += m.quantite; ligneJ.entrees += m.quantite; t.achats.push({ date: m.createdAt, quantite: m.quantite, motif: m.motif }); } }
+          else if (m.type === 'SORTIE') { t.ventes += m.quantite; ligneJ.ventes += m.quantite; }
+          else if (m.type === 'PERTE') { t.pertes += m.quantite; ligneJ.pertes += m.quantite; }
+          else if (m.type === 'INVENTAIRE') { t.inventaires++; ligneJ.inventaire = m.quantite; }
+        }
+        etat = m.type === 'INVENTAIRE' ? null : (etat == null ? null : etat - delta(m));
+      }
+      if (!finTrouve) fin = actuel; // aucun mouvement jusqu'à la fin de période
+      const debut = etat; // état avant le plus ancien mouvement ≥ du
+      const detail = unSeul ? { jours: [...jours.values()].sort((a, b) => a.date < b.date ? -1 : 1), achats: t.achats.reverse() } : {};
+      return { id: p.id, nom: p.nom, reference: p.reference, unite: p.unite, categorie: p.categorie, type: p.type, stockActuel: actuel, stockDebut: debut, stockFin: fin, entrees: t.entrees, retours: t.retours, ventes: t.ventes, pertes: t.pertes, inventaires: t.inventaires, ...detail };
+    });
+    res.json({ du: jourDe(du), au: jourDe(au), lignes });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Achats / Approvisionnements
 router.get('/achats', auth, async (req, res) => {
   try {
