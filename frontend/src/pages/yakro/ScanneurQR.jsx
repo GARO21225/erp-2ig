@@ -2,6 +2,19 @@ import { useEffect, useRef, useState } from 'react';
 import { X, Camera } from 'lucide-react';
 import jsQR from 'jsqr';
 
+/** Décode un QR code depuis une photo ; renvoie le texte ou lève une erreur lisible. */
+export async function lireQRPhoto(f) {
+  const bmp = await createImageBitmap(f);
+  for (const max of [1200, 800, 1600]) {
+    const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+    const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(bmp, 0, 0, c.width, c.height);
+    const r = jsQR(x.getImageData(0, 0, c.width, c.height).data, c.width, c.height);
+    if (r?.data) return r.data;
+  }
+  throw new Error('QR code non reconnu : rapprochez-vous, cadrez bien le QR et reprenez la photo.');
+}
+
 /** Scanner de QR code intégré à l'application (caméra arrière). Appelle onCode(texte) au premier code lu. */
 export default function ScanneurQR({ onCode, onClose }) {
   const video = useRef(null);

@@ -69,9 +69,7 @@ const NAV = {
     { id: 'gestion-caisse',  label: 'Gestion Caisse',      to: '/yakro/gestion-caisse',   icon: BarChart2 },
     { id: 'reservations',    label: 'Réservations',        to: '/yakro/reservations',     icon: Calendar },
     { id: 'depenses',        label: 'Dépenses',            to: '/yakro/depenses',         icon: ArrowDownLeft },
-    { id: 'config-tables',   label: 'Config. Tables',      to: '/yakro/tables',           icon: Settings },
     { id: 'parametrage-resto', label: 'Paramétrage restaurant', to: '/yakro/parametrage',   icon: Settings },
-    { id: 'restaurants',     label: 'Mes restaurants',     to: '/yakro/restaurants',      icon: Store },
   ],
   TOPTELSIG: [
     { id: 'toptelsig-dashboard', label: 'Dashboard',           to: '/toptelsig/dashboard',     icon: LayoutDashboard },

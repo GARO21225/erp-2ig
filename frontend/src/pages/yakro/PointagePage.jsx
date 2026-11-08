@@ -5,7 +5,7 @@ import { Clock, Users, QrCode, History, Plus, X, AlertTriangle } from 'lucide-re
 import { yakroAPI } from '../../lib/api';
 import { useYakro } from '../../lib/useYakro';
 import { duree } from './PointerPage';
-import ScanneurQR from './ScanneurQR';
+import ScanneurQR, { lireQRPhoto } from './ScanneurQR';
 import { useNavigate } from 'react-router-dom';
 
 const heure = (d) => new Date(d).toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' });
@@ -113,6 +113,7 @@ export default function PointagePage({ histo = false }) {
 
   const navigate = useNavigate();
   const [scan, setScan] = useState(false);
+  const [errScan, setErrScan] = useState('');
   const moi = useQuery({ queryKey: ['pointage', 'moi'], queryFn: yakroAPI.pointageMoi, enabled: onglet === 'moi', refetchInterval: 30000 });
   const pres = useQuery({ queryKey: ['pointage', 'presences', courant?.id], queryFn: yakroAPI.pointagePresences, enabled: voir && onglet === 'presences', refetchInterval: 30000 });
   const hist = useQuery({ queryKey: ['pointage', 'hist', courant?.id, du, au], queryFn: () => yakroAPI.pointageHistorique({ du, au }), enabled: voir && onglet === 'historique' });
@@ -137,10 +138,20 @@ export default function PointagePage({ histo = false }) {
               <b style={{ color: '#3C7A37' }}>● Vous êtes en service</b> depuis {heure(moi.data.enService.entreeLe)} ({duree(moi.data.enService.dureeMin)}). Scannez le QR du restaurant pour pointer votre départ.
             </div>
           ) : <div style={{ background: '#FAF6F0', borderRadius: 12, padding: 14, marginBottom: 14, fontSize: 13 }}>Vous n'êtes pas en service. Scannez le QR code affiché au restaurant pour pointer votre arrivée.</div>}
-          <button onClick={() => setScan(true)} style={{ width: '100%', minHeight: 56, marginBottom: 14, border: 0, borderRadius: 14, background: ROUGE, color: 'white', fontFamily: 'Syne', fontWeight: 700, fontSize: 16, cursor: 'pointer' }}>
-            <QrCode size={18} style={{ verticalAlign: -3, marginRight: 8 }} />{moi.data?.enService ? 'Scanner pour pointer ma sortie' : 'Scanner pour pointer mon arrivée'}
-          </button>
-          {scan && <ScanneurQR onClose={() => setScan(false)} onCode={(t) => { setScan(false); try { const u = new URL(t); if (u.pathname === '/yakro/pointer') return navigate('/yakro/pointer' + u.search); } catch { /* pas un lien */ } alert('Ce QR code n’est pas celui du pointage Yakro Grill.'); }} />}
+          {(() => {
+            const st = { display: 'block', textAlign: 'center', lineHeight: '56px', width: '100%', minHeight: 56, marginBottom: 14, border: 0, borderRadius: 14, background: ROUGE, color: 'white', fontFamily: 'Syne', fontWeight: 700, fontSize: 16, cursor: 'pointer' };
+            const texte = <><QrCode size={18} style={{ verticalAlign: -3, marginRight: 8 }} />{moi.data?.enService ? 'Scanner pour pointer ma sortie' : 'Scanner pour pointer mon arrivée'}</>;
+            const aller = (t) => { try { const u = new URL(t); if (u.pathname === '/yakro/pointer') return navigate('/yakro/pointer' + u.search); } catch { /* pas un lien */ } setErrScan('Ce QR code n’est pas celui du pointage Yakro Grill.'); };
+            // Sans HTTPS la caméra en direct est bloquée : un seul appui ouvre directement l'appareil photo, la photo est lue automatiquement.
+            const direct = !!navigator.mediaDevices?.getUserMedia;
+            return (<>
+              {direct
+                ? <button onClick={() => { setErrScan(''); setScan(true); }} style={st}>{texte}</button>
+                : <label style={st}>{texte}<input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (!f) return; setErrScan(''); try { aller(await lireQRPhoto(f)); } catch (x) { setErrScan(x.message || 'Photo illisible, réessayez.'); } }} /></label>}
+              {errScan && <p role="alert" style={{ color: '#A32D2D', fontSize: 14, margin: '-6px 0 14px' }}>{errScan}</p>}
+              {scan && <ScanneurQR onClose={() => setScan(false)} onCode={(t) => { setScan(false); aller(t); }} />}
+            </>);
+          })()}
           <Tableau sessions={moi.data?.historique || []} />
         </div>
       )}

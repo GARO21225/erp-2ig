@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Save, Trash2, Plus, UserPlus } from 'lucide-react';
 import { yakroAPI } from '../../lib/api';
 import { useYakro } from '../../lib/useYakro';
+import TablesPage from './TablesPage';
+import RestaurantsPage from './RestaurantsPage';
 
 const ROUGE = '#8B1A1A';
 const msgErreur = (e) => e?.response?.data?.error || e?.message || 'Erreur';
@@ -307,6 +309,8 @@ export default function ParametrageRestaurantPage() {
     { id: 'prix', label: 'Prix', visible: peut('prix.gerer') || peut('menu.voir') },
     { id: 'parametres', label: 'Paramètres', visible: peut('parametres.gerer') },
     { id: 'equipe', label: 'Équipe & profils', visible: peut('equipe.gerer') },
+    { id: 'tables', label: 'Plan de salle', visible: peut('parametres.gerer') },
+    { id: 'restaurants', label: 'Mes restaurants', visible: peut('restaurants.gerer') },
   ].filter(o => o.visible);
   const actif = onglets.find(o => o.id === onglet) || onglets[0];
 
@@ -329,6 +333,8 @@ export default function ParametrageRestaurantPage() {
       {actif.id === 'prix' && <OngletPrix r={courant} restos={restaurants} peutModifier={peut('prix.gerer')} />}
       {actif.id === 'parametres' && <OngletParametres r={courant} peutModifier={peut('parametres.gerer')} />}
       {actif.id === 'equipe' && <OngletEquipe r={courant} />}
+      {actif.id === 'tables' && <TablesPage />}
+      {actif.id === 'restaurants' && <RestaurantsPage />}
     </div>
   );
 }
