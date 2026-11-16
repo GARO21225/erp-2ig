@@ -54,7 +54,7 @@ export default function CuisinePage() {
 
   return (
     <div className="page-enter">
-      <div className="yk-head"><div><h1 className="yk-title">Cuisine & Bar</h1><div className="yk-sub">{courant?.nom} · {preparer.length} à préparer · {recuperer.length} à récupérer</div></div></div>
+      <div className="yk-head"><div><h1 className="yk-title">Cuisine & Bar</h1><div className="yk-sub">{courant?.nom} · {preparer.length} à préparer · {recuperer.length} à récupérer</div></div><a className="btn btn-ghost" href="/yakro/ecran">📺 Affichage TV</a></div>
       <div className="yk-chips" style={{ marginBottom: 14 }}>
         {STATIONS.map(([k, l, Icon]) => <button key={k} className="yk-chip" aria-pressed={station === k} onClick={() => setStation(k)}><Icon size={14} style={{ verticalAlign: -2, marginRight: 6 }} />{l}</button>)}
       </div>

@@ -82,7 +82,7 @@ export default function EcranBoutique() {
             <div style={{ borderLeft: '1px solid #ffffff55', paddingLeft: 10, fontSize: 18, fontWeight: 700, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{data?.restaurant || 'Yakro Grill'}</div>
             <button style={{ ...bouton, color: '#fff' }} aria-label="Plein écran" onClick={() => document.documentElement.requestFullscreen?.()}><Maximize size={16} /></button>
             <button style={{ ...bouton, color: '#fff' }} aria-label="Réglages" onClick={() => setReglages(!reglages)}><Settings size={16} /></button>
-            <button style={{ ...bouton, color: '#fff' }} aria-label="Quitter l'écran" onClick={() => navigate('/yakro/dashboard')}><ArrowLeft size={16} /></button>
+            <button style={{ ...bouton, color: '#fff' }} aria-label="Quitter l'écran" onClick={() => navigate('/yakro/cuisine')}><ArrowLeft size={16} /></button>
           </div>
           <div style={{ overflow: 'hidden', marginTop: 8, borderTop: '1px solid #ffffff33', paddingTop: 6 }}>
             <div style={{ whiteSpace: 'nowrap', fontSize: 14, animation: 'yk-defile 25s linear infinite' }}>
