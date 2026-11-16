@@ -7,6 +7,7 @@ import OfflineIndicator from './components/ui/OfflineIndicator';
 import Layout from './components/layout/Layout';
 import LoginPage from './pages/LoginPage';
 import PointerPage from './pages/yakro/PointerPage';
+import EcranBoutique from './pages/yakro/EcranBoutique';
 import PointagePage from './pages/yakro/PointagePage';
 import CongesYakroPage from './pages/yakro/CongesYakroPage';
 import HistoriquesPage from './pages/yakro/HistoriquesPage';
@@ -99,6 +100,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/yakro/ecran" element={<PrivateRoute><EcranBoutique /></PrivateRoute>} />
           <Route path="/yakro/pointer" element={<PrivateRoute><PointerPage /></PrivateRoute>} />
           <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
             <Route index element={<Navigate to="/dashboard" replace />} />

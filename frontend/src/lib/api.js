@@ -168,6 +168,7 @@ export const yakroAPI = {
   createReservation: (data) => api.post('/yakro/reservations', data),
   updateReservation: (id, statut) => api.put(`/yakro/reservations/${id}/statut`, { statut }),
   // Dashboard
+  ecran: () => api.get('/yakro/commandes/ecran'),
   cuisine: () => api.get('/yakro/commandes/cuisine'),
   pret: (id, station) => api.put(`/yakro/commandes/${id}/pret`, { station }),
   servi: (id) => api.put(`/yakro/commandes/${id}/servi`),

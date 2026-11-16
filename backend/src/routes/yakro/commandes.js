@@ -142,6 +142,39 @@ router.get('/cuisine', auth, yakro, resto, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// GET /ecran — écran boutique : commandes en cours par table (bar / restaurant), agents en service, indicateurs du jour
+router.get('/ecran', auth, yakro, resto, async (req, res) => {
+  try {
+    const S = sc(req), jour = new Date(); jour.setHours(0, 0, 0, 0);
+    const [cmds, agents, duJour] = await Promise.all([
+      prisma.commandeYakro.findMany({
+        where: { ...S, statut: { in: ['EN_COURS', 'CUISINE', 'PRETE', 'SERVIE'] }, createdAt: { gte: new Date(Date.now() - 12 * 3600000) } },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, numero: true, type: true, serveurNom: true, createdAt: true, table: { select: { numero: true } },
+          lignes: { select: { id: true, quantite: true, statut: true, menu: { select: { nom: true, categorie: true } } } } },
+      }),
+      prisma.pointageYakro.findMany({ where: { ...S, sortieLe: null, entreeLe: { gte: new Date(Date.now() - 20 * 3600000) } }, select: { nom: true }, orderBy: { entreeLe: 'asc' } }),
+      prisma.commandeYakro.findMany({ where: { ...S, createdAt: { gte: jour }, statut: { not: 'ANNULEE' } }, select: { statut: true, total: true } }),
+    ]);
+    const commandes = cmds.map((c) => ({
+      id: c.id, numero: c.numero, table: c.table ? `Table ${c.table.numero}` : (c.type === 'EMPORTER' ? 'À emporter' : 'Sans table'), serveurNom: c.serveurNom || '—', createdAt: c.createdAt,
+      lignes: c.lignes.map((l) => ({ id: l.id, nom: l.menu?.nom || '?', quantite: l.quantite, statut: l.statut, station: stationDe(l.menu?.categorie) })),
+    })).filter((c) => c.lignes.some((l) => l.statut !== 'SERVI'));
+    const lignes = commandes.flatMap((c) => c.lignes);
+    const voitCA = ['DG', 'DIRECTEUR'].includes(req.user.role) || req.permissions?.has('rapports.voir');
+    res.json({
+      restaurant: req.restaurant?.nom || 'Yakro Grill', commandes, agents: [...new Set(agents.map((a) => a.nom))],
+      kpi: {
+        commandesJour: duJour.length, enCours: commandes.length,
+        aPreparer: lignes.filter((l) => ['EN_ATTENTE', 'EN_CUISINE'].includes(l.statut)).length,
+        prets: lignes.filter((l) => l.statut === 'PRET').length,
+        payees: duJour.filter((c) => c.statut === 'PAYEE').length,
+        caJour: voitCA ? duJour.filter((c) => c.statut === 'PAYEE').reduce((s, c) => s + (c.total || 0), 0) : null,
+      },
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // PUT /:id/pret { station: CUISINE | BAR | TOUT } — les articles de la station sont prêts : le serveur est notifié
 router.put('/:id/pret', auth, yakro, resto, async (req, res) => {
   try {

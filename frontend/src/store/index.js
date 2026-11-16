@@ -61,7 +61,7 @@ if (typeof window !== 'undefined') {
 }
 
 // Pages d'exploitation (prise de commande, cuisine, pointage) : toujours sur UN restaurant
-const OPERATIONNEL = ['/yakro/pos', '/yakro/cuisine', '/yakro/pointer'];
+const OPERATIONNEL = ['/yakro/pos', '/yakro/cuisine', '/yakro/pointer', '/yakro/ecran'];
 const LECTURE_PAR_DEFAUT = ['/yakro/dashboard', '/yakro/historiques'];
 /** Vue « tous les restaurants » active pour cette page ? */
 export function porteeGlobale(pathname = (typeof window !== 'undefined' ? window.location.pathname : '')) {
