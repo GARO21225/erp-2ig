@@ -227,6 +227,10 @@ router.post('/:id/payer', auth, yakro, resto, can('commande.encaisser'), VALIDAT
     if (!commande) return res.status(404).json({ error: 'Commande introuvable' });
     if (commande.statut === 'PAYEE') return res.status(400).json({ error: 'Commande déjà payée' });
     if (commande.statut === 'ANNULEE') return res.status(400).json({ error: 'Impossible de payer une commande annulée' });
+    // Ordre logique : préparé → servi → encaissé
+    const lignesCmd = await prisma.ligneCommandeYakro.findMany({ where: { commandeId: commande.id }, select: { statut: true } });
+    if (lignesCmd.some((l) => ['EN_ATTENTE', 'EN_CUISINE'].includes(l.statut))) return res.status(409).json({ error: "Encaissement impossible : la commande n'est pas encore prête (cuisine / bar)" });
+    if (lignesCmd.some((l) => l.statut !== 'SERVI')) return res.status(409).json({ error: "Encaissement impossible : la commande est prête mais pas encore servie" });
 
     const params = await parametresDe(req.restaurantId);
     for (const p of paiements) {
@@ -413,6 +417,7 @@ router.post('/:id/ajouter-lignes', auth, yakro, resto, async (req, res) => {
         data: {
           sousTotal: { increment: ajout },
           total: { increment: ajout },
+          ...(['PRETE', 'SERVIE'].includes(commande.statut) ? { statut: 'CUISINE' } : {}), // nouveaux articles à préparer
           notes: notes ? `${commande.notes || ''} | ${notes}` : commande.notes,
         }
       });

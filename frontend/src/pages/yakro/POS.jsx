@@ -8,7 +8,7 @@ import { exportTicketYakro } from '../../lib/export';
 import { yakroAPI, employesAPI, API_URL } from '../../lib/api';
 import DocumentViewer from '../../components/ui/DocumentViewer';
 import { useYakro } from '../../lib/useYakro';
-import { Plus, X, Minus, ShoppingBag, Banknote, Smartphone, CreditCard, CheckCircle, Users, RefreshCw, ArrowRight, Search } from 'lucide-react';
+import { Plus, X, Minus, ShoppingBag, Banknote, Smartphone, CreditCard, CheckCircle, Users, RefreshCw, ArrowRight, Search, Utensils } from 'lucide-react';
 
 const STATUT_TABLE = {
   LIBRE:    { label:'Libre',     color:'#639922', bg:'#F4FAE8', border:'#C0DD97' },
@@ -589,6 +589,13 @@ export default function POS() {
 
   const createCmd = useMutation({ mutationFn:yakroAPI.createCommande, onSuccess:()=>{ qc.invalidateQueries(['tables']); qc.invalidateQueries(['menu']); setCommandeTable(null); setPanneauTable(null); showToast('Commande créée ✓'); }, onError:e=>showToast(e?.error||'Erreur','error') });
   const updateStatut = useMutation({ mutationFn:({id,statut})=>statut==='PRETE' ? yakroAPI.pret(id,'TOUT') : yakroAPI.updateStatut(id,statut), onSuccess:()=>{ qc.invalidateQueries(['tables']); showToast('Statut mis à jour'); } });
+  const servirCmd = useMutation({ mutationFn: (id) => yakroAPI.servi(id), onSuccess: () => { qc.invalidateQueries(['tables']); qc.invalidateQueries({ queryKey: ['cuisine'] }); showToast('Commande servie ✓'); }, onError: e => showToast(e?.error || 'Erreur', 'error') });
+  // Ordre logique : préparé → servi → encaissé
+  const ouvrirPaiement = (commande) => {
+    if (['EN_COURS', 'CUISINE'].includes(commande.statut)) return showToast("Pas encore prête : la cuisine / le bar doit d'abord marquer « Prêt »", 'error');
+    if (commande.statut === 'PRETE') return showToast("Prête mais pas servie : marquez « Servie » avant d'encaisser", 'error');
+    setPaiementCommande(commande);
+  };
   const payerCmd = useMutation({
     mutationFn: ({ id, data }) => yakroAPI.payer(id, data),
     onSuccess: async (res, vars) => {
@@ -633,7 +640,7 @@ export default function POS() {
     setPanneauTable(null);
     // Si la table a déjà une commande ouverte → mode ajout (pas de serveur requis)
     const commandeOuverte = table.commandes?.find(
-      cmd => cmd.statut === 'EN_COURS' || cmd.statut === 'CUISINE' || cmd.statut === 'PRETE'
+      cmd => ['EN_COURS', 'CUISINE', 'PRETE', 'SERVIE'].includes(cmd.statut)
     );
     if (commandeOuverte) {
       setCommandeTable({ ...table, commandeExistante: commandeOuverte });
@@ -644,7 +651,7 @@ export default function POS() {
 
   const handleEncaisser = (table) => {
     const commande = table.commandes?.[0];
-    if (commande) { setPanneauTable(null); setPaiementCommande(commande); }
+    if (commande) { setPanneauTable(null); ouvrirPaiement(commande); }
   };
 
   const handleSaveCommande = (table, data) => {
@@ -723,7 +730,8 @@ export default function POS() {
                   <div className="yk-table-actions">
                     {enCours && <button className="yk-mini" aria-label="Ajouter des articles" onClick={e=>{e.stopPropagation();setCommandeTable({...t,commandeExistante:commande});}}><Plus size={16}/></button>}
                     {enCours && <button className="yk-mini" data-ok aria-label="Marquer prête" onClick={e=>{e.stopPropagation();updateStatut.mutate({id:commande.id,statut:'PRETE'});}}><CheckCircle size={16}/></button>}
-                    <button className="yk-mini" data-primary aria-label="Encaisser" onClick={e=>{e.stopPropagation();setPaiementCommande(commande);}}><Banknote size={16}/></button>
+                    {commande.statut==='PRETE' && <button className="yk-mini" data-ok aria-label="Marquer servie" title="Marquer servie" onClick={e=>{e.stopPropagation();servirCmd.mutate(commande.id);}}><Utensils size={16}/></button>}
+                    <button className="yk-mini" data-primary aria-label="Encaisser" title={commande.statut==='SERVIE' ? 'Encaisser' : 'Encaissement après service'} style={commande.statut==='SERVIE' ? undefined : { opacity:.4 }} onClick={e=>{e.stopPropagation();ouvrirPaiement(commande);}}><Banknote size={16}/></button>
                   </div>
                 </>
               ) : resa ? (
