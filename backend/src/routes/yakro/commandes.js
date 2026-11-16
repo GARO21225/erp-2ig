@@ -151,14 +151,14 @@ router.get('/ecran', auth, yakro, resto, async (req, res) => {
         where: { ...S, statut: { in: ['EN_COURS', 'CUISINE', 'PRETE', 'SERVIE'] }, createdAt: { gte: new Date(Date.now() - 12 * 3600000) } },
         orderBy: { createdAt: 'asc' },
         select: { id: true, numero: true, type: true, serveurNom: true, createdAt: true, table: { select: { numero: true } },
-          lignes: { select: { id: true, quantite: true, statut: true, menu: { select: { nom: true, categorie: true } } } } },
+          lignes: { select: { id: true, quantite: true, notes: true, statut: true, menu: { select: { nom: true, categorie: true } } } } },
       }),
       prisma.pointageYakro.findMany({ where: { ...S, sortieLe: null, entreeLe: { gte: new Date(Date.now() - 20 * 3600000) } }, select: { nom: true }, orderBy: { entreeLe: 'asc' } }),
       prisma.commandeYakro.findMany({ where: { ...S, createdAt: { gte: jour }, statut: { not: 'ANNULEE' } }, select: { statut: true, total: true } }),
     ]);
     const commandes = cmds.map((c) => ({
       id: c.id, numero: c.numero, table: c.table ? `Table ${c.table.numero}` : (c.type === 'EMPORTER' ? 'À emporter' : 'Sans table'), serveurNom: c.serveurNom || '—', createdAt: c.createdAt,
-      lignes: c.lignes.map((l) => ({ id: l.id, nom: l.menu?.nom || '?', quantite: l.quantite, statut: l.statut, station: stationDe(l.menu?.categorie) })),
+      lignes: c.lignes.map((l) => ({ id: l.id, nom: l.menu?.nom || '?', quantite: l.quantite, notes: l.notes, statut: l.statut, station: stationDe(l.menu?.categorie) })),
     })).filter((c) => c.lignes.some((l) => l.statut !== 'SERVI'));
     const lignes = commandes.flatMap((c) => c.lignes);
     const voitCA = ['DG', 'DIRECTEUR'].includes(req.user.role) || req.permissions?.has('rapports.voir');

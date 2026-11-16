@@ -73,19 +73,20 @@ function Zone({ titre, station, commandes, now }) {
   return (
     <section style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: '#1c1c1c', borderRadius: 14, padding: 12 }}>
       <h2 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 800, color: '#fff', display: 'flex', justifyContent: 'space-between' }}>{titre}<span style={{ color: '#F5B041' }}>{liste.length}</span></h2>
-      <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 10, alignContent: 'start' }}>
+      <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10, alignContent: 'start' }}>
         {liste.length === 0 && <div style={{ color: '#777', fontSize: 14 }}>Aucune commande en cours</div>}
         {liste.map(c => {
           const pret = c.l.every(x => x.statut === 'PRET'), m = minutes(c.createdAt, now);
           return (
             <div key={c.id} style={{ background: '#fff', borderRadius: 10, padding: 10, borderLeft: `6px solid ${pret ? '#2E8B3D' : m >= 20 ? '#A32D2D' : '#BA7517'}` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <b style={{ fontSize: 18, color: ROUGE }}>{c.table}</b><span style={{ fontSize: 12, color: m >= 20 ? '#A32D2D' : '#666', fontWeight: 700 }}>{m} min</span>
+                <b style={{ fontFamily: 'Syne', fontSize: 22, color: '#1a1a1a' }}>{c.table}</b><span style={{ fontSize: 12, color: m >= 20 ? '#A32D2D' : '#666', fontWeight: 700 }}>{m} min</span>
               </div>
               <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>{c.serveurNom}</div>
               {c.l.map(x => (
-                <div key={x.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 14, padding: '2px 0' }}>
-                  <span><b>{x.quantite}×</b> {x.nom}</span>
+                <div key={x.id} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '4px 0', color: '#1a1a1a' }}>
+                  <span style={{ fontFamily: 'Syne', fontWeight: 800, fontSize: 22, minWidth: 36, color: ROUGE }}>{x.quantite}×</span>
+                  <span style={{ flex: 1, fontSize: 18, fontWeight: 700 }}>{x.nom}{x.notes && <span style={{ display: 'block', fontSize: 13, fontWeight: 400, color: '#BA7517', fontStyle: 'italic' }}>⚠ {x.notes}</span>}</span>
                   <span style={{ fontSize: 11, fontWeight: 700, color: (STATUT[x.statut] || STATUT.EN_ATTENTE)[1], whiteSpace: 'nowrap' }}>{(STATUT[x.statut] || STATUT.EN_ATTENTE)[0]}</span>
                 </div>
               ))}
