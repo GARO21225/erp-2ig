@@ -21,7 +21,7 @@ app.set('trust proxy', 1);
 app.use(morgan('combined', { stream: { write: (m) => logger.http(m.trim()) } }));
 
 // ── Rate limiting
-app.use('/api/', rateLimit({ windowMs: 15*60*1000, max: 500, standardHeaders: true, legacyHeaders: false }));
+app.use('/api/', rateLimit({ windowMs: 15*60*1000, max: 6000, standardHeaders: true, legacyHeaders: false }));
 app.use('/api/auth/login', rateLimit({ windowMs: 15*60*1000, max: 20, standardHeaders: true, legacyHeaders: false }));
 
 // ── Routes
@@ -36,6 +36,7 @@ app.use('/api/recherche',   require('./routes/recherche'));
 app.use('/api/audit', require('./routes/audit'));
 app.use('/api/backup',      require('./routes/backup'));
 app.use('/api/yakro/pointage', require('./routes/yakro/pointage'));
+app.use('/api/yakro/ecran', require('./routes/yakro/ecran'));
 app.use('/api/yakro/conges', require('./routes/yakro/conges'));
 app.use('/api/yakro/notifications', require('./routes/yakro/notifications'));
 app.use('/api/yakro/restaurants', require('./routes/yakro/restaurants'));

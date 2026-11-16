@@ -168,6 +168,9 @@ export const yakroAPI = {
   createReservation: (data) => api.post('/yakro/reservations', data),
   updateReservation: (id, statut) => api.put(`/yakro/reservations/${id}/statut`, { statut }),
   // Dashboard
+  videosEcran: () => api.get('/yakro/ecran/videos'),
+  envoyerVideoEcran: (file, onProgress) => { const fd = new FormData(); fd.append('video', file); return api.post('/yakro/ecran/videos', fd, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 0, onUploadProgress: (e) => onProgress?.(e.total ? Math.round(e.loaded / e.total * 100) : 0) }); },
+  supprimerVideoEcran: (f) => api.delete(`/yakro/ecran/videos/${encodeURIComponent(f)}`),
   ecran: () => api.get('/yakro/commandes/ecran'),
   cuisine: () => api.get('/yakro/commandes/cuisine'),
   pret: (id, station) => api.put(`/yakro/commandes/${id}/pret`, { station }),

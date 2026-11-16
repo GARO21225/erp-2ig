@@ -21,6 +21,9 @@ services:
       BACKUP_RETENTION_MONTHLY: ${BACKUP_RETENTION_MONTHLY:-12}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_DIR: ${LOG_DIR:-/tmp/erp-2ig-logs}
+      VIDEOS_DIR: /data/videos
+    volumes:
+      - yakro_videos:/data/videos
     ports:
       - "4000:4000"
     networks:
@@ -58,6 +61,7 @@ services:
       - frontend
 
 volumes:
+  yakro_videos:
   caddy_data:
   caddy_config:
 
