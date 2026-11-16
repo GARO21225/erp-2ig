@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Settings, ArrowLeft, Maximize } from 'lucide-react';
@@ -10,25 +10,57 @@ const lire = () => { try { return JSON.parse(localStorage.getItem(CLE) || '{}');
 const STATUT = { EN_ATTENTE: ['En attente', '#BA7517'], EN_CUISINE: ['En préparation', '#BA7517'], PRET: ['Prêt', '#2E8B3D'], SERVI: ['Servi', '#777'] };
 const minutes = (d, now) => Math.max(0, Math.floor((now - new Date(d)) / 60000));
 
-/** Adresse du lecteur YouTube : une playlist (list=PL…), ou plusieurs liens lus à la suite, en boucle */
-function lecteurYoutube(texte, son) {
+/** Liens YouTube → { liste } (playlist list=PL…) ou { ids } (vidéos lues à la suite). Les « mix » (RD…) ne sont pas intégrables. */
+function lireYoutube(texte) {
   const lignes = String(texte || '').split(/\s+/).filter(Boolean);
-  const liste = lignes.map(l => l.match(/[?&]list=((?:PL|OL|UU|FL)[\w-]+)/)?.[1]).find(Boolean); // les « mix » (RD…) ne sont pas intégrables
+  const liste = lignes.map(l => l.match(/[?&]list=((?:PL|OL|UU|FL)[\w-]+)/)?.[1]).find(Boolean);
   const ids = [...new Set(lignes.map(l => l.match(/(?:youtu\.be\/|v=|embed\/|shorts\/|live\/)([\w-]{11})/)?.[1]).filter(Boolean))];
-  const fin = `autoplay=1&mute=${son ? 0 : 1}&loop=1&rel=0`;
-  if (liste) return `https://www.youtube.com/embed/videoseries?list=${liste}&${fin}`;
-  if (ids.length) return `https://www.youtube.com/embed/${ids[0]}?playlist=${(ids.length > 1 ? ids.slice(1) : ids).join(',')}&${fin}`;
-  return null;
+  return { liste, ids };
+}
+let apiYT;
+const chargerYT = () => apiYT || (apiYT = new Promise((ok) => {
+  if (window.YT?.Player) return ok(window.YT);
+  const avant = window.onYouTubeIframeAPIReady;
+  window.onYouTubeIframeAPIReady = () => { avant?.(); ok(window.YT); };
+  const sc = document.createElement('script'); sc.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(sc);
+}));
+
+/** Lecteur YouTube piloté : enchaîne les vidéos en boucle, saute celles que YouTube refuse, prévient si aucune n'est lisible. */
+function LecteurYoutube({ texte, son, onBloque }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const { liste, ids } = lireYoutube(texte);
+    if (!liste && !ids.length) { onBloque('Lien YouTube non reconnu'); return undefined; }
+    let player, mort = false, refus = 0;
+    chargerYT().then((YT) => {
+      if (mort || !ref.current) return;
+      const cible = document.createElement('div'); ref.current.replaceChildren(cible);
+      player = new YT.Player(cible, {
+        width: '100%', height: '100%', videoId: liste ? undefined : ids[0],
+        playerVars: { autoplay: 1, mute: son ? 0 : 1, rel: 0, loop: 1, playsinline: 1, ...(liste ? { listType: 'playlist', list: liste } : { playlist: (ids.length > 1 ? ids.slice(1) : ids).join(',') }) },
+        events: {
+          onReady: (e) => { if (!son) e.target.mute(); e.target.playVideo(); },
+          onStateChange: (e) => { if (e.data === YT.PlayerState.PLAYING) refus = 0; },
+          // 100 = introuvable, 101/150 = le propriétaire interdit la lecture hors de YouTube
+          onError: () => { refus += 1; const n = liste ? 50 : ids.length; if (refus >= n) onBloque("YouTube refuse la lecture de cette vidéo hors de son site (choix du propriétaire, fréquent pour la musique)"); else e_next(); },
+        },
+      });
+      const e_next = () => { try { player.nextVideo(); } catch { /* ignore */ } };
+    });
+    return () => { mort = true; try { player?.destroy(); } catch { /* ignore */ } };
+  }, [texte, son]); // eslint-disable-line react-hooks/exhaustive-deps
+  return <div ref={ref} style={{ width: '100%', height: '100%', borderRadius: 12, overflow: 'hidden', background: '#000' }} />;
 }
 
 /** Vidéos de l'écran : fichiers envoyés (lus à la suite, en boucle) ou YouTube (un lien, plusieurs liens ou une playlist) */
 function Video({ cfg, videos }) {
   const [i, setI] = useState(0);
+  const [bloque, setBloque] = useState(null); // YouTube illisible → on passe aux vidéos envoyées
   const style = { width: '100%', height: '100%', border: 0, borderRadius: 12, background: '#000', objectFit: 'contain' };
   const vide = (t) => <div style={{ color: '#888', fontSize: 14, textAlign: 'center', padding: 20 }}>{t}</div>;
   if ((cfg.source || (cfg.video ? 'YOUTUBE' : 'FICHIERS')) === 'YOUTUBE') {
-    const src = lecteurYoutube(cfg.video, cfg.son);
-    return src ? <iframe key={src} title="Vidéo" style={style} allow="autoplay; encrypted-media; picture-in-picture" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen src={src} /> : vide('Lien YouTube non reconnu : vérifiez-le avec le bouton ⚙');
+    if (!bloque || bloque.pour !== cfg.video) return <LecteurYoutube texte={cfg.video} son={cfg.son} onBloque={(m) => setBloque({ pour: cfg.video, m })} />;
+    if (!videos.length) return vide(`${bloque.m}. Mettez un autre lien, ou envoyez la vidéo dans « Mes vidéos » (bouton ⚙).`);
   }
   if (!videos.length) return vide('Aucune vidéo : ajoutez-en avec le bouton ⚙ en haut à droite');
   const v = videos[i % videos.length];
@@ -103,6 +135,7 @@ export default function EcranBoutique() {
       <div className="yk-ecran-d" style={{ flex: 2, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ background: ROUGE, borderRadius: 14, padding: '10px 14px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <img src="/logos/yakro.svg" alt="Yakro Grill" style={{ height: 52, width: 52, objectFit: 'contain', background: '#fff', borderRadius: 10, padding: 3, flexShrink: 0 }} />
             <div style={{ fontVariantNumeric: 'tabular-nums' }}>
               <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1 }}>{d.toLocaleTimeString('fr')}</div>
               <div style={{ fontSize: 12, opacity: .85 }}>{d.toLocaleDateString('fr', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
